@@ -1,0 +1,150 @@
+# Stories of epic-share-a-file, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Solution scaffold and walking skeleton"
+description = "Creates the solution with all projects from the spine's Structural Seed, the React + Vite app, and a MAUI window whose HybridWebView shows the UI and answers one `shares.list` call from a core use case with an empty list."
+verify = "After a clean clone, the documented build command opens a Windows window that shows the empty-list message fetched through the bridge; `dotnet test` and the UI tests pass."
+covers = ["CAP-2"]
+after = []
+hitl = true                 # a person installs the .NET 10 SDK, the MAUI workload and Node
+risk = "high"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Continuous integration on Windows"
+description = "Adds a workflow that builds the solution and the UI and runs every C# and UI test on a Windows runner for each push and pull request."
+verify = "A pushed commit with a failing test shows a failed run; fixing the test shows a passing run."
+covers = []
+after = [1]
+hitl = true                 # a person creates the GitHub repository and pushes
+risk = "low"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Bridge contract, generated types and fake bridge"
+description = "Declares in ComParta.Contracts the commands `shares.list`, `shares.add`, `shares.remove`, the event `shares.changed`, `ShareDto` (id, name, sizeBytes, available) and the error codes; generates the TypeScript types from it; and gives the UI a typed bridge module with a fake that implements the full contract in a browser."
+verify = "Changing a DTO in C# and rebuilding changes the TypeScript type; UI tests add, list and remove shares against the fake bridge in a plain browser."
+covers = ["CAP-1", "CAP-2", "CAP-3"]
+after = [1]
+hitl = false
+risk = "medium"
+references = ["architecture-comparta/architecture-comparta.md#ad-3", "architecture-comparta/architecture-comparta.md#ad-11", "architecture-comparta/architecture-comparta.md#ad-12"]
+
+[[entry]]
+id = 4
+type = "story"
+title = "Core: share rules and ports"
+description = "Adds to ComParta.Core the `Share` entity, the add, list and remove use cases, the `SharingPolicy` with the network closed, and the ports (`IShareRepository`, `ITransferEngine`, `IFilePicker`, `IAppPaths`) with in-memory fakes; adding refuses a duplicate file and removing never touches the original."
+verify = "Core tests pass against the fakes: add then list returns the share, a duplicate is refused with its error, remove deletes the record and calls no file operation."
+covers = ["CAP-1", "CAP-2", "CAP-3"]
+after = [1]
+hitl = false
+risk = "medium"
+references = ["architecture-comparta/architecture-comparta.md#ad-6", "architecture-comparta/architecture-comparta.md#ad-7", "architecture-comparta/architecture-comparta.md#ad-8"]
+
+[[entry]]
+id = 5
+type = "story"
+title = "Storage: shares in SQLite"
+description = "Implements `IShareRepository` in ComParta.Storage.Sqlite with the database created and upgraded at start-up in the folder given by `IAppPaths`."
+verify = "Adapter tests against a temporary database: a saved share is read back by a new repository instance, a removed one is not, and opening an existing database keeps its data."
+covers = ["CAP-2"]
+after = [4]
+hitl = false
+risk = "low"
+references = ["architecture-comparta/architecture-comparta.md#ad-10"]
+
+[[entry]]
+id = 6
+type = "story"
+title = "Engine: offer and stop offering a file with MonoTorrent"
+description = "Implements `ITransferEngine` in ComParta.Engine.MonoTorrent: offering a share prepares the file in place and starts offering it under the `SharingPolicy`, stopping removes it from the engine, and the `ShareId` mapping and engine data live in the adapter's own folder."
+verify = "Integration tests: after offering a temporary file the engine reports it as offered and the file's checksum is unchanged; after stopping, the engine holds nothing for that share; with the closed policy no public discovery is enabled."
+covers = ["CAP-1", "CAP-3"]
+after = [4]
+hitl = false
+risk = "high"
+references = ["architecture-comparta/architecture-comparta.md#ad-2", "architecture-comparta/architecture-comparta.md#ad-8"]
+
+[[entry]]
+id = 7
+type = "story"
+title = "UI: the list of my shares"
+description = "Builds the main screen that loads the shares snapshot, updates on `shares.changed`, shows name and formatted size, an empty-state message and an unavailable marker, with every string coming from the English translation catalog."
+verify = "In a browser against the fake bridge: no shares shows the empty-state message; seeded shares show name and size; one seeded as unavailable is marked; a change event updates the list without reload."
+covers = ["CAP-2", "CAP-4", "CAP-5"]
+after = [3]
+hitl = false
+risk = "low"
+references = ["architecture-comparta/architecture-comparta.md#ad-4"]
+
+[[entry]]
+id = 8
+type = "story"
+title = "UI: add a file"
+description = "Adds the add button that sends `shares.add`, shows the new share when the event arrives, and shows a plain-language message for each error code (duplicate, file unreadable, unexpected) and nothing when the person cancels."
+verify = "In a browser against the fake bridge: adding shows the new share; a duplicate shows its message; cancel changes nothing."
+covers = ["CAP-1", "CAP-4"]
+after = [7]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 9
+type = "story"
+title = "UI: remove a share"
+description = "Adds a remove action on each share with a confirmation that says the original file is kept, then sends `shares.remove`."
+verify = "In a browser against the fake bridge: confirming removes the share from the list; declining keeps it; an unavailable share is removable too."
+covers = ["CAP-3", "CAP-4", "CAP-5"]
+after = [8]                 # same screen code as 8
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 10
+type = "story"
+title = "Shell: the real app adds and removes a file"
+description = "Wires ComParta.App: `BridgeHost` handles the three commands and raises `shares.changed`, the Windows file picker implements `IFilePicker`, `IAppPaths` points at the per-user data folder, core types map to the contract DTOs and error codes, and the SQLite and MonoTorrent adapters are connected to the core."
+verify = "On a Windows PC: add a file through the file dialog and see it listed; restart and it is still there; remove it and it is gone after restart; the file's checksum never changes."
+covers = ["CAP-1", "CAP-2", "CAP-3"]
+after = [3, 4, 5, 6]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 11
+type = "story"
+title = "Notice a shared file that went missing"
+description = "Makes the core check at start-up and on list whether each share's file is still where it was, report it as unavailable, stop offering it through the engine, and offer it again when the file is back."
+verify = "Core tests with a fake file system cover missing and restored files; in the running app, renaming a shared file marks it unavailable after reopening and it is still removable."
+covers = ["CAP-5"]
+after = [10]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 12
+type = "story"
+title = "Guards for plain language and boundaries"
+description = "Adds automated tests that fail when a UI string contains a banned torrent term, when an error code has no message, when a banned term appears in code outside the engine adapter, or when ComParta.Core references another project or a MAUI, MonoTorrent or SQLite package."
+verify = "Adding the word 'seed' to the catalog, deleting an error message, or referencing MonoTorrent from Core each makes a test fail."
+covers = ["CAP-4"]
+after = [3, 4, 7]
+hitl = false
+risk = "low"
+references = ["architecture-comparta/architecture-comparta.md#ad-5"]
+
+[[entry]]
+id = 13
+type = "story"
+title = "Refactor sweep"
+description = "Cleans up what the epic's plans and deferred review findings name; scope is set when it starts and takes cleanup only."
+verify = "All tests and the Done when checks of the epic still pass after the cleanup."
+covers = []
+after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+hitl = false
+risk = "low"
