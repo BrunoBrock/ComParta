@@ -23,7 +23,7 @@ Hexagonal (ports and adapters). The core holds the product's rules and knows not
 | Layer | Namespace / directory | Holds |
 | --- | --- | --- |
 | Core | `ComParta.Core` | Domain (`Share`, `Transfer`, `Person`, `Invite`), use cases, ports |
-| Contracts | `ComParta.Contracts` | Bridge command names, event names, DTOs, error codes |
+| Contracts | `ComParta.Contracts` | Bridge command names, event names, DTOs, error codes, and `BridgeRouter`, which runs a command against the core without any shell |
 | Driven adapters | `ComParta.Engine.MonoTorrent`, `ComParta.Storage.Sqlite` | Implementations of core ports |
 | Shell (driving adapter) | `ComParta.App` | .NET MAUI host, `BridgeHost`, platform ports (file picker, content opener, paths) |
 | UI | `src/ui` | React app; renders state, sends commands |
@@ -87,11 +87,12 @@ An arrow means "may depend on". `ComParta.Core` depends on no other project and 
 - **Prevents:** path handling split between JavaScript and C#; UI code passing arbitrary paths to the core.
 - **Rule:** No bridge command accepts a filesystem path from the UI. Choosing a file is a command that makes the shell open the native picker behind `IFilePicker`; the core receives the result. The UI is given display names and sizes, never a path it must send back.
 
-### AD-8 — Network behaviour is set in one place and starts closed
+### AD-8 — Network behaviour is set in one place; devices meet only through an invite
 
 - **Binds:** engine, core
-- **Prevents:** a story switching on public discovery and exposing family files; inconsistent network settings per share.
-- **Rule:** All discovery, encryption and port settings come from one `SharingPolicy` object in core, applied only by the engine adapter. Until the privacy model in Deferred is decided, the policy keeps public discovery, peer exchange and trackers off and allows local-network discovery only. No other code sets engine network options.
+- **Prevents:** a story switching on wider discovery and exposing family files; inconsistent network settings per share.
+- **Rule:** All discovery, encryption and port settings come from one `SharingPolicy` object in core, applied only by the engine adapter. The policy (decided 2026-10-08) allows three ways for two devices to meet, all keyed by the invite: the sender's own network address carried inside the invite, local-network discovery, and the public BitTorrent lookup network (DHT). Peer exchange and trackers stay off, addresses of servers found in a pasted invite are dropped, and connections are encrypted. No other code sets engine network options.
+- **Accepted trade-off:** the content's fingerprint is announced on the public lookup network, so a share is unlisted, not secret: only someone holding the invite can ask for it, but the fingerprint is not hidden from that network. A stronger model (per-person keys) stays in Deferred.
 
 ### AD-9 — No hosted services, no accounts, no telemetry
 
@@ -165,7 +166,7 @@ erDiagram
   SHARE ||--o{ INVITE : "is offered through"
 ```
 
-Only `SHARE` exists in the MVP; the other entities are named so later epics use the same words.
+`SHARE` and `TRANSFER` exist in the first release. An invite is plain text produced by the engine adapter and is not stored as an entity yet; `PERSON` is named so later epics use the same word.
 
 ```text
 ComParta/
@@ -177,8 +178,11 @@ ComParta/
     ComParta.App/                # MAUI shell, BridgeHost, platform ports
     ui/                          # React + Vite; build output -> ComParta.App/Resources/Raw/wwwroot
   tests/
-    ComParta.Core.Tests/
+    ComParta.Core.Tests/         # core, bridge router and architecture guards
+    ComParta.Storage.Sqlite.Tests/
     ComParta.Engine.MonoTorrent.Tests/
+  tools/
+    ComParta.Contracts.TypeGen/  # writes src/ui/src/bridge/contract.generated.ts
   Planning/
 ```
 
@@ -188,8 +192,8 @@ Operational envelope: the product is an installed desktop app with no servers an
 
 | Item | Why it can wait | Revisit when |
 | --- | --- | --- |
-| Privacy and discovery model: how two people behind home routers find each other with no server, and who is able to download | The MVP only adds and removes shares locally; AD-8 keeps the network closed meanwhile. | Before the first epic that sends a file to another person. |
-| Engine fitness: MonoTorrent has slow releases and no documented uTP, which weakens connections through home routers | AD-2 keeps a swap cheap. | Together with the discovery model; test real two-household transfers. |
+| Stronger privacy model: per-person keys so that only chosen people can download, and no fingerprint on the public lookup network | The first release uses the invite-as-secret model in AD-8. | Before the app is offered to people outside the maintainer's circle. |
+| Connecting through home routers: at least one of the two devices must accept incoming connections (Windows Firewall allowed, and either the same network or a router that opens the port automatically). MonoTorrent has no uTP hole punching | Same-network transfers work today; AD-2 keeps an engine swap cheap. | After the first real two-household transfers. |
 | Operating-system sandbox on Windows, and scanning or marking of received files | AD-6 already contains received content at app level. | Before the first epic that receives a file. |
 | Open source license | Does not affect code structure; MonoTorrent's MIT license fits MIT, Apache-2.0 and AGPL-3.0. | Before the repository is made public. |
 | Packaging, code signing and updates | Not needed until other people install it. An update check is a network call and must be reconciled with AD-9. | Before the first public release. |

@@ -16,7 +16,7 @@ A vision to realize, answering a pain. Sharing large personal files (family vide
 
 ## Capabilities
 
-Capabilities marked **[MVP]** form the first release (Windows desktop: add or remove a shared file). The rest are later epics.
+Capabilities marked **[MVP]** form the first release (Windows desktop: add or remove a shared file, and send it to another person's computer with an invite). The rest are later epics. CAP-6, CAP-7 and a first form of CAP-8 were pulled into the first release on 2026-10-08.
 
 - **CAP-1 [MVP] Add a share**
   - **intent:** A person picks a file on their PC and it joins the list of things they share.
@@ -33,13 +33,13 @@ Capabilities marked **[MVP]** form the first release (Windows desktop: add or re
 - **CAP-5 [MVP] Missing-file handling**
   - **intent:** A person learns when a shared file was moved, renamed or deleted outside the app.
   - **success:** Such a share is marked unavailable in the list and can still be removed.
-- **CAP-6 Invite a person**
+- **CAP-6 [MVP] Invite a person**
   - **intent:** A person offers a share to someone they choose, through a channel they already know (email, chat).
-  - **success:** The sender produces an invite they can paste into an email or chat; only its holder can obtain the share.
-- **CAP-7 Receive a share**
+  - **success:** The sender copies an invite they can paste into an email or chat; someone without the invite cannot ask for the share (see AD-8 for the limits of this).
+- **CAP-7 [MVP] Receive a share**
   - **intent:** A person accepts an invite and gets the file.
-  - **success:** Opening an invite downloads the content directly from the sender's device into the Received folder, with no account and no hosted service involved.
-- **CAP-8 Follow a transfer**
+  - **success:** Pasting an invite brings the content directly from the sender's device into the Received folder, with no account and no hosted service involved, and never overwrites a file already there.
+- **CAP-8 [MVP, first form] Follow a transfer**
   - **intent:** A person sees whether a file is on its way, done or stuck.
   - **success:** Each transfer shows progress and a plain-language state, and says what to do when it cannot proceed (for example, the other person's device is off).
 - **CAP-9 Safe handling of received content**
@@ -60,7 +60,7 @@ Capabilities marked **[MVP]** form the first release (Windows desktop: add or re
 - AD-1 to AD-12 in the architecture companion are binding.
 - No account, no cloud, no hosted service, no telemetry (AD-9).
 - The target user can use a smartphone and email but nothing more complex; any step needing networking or torrent knowledge is a defect.
-- Private by default: content reaches only people the sharer chose; public discovery stays off until the privacy model is decided (AD-8).
+- Private by default: content reaches only people who hold its invite; nothing is listed or searchable. The limits of this are stated in AD-8.
 - Sharing never copies, moves, changes or deletes the original file (AD-6).
 - The MVP is Windows desktop only; nothing in it may block the Android shell (AD-1).
 - Open source. qBittorrent and other clients are reference only; no code is copied from them.
@@ -70,25 +70,26 @@ Capabilities marked **[MVP]** form the first release (Windows desktop: add or re
 
 - Public search or discovery of content from strangers.
 - Cloud storage, or hosted relays as a requirement.
-- Power-user torrent features: opening `.torrent` files or magnet links, trackers, speed limits, queues, RSS.
-- In the MVP: sending to or receiving from another person, mobile, an installer.
+- Power-user torrent features: opening `.torrent` files, trackers, speed limits, queues, RSS. (An invite is technically a magnet link, but the app never calls it that.)
+- In the MVP: mobile, an installer.
 
 ## Success signal
 
-- **MVP:** a person who has never used a torrent program adds a file and removes it on Windows without help, and the original file is untouched.
+- **MVP:** a person who has never used a torrent program adds a file on Windows, sends its invite to someone, and that person receives the file on their own PC; the original file is untouched.
 - **Product:** two people in different homes move a large family video directly between their devices with no account and no hosted service.
 
 ## Assumptions
 
 - The MVP shares single files only; folders (photo albums) come in a later story.
-- In the MVP a share is registered and persisted but reaches nobody outside the local network, because AD-8 keeps the network closed. The MVP proves the UI, bridge, core, storage and engine wiring.
+- Both people keep ComParta open during a transfer, and at least one of the two computers can accept incoming connections (see the architecture's Deferred table).
+- Unfinished received data is kept in a hidden folder inside the Received folder and moved to its final name when complete.
 - CAP-5 is not in the input; it follows from sharing files in place (AD-6).
 - Remove asks for confirmation and states that the original file is kept.
 - Adding the same file twice is rejected with a plain message instead of creating a duplicate.
 
 ## Open Questions
 
-- OQ-1: How do two people behind home routers find each other with no server, and who is able to download? Blocks CAP-6, CAP-7, CAP-8.
+- OQ-1: Answered for the first release by AD-8 (invite carries the sender's address, plus local discovery and the public lookup network). Still open: a stronger model where only chosen people can download, and reliable connection when both people are behind strict routers.
 - OQ-2: Which Windows sandbox mechanism is used, and are received files scanned or marked? Blocks CAP-9.
 - OQ-3: Which open source license (MIT, Apache-2.0, AGPL-3.0)? Needed before the repository goes public.
 - OQ-4: How is the app packaged, signed and updated, given an update check is a network call (AD-9)? Blocks CAP-11.

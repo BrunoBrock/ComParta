@@ -1,0 +1,146 @@
+using System.Text.Json;
+using ComParta.Contracts;
+using ComParta.Core.Ports;
+using ComParta.Core.UseCases;
+
+namespace ComParta.Core.Tests;
+
+/// <summary>The whole contract, exercised as JSON the way the UI does, with no window.</summary>
+public sealed class BridgeRouterTests
+{
+    private const string Video = @"C:\Videos\birthday.mp4";
+
+    private readonly FakeEngine _engine = new();
+    private readonly FakeFilePicker _picker = new();
+    private readonly FakeFileSystem _files = new();
+    private readonly FakeShell _shell = new();
+    private readonly List<JsonElement> _events = [];
+    private readonly BridgeRouter _router;
+
+    public BridgeRouterTests()
+    {
+        var shares = new ShareUseCases(new FakeShareRepository(), _engine, _picker, _files);
+        var transfers = new TransferUseCases(new FakeTransferRepository(), _engine);
+        _router = new BridgeRouter(shares, transfers, _shell, _shell);
+        _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
+        _files.Files[Video] = 5_000;
+        _picker.NextPick = Video;
+    }
+
+    private sealed class FakeShell : IClipboard, IContentOpener
+    {
+        public string? Copied { get; private set; }
+        public int Opened { get; private set; }
+        public Task SetTextAsync(string text, CancellationToken ct = default) { Copied = text; return Task.CompletedTask; }
+        public Task OpenReceivedFolderAsync(CancellationToken ct = default) { Opened++; return Task.CompletedTask; }
+    }
+
+    private async Task<JsonElement> InvokeAsync(string command, object? args = null) =>
+        JsonDocument.Parse(await _router.InvokeAsync(command, args is null ? "null" : JsonSerializer.Serialize(args))).RootElement;
+
+    private static string ErrorCode(JsonElement result)
+    {
+        Assert.False(result.GetProperty("ok").GetBoolean());
+        return result.GetProperty("error").GetProperty("code").GetString()!;
+    }
+
+    [Fact]
+    public async Task Add_list_and_remove_a_share()
+    {
+        var added = await InvokeAsync(Commands.SharesAdd);
+        Assert.True(added.GetProperty("ok").GetBoolean());
+        var share = added.GetProperty("value");
+        Assert.Equal("birthday.mp4", share.GetProperty("name").GetString());
+        Assert.Equal(5_000, share.GetProperty("sizeBytes").GetInt64());
+
+        var listed = (await InvokeAsync(Commands.SharesList)).GetProperty("value");
+        Assert.Equal("ready", listed[0].GetProperty("status").GetString());
+        // No path ever crosses the bridge (AD-7).
+        Assert.DoesNotContain("Videos", listed[0].GetRawText());
+
+        var id = share.GetProperty("id").GetString();
+        Assert.True((await InvokeAsync(Commands.SharesRemove, new { id })).GetProperty("ok").GetBoolean());
+        Assert.Equal(0, (await InvokeAsync(Commands.SharesList)).GetProperty("value").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Cancelling_the_file_dialog_is_ok_with_no_value()
+    {
+        _picker.NextPick = null;
+
+        var result = await InvokeAsync(Commands.SharesAdd);
+
+        Assert.True(result.GetProperty("ok").GetBoolean());
+        Assert.False(result.TryGetProperty("value", out var value) && value.ValueKind != JsonValueKind.Null);
+    }
+
+    [Fact]
+    public async Task Errors_come_back_as_codes()
+    {
+        await InvokeAsync(Commands.SharesAdd);
+
+        Assert.Equal(ErrorCodes.ShareDuplicate, ErrorCode(await InvokeAsync(Commands.SharesAdd)));
+        Assert.Equal(ErrorCodes.ShareNotFound, ErrorCode(await InvokeAsync(Commands.SharesRemove, new { id = "nonsense" })));
+        Assert.Equal(ErrorCodes.InviteInvalid, ErrorCode(await InvokeAsync(Commands.TransfersReceive, new { invite = "hello" })));
+        Assert.Equal(ErrorCodes.TransferNotFound, ErrorCode(await InvokeAsync(Commands.TransfersRemove, new { id = Guid.NewGuid() })));
+        Assert.Equal(ErrorCodes.Unexpected, ErrorCode(await InvokeAsync("no.suchCommand")));
+        Assert.Equal(ErrorCodes.Unexpected, ErrorCode(JsonDocument.Parse(await _router.InvokeAsync(Commands.SharesRemove, "{ not json")).RootElement));
+    }
+
+    [Fact]
+    public void Every_core_error_has_its_own_declared_code()
+    {
+        var codes = Enum.GetValues<ErrorKind>().Select(BridgeRouter.ToCode).ToList();
+
+        Assert.Equal(codes.Count, codes.Distinct().Count());
+        Assert.Equal(ErrorCodes.All.Order(), codes.Order());
+    }
+
+    [Fact]
+    public async Task Copying_an_invite_puts_it_on_the_clipboard()
+    {
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
+
+        var result = await InvokeAsync(Commands.SharesCopyInvite, new { id });
+
+        Assert.True(result.GetProperty("ok").GetBoolean());
+        Assert.Equal(FakeEngine.InvitePrefix + id, _shell.Copied);
+    }
+
+    [Fact]
+    public async Task Receiving_reports_progress_through_events()
+    {
+        var started = await InvokeAsync(Commands.TransfersReceive, new { invite = "invite:abc" });
+        var id = Guid.Parse(started.GetProperty("value").GetProperty("id").GetString()!);
+        Assert.Equal("connecting", started.GetProperty("value").GetProperty("state").GetString());
+
+        _engine.Report(new ReceiveProgress(new TransferId(id), "a.mp4", 1_000, 250, false));
+
+        var last = _events.Last(e => e.GetProperty("event").GetString() == Events.TransfersChanged).GetProperty("payload")[0];
+        Assert.Equal("receiving", last.GetProperty("state").GetString());
+        Assert.Equal(250, last.GetProperty("receivedBytes").GetInt64());
+        Assert.Equal("a.mp4", last.GetProperty("name").GetString());
+
+        Assert.True((await InvokeAsync(Commands.TransfersRemove, new { id })).GetProperty("ok").GetBoolean());
+        Assert.Equal(0, (await InvokeAsync(Commands.TransfersList)).GetProperty("value").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Share_changes_are_sent_as_events_and_the_folder_can_be_opened()
+    {
+        await InvokeAsync(Commands.SharesAdd);
+
+        var changed = _events.Last(e => e.GetProperty("event").GetString() == Events.SharesChanged);
+        Assert.Equal("birthday.mp4", changed.GetProperty("payload")[0].GetProperty("name").GetString());
+
+        Assert.True((await InvokeAsync(Commands.ReceivedOpenFolder)).GetProperty("ok").GetBoolean());
+        Assert.Equal(1, _shell.Opened);
+    }
+
+    [Fact]
+    public void Every_declared_command_and_event_is_named_area_dot_verb()
+    {
+        Assert.All(Contract.CommandSpecs, spec => Assert.Matches(@"^[a-z]+\.[a-z][A-Za-z]+$", spec.Name));
+        Assert.All(Contract.EventSpecs, spec => Assert.Matches(@"^[a-z]+\.changed$", spec.Name));
+    }
+}

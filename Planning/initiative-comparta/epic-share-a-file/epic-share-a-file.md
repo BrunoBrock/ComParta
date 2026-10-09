@@ -50,6 +50,8 @@ The Windows desktop app and everything inside it: core, contracts, storage adapt
 
 ## Notes
 
+- Status 2026-10-08: stories 1 and 3 to 12 are built and their automated checks pass. Story 2 (continuous integration) has a workflow file that has not run yet, because nothing has been pushed. Done when 6 (another PC) is not checked yet. The first version of epic-send-to-a-person was built at the same time, so the sentence "Nothing is sent to another person yet" in the Description no longer holds.
+- `ShareDto` carries a `status` (preparing, ready, unavailable) instead of the planned `available` flag, because reading a large file before it can be sent takes time and the screen needs to say so.
 - Tracer bullet: story 1. One `shares.list` call travels from the React UI through the bridge and `BridgeHost` to a core use case and back, inside the MAUI window.
 - Sequencing: after the tracer, the bridge contract (3) and the core (4) open three lanes that do not touch the same code: UI (7, 8, 9), adapters (5, 6), and shell wiring (10). Story 10 is the first point where the real app adds and removes a file.
 - Handoff: story 3 defines the DTOs and error codes on their own; story 4 defines the domain and its errors on its own; story 10 maps one to the other.

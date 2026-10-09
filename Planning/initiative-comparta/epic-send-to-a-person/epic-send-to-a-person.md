@@ -43,6 +43,7 @@ Invite and receive on Windows. Not transfer progress beyond done or not done (ep
 
 ## Notes
 
-- Open question: OQ-1, how two people behind home routers find each other with no server and who is able to download. Every story here waits on it; settle it with a `bmad-architecture` update first.
+- Status 2026-10-08: a first version was built together with epic-share-a-file. Done when 1, 2 and 4 are met in the app and checked on one PC with two copies running; 3, 5 and 6 still need two real PCs in two homes.
+- OQ-1 was answered for this release by AD-8. What remains is in the architecture's Deferred table.
 - Unknown: whether MonoTorrent connects reliably through home routers without uTP; test real two-household transfers when the model is chosen.
 - Waits on epic-share-a-file because: it provides the running app, the bridge contract and the engine port.
