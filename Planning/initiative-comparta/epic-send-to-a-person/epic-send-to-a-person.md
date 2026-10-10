@@ -2,10 +2,11 @@
 type: epic
 title: "A person sends a share to someone they choose, who receives it"
 parent: initiative-comparta
-covers: [CAP-6, CAP-7]
+covers: [CAP-6, CAP-7, CAP-16]
 after: []
 assignee: ""
 risk: high
+status: in-progress
 ---
 
 # A person sends a share to someone they choose, who receives it
@@ -20,13 +21,16 @@ Two people in different homes move a large family video directly between their d
 
 ## Requirements
 
-To be completed when this epic is planned. The spec is the source: CAP-6 (invite a person), CAP-7 (receive a share).
+The spec is the source; stories cite its ids. Story 1 is the first version already built; stories 2 to 7 are the R1 follow-ups.
+
+- CAP-6, CAP-7: invite and receive, built in the first version.
+- CAP-16: the invite explains itself: a ComParta link inside a friendly message, paste anywhere, click to open, and a confirmation before anything is received (AD-16, UX design "Receive a file").
 
 ## Done when
 
 1. The sender creates an invite for a share and pastes it into an email or chat.
 2. The receiver opens the invite and the file arrives in the Received folder, identical to the original.
-3. The transfer works between two homes on ordinary home routers.
+3. The transfer works between two homes on ordinary home routers. Moved to epic 9 (connect between homes), which measures and improves it.
 4. Someone without the invite cannot obtain the file.
 5. A network capture shows no connection to a hosted service during the transfer.
 6. Both people run a release build on their own Windows PCs.
@@ -45,5 +49,6 @@ Invite and receive on Windows. Not transfer progress beyond done or not done (ep
 
 - Status 2026-10-08: a first version was built together with epic-share-a-file. Done when 1, 2 and 4 are met in the app and checked on one PC with two copies running; 3, 5 and 6 still need two real PCs in two homes.
 - OQ-1 was answered for this release by AD-8. What remains is in the architecture's Deferred table.
-- Unknown: whether MonoTorrent connects reliably through home routers without uTP; test real two-household transfers when the model is chosen.
+- Unknown: whether MonoTorrent connects reliably through home routers without uTP. Moved to epic 9, which starts with a field test.
+- Plan 2026-10-10: invites become `comparta://` links (AD-16); the receive step always confirms first; story 6 also brings the single running copy that epic 10 builds on. The epic is done when stories 2 to 7 are built and Done when 1, 2, 4, 5 and 6 are checked.
 - Waits on epic-share-a-file because: it provides the running app, the bridge contract and the engine port.

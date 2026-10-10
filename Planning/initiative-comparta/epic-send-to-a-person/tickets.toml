@@ -1,0 +1,81 @@
+# Stories of epic-send-to-a-person, in build order.
+# Story 1 was built on 2026-10-08 together with epic-share-a-file (branch mvp-share-and-send).
+
+[[entry]]
+id = 1
+type = "story"
+title = "First version: copy an invite and receive the file"
+description = "Already built: `shares.copyInvite` copies the engine's invite text, `transfers.receive` starts receiving into the Received root with sanitised names, transfers resume after restart and can be cancelled or cleared, and `received.openFolder` opens the folder."
+verify = "Two copies on one PC with separate `COMPARTA_HOME` folders: a file shared in A and received in B is byte-identical; the engine test with two engines passes in CI."
+covers = ["CAP-6", "CAP-7"]
+after = ["1.10"]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Invites become ComParta links"
+description = "Adds `InviteCodec` to core (AD-16): writes `comparta://receive/v1/<payload>` carrying the engine's opaque text and display hints (item name, total size, item count, sender name when set), finds a link anywhere inside pasted text, still accepts the first build's raw engine text, and rejects anything else with `invite.invalid`. `shares.copyInvite` and `transfers.receive` use it. Adds `InviteHintsDto` to the contract and the fake bridge."
+verify = "Core tests: round trip of a link; a link inside a WhatsApp-style message with emoji and line breaks is found; an old raw invite still works; random text and a link with a broken payload give `invite.invalid`; a hint name with `..\\` never reaches a file name. UI tests against the fake bridge still pass."
+covers = ["CAP-6", "CAP-7", "CAP-16"]
+after = [1]
+hitl = false
+risk = "medium"
+references = ["architecture-comparta/architecture-comparta.md#ad-16", "architecture-comparta/architecture-comparta.md#ad-5"]
+
+[[entry]]
+id = 3
+type = "story"
+title = "Copy a friendly invite message"
+description = "Changes Copy invite so the clipboard gets the message from the UX design ('Send a file, first time', step 3): who is sending (or 'Someone' with no name), the file name and size, where to get ComParta, and the link; the words come from the catalog in the current language. Adds `invite.message` keys to the catalog and the store link as a build-time constant. The button shows 'Copied' and a toast says what to do next."
+verify = "UI tests against the fake bridge: the copied text contains the name, the formatted size and the link, with and without a sender name; the plain-language guard passes on the new keys."
+covers = ["CAP-16", "CAP-4"]
+after = [2]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Confirm before receiving"
+description = "Adds `transfers.preview { invite }`, which returns the invite's hints and the free space under the Received root (new `IAppPaths`-based free-space query in the shell), and the 'Get this file?' dialog from the UX design. Receiving starts only from the dialog. Not enough space disables the button and says how much to free (`disk.full`)."
+verify = "UI tests: pasting an invite shows name, size and sender labelled as from the invite; 'Not now' starts nothing; a size larger than the free space disables 'Get the file' and shows the amount; core tests for `transfers.preview` with fakes."
+covers = ["CAP-7", "CAP-16"]
+after = [2]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Paste an invite anywhere"
+description = "Ctrl+V anywhere in the window with an invite on the clipboard opens the confirmation; opening the receive dialog fills in an invite found on the clipboard and says so. The shell reads the clipboard only when the window gains focus or the person pastes, and passes the text to `InviteCodec`; nothing is kept."
+verify = "UI tests: a paste event with a message containing a link opens the confirmation; a paste with ordinary text does nothing. Manual on Windows: copy an invite from WhatsApp Desktop, focus ComParta, press Ctrl+V."
+covers = ["CAP-16"]
+after = [4]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 6
+type = "story"
+title = "One running copy, and opening an invite by clicking its link"
+description = "Registers the `comparta:` scheme for the app on Windows (the unpackaged build writes it per user; the MSIX declares it in the manifest). Makes ComParta a single running copy (AD-14): a second launch forwards its arguments to the first over a local named pipe and exits. A click on a link starts ComParta, or forwards the link to the running copy, which comes to the front with the confirmation open."
+verify = "Shell test: a second instance started with a link delivers it to the first and exits. Manual on Windows: clicking a `comparta://` link in Outlook, Gmail in Edge and WhatsApp Desktop opens the confirmation in the running app, or starts the app first; notes in this epic record which programs do not make the link clickable."
+covers = ["CAP-16"]
+after = [4]
+hitl = true                 # needs a person clicking links in real mail and chat programs
+risk = "medium"
+unknown = "Whether WhatsApp makes custom-scheme links clickable; if not, pasting stays the main way in."
+
+[[entry]]
+id = 7
+type = "story"
+title = "Network capture during a real transfer"
+description = "Runs one transfer between two PCs while capturing traffic, lists every remote address the app talked to, and classifies each one (the other PC, lookup-network nodes, local discovery, the home router's port mapping). Records the method and result in this epic's Notes."
+verify = "The capture shows no connection to any hosted service operated by the project or a third-party API (AD-9); the epic's Done when 5 is checked."
+covers = ["CAP-6", "CAP-7"]
+after = [1]
+hitl = true                 # a person runs the capture
+risk = "low"

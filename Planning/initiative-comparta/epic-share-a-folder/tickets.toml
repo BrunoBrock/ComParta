@@ -1,0 +1,58 @@
+# Stories of epic-share-a-folder, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Share items in core and storage"
+description = "Adds `ShareItem` (relative path, size, opaque `ContentRef`) and `ShareKind` to core (AD-19), migrates every existing share to one item, adds `itemCount` and `kind` to `ShareDto`, and updates the use cases so add takes a set of items and missing-file checks work per item (`partlyUnavailable`)."
+verify = "Core tests: a folder share with three items lists, one missing item makes it partly unavailable, all missing makes it unavailable; storage test upgrades a first-build database and keeps every share."
+covers = ["CAP-19"]
+after = []
+hitl = false
+risk = "medium"
+references = ["architecture-comparta/architecture-comparta.md#ad-19"]
+
+[[entry]]
+id = 2
+type = "story"
+title = "Pick a folder or several files"
+description = "Adds `shares.addFolder` (native folder picker) and lets `shares.add` return several files from a multi-select picker; the UI asks for a name when several loose files are picked. Dropping a folder (epic 8 story 6) now shares it instead of showing `share.folderNotYet`."
+verify = "UI tests against the fake bridge for both commands and the naming dialog; manual on Windows: picking a folder and dropping a folder each make one share."
+covers = ["CAP-19", "CAP-15"]
+after = [1, "8.6"]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Offer several items with one invite"
+description = "Makes the engine adapter create multi-file content in place from a set of items (each source path mapped to its relative destination), offer it, and report per-item problems; checks the assumption about files from different folders."
+verify = "Engine integration test: three files from two folders offered as one share are received byte-identical by a second engine; source files' checksums are unchanged."
+covers = ["CAP-19"]
+after = [1]
+hitl = false
+risk = "high"
+unknown = "Whether MonoTorrent accepts files from different parent folders in one piece of content."
+
+[[entry]]
+id = 4
+type = "story"
+title = "Receive a folder"
+description = "Writes received items under `Received/<sanitised share name>/` with each path segment sanitised, enforces the limits from AD-19 (fail with `invite.tooLarge`), shows the received folder as one item with a count, and opens it in the grid (epic 8) as a folder view with its files."
+verify = "Engine test: a 200-file folder arrives with its tree; hostile tree tests from epic 3 extended to segments pass; UI test: the received folder opens to its files."
+covers = ["CAP-19", "CAP-9"]
+after = [3, "3.2"]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Folder cards and wording"
+description = "Shows folder and collection cards with up to four photo thumbnails, '· {n} files', the 'partly unavailable' state, and the details panel note that files added later are not included ('Share the folder again to include new photos')."
+verify = "UI tests for each state in en and pt-BR; axe passes."
+covers = ["CAP-19", "CAP-13"]
+after = [1, "8.4"]
+hitl = false
+risk = "low"

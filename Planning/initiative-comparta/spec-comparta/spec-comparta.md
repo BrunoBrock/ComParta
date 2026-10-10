@@ -2,6 +2,8 @@
 id: SPEC-comparta
 companions:
   - '../architecture-comparta/architecture-comparta.md'
+  - '../ux-comparta/ux-comparta.md'
+  - '../roadmap-comparta/roadmap-comparta.md'
 sources:
   - '../../ReadMe.md'
 ---
@@ -16,7 +18,7 @@ A vision to realize, answering a pain. Sharing large personal files (family vide
 
 ## Capabilities
 
-Capabilities marked **[MVP]** form the first release (Windows desktop: add or remove a shared file, and send it to another person's computer with an invite). The rest are later epics. CAP-6, CAP-7 and a first form of CAP-8 were pulled into the first release on 2026-10-08.
+Capabilities marked **[MVP]** form the first build (Windows desktop: add or remove a shared file, and send it to another person's computer with an invite). CAP-6, CAP-7 and a first form of CAP-8 were pulled into the first build on 2026-10-08. Each later capability names its release: **[R1]** family pilot on Windows, **[R2]** albums and Android, **[R3]** people I share with (see the roadmap companion). CAP-13 to CAP-24 were added on 2026-10-10 when the rest of the product was planned.
 
 - **CAP-1 [MVP] Add a share**
   - **intent:** A person picks a file on their PC and it joins the list of things they share.
@@ -42,18 +44,55 @@ Capabilities marked **[MVP]** form the first release (Windows desktop: add or re
 - **CAP-8 [MVP, first form] Follow a transfer**
   - **intent:** A person sees whether a file is on its way, done or stuck.
   - **success:** Each transfer shows progress and a plain-language state, and says what to do when it cannot proceed (for example, the other person's device is off).
-- **CAP-9 Safe handling of received content**
+  - **R1 adds:** the sender also sees when someone is getting a shared file and how far along they are; a transfer shows roughly how long is left; running out of disk space and a file that changed on the sender's side each have their own plain state.
+- **CAP-9 [R1] Safe handling of received content**
   - **intent:** Received files cannot harm the rest of the computer.
-  - **success:** Received content is written only under the Received root, hostile file names cannot escape it, and nothing received is run automatically.
-- **CAP-10 Use on a phone**
+  - **success:** Received content is written only under the Received root, hostile file names cannot escape it or disguise their type, nothing received is run automatically, Windows treats every received file as coming from the internet (AD-13), and opening a program or script that was received asks a second time.
+- **CAP-10 [R2] Use on a phone**
   - **intent:** A person does the same things on an Android phone.
-  - **success:** Add, remove, invite and receive work on Android with the same words and flows as on desktop.
-- **CAP-11 Install and stay current**
+  - **success:** Add, remove, invite and receive work on Android with the same words and flows as on desktop, starting from the phone's own share menu or from a link in a chat app.
+- **CAP-11 [R1] Install and stay current**
   - **intent:** A non-technical person installs and updates the app without technical steps.
-  - **success:** Installation on Windows is one download with no extra prerequisites, and updating needs no manual uninstall.
-- **CAP-12 Brazilian Portuguese**
+  - **success:** Installation on Windows is one download with no extra prerequisites and no unknown-publisher warning, updating needs no manual uninstall and keeps the person's shares, and the app makes no update check of its own (AD-17).
+- **CAP-12 [R1] Brazilian Portuguese**
   - **intent:** A person uses the app in Brazilian Portuguese.
-  - **success:** Every UI string and error message has a pt-BR translation selectable in the app.
+  - **success:** Every UI string, error message and invite message has a pt-BR translation; the app starts in the Windows display language when it is supported; the person can change it and the choice survives a restart; sizes and dates follow Brazilian formatting.
+- **CAP-13 [R1] Browse like a file drive**
+  - **intent:** A person finds what they share and what they received the way they find files in Google Drive.
+  - **success:** Shared and received items show as a grid with pictures (photo and video thumbnails, file-type icons) or as a list; the person can switch view, search by name, sort by name, date or size, and see an item's details in a side panel. The choice of view survives a restart.
+- **CAP-14 [R1] Use what I received**
+  - **intent:** A person opens, finds and tidies the files they received without leaving ComParta.
+  - **success:** From a received item the person can open it, show it in its folder, remove it from the list, or delete the file after confirming. Opening follows CAP-9.
+- **CAP-15 [R1] Add files the natural way**
+  - **intent:** A person shares a file the way they already move files around.
+  - **success:** Dropping files from Windows Explorer onto the window shares them, as picking them does. On Android the phone's share menu offers ComParta (R2).
+- **CAP-16 [R1] An invite that explains itself**
+  - **intent:** The person who gets an invite understands what it is and what to do, even without ComParta installed.
+  - **success:** Copying an invite produces a short message in the sender's language naming the sender (when they gave a name), the file and its size, how to get ComParta, and a ComParta link. Pasting the whole message, or clicking the link where the chat or email program allows it, opens the receive step, which shows the file's name and size and asks before anything is received. A phone in the same room can scan the invite as a QR code (R2).
+- **CAP-17 [R1] Keep sharing when the window is closed**
+  - **intent:** A person does not stop a transfer by closing the window.
+  - **success:** While something is shared or moving, closing the window keeps ComParta running in the notification area and says so the first time; ComParta can start with Windows; quitting while someone is receiving a file asks first; the computer does not go to sleep in the middle of a transfer.
+- **CAP-18 [R1] Connect between homes**
+  - **intent:** Two people in different homes connect without knowing anything about networks.
+  - **success:** The app opens the router port where the router allows it, uses IPv6 where the internet connection has it, connects when either of the two devices is reachable, and shows in plain words whether others can reach this computer and what to try when they cannot. The field test in epic 9 sets the target success rate.
+- **CAP-19 [R2] Share a folder or several files**
+  - **intent:** A person sends a whole photo album at once.
+  - **success:** A person picks a folder, or several files, and it becomes one share with one invite; the receiver gets the same folder structure under the Received root; adding files to the folder later does not change what was shared, and the screen says so.
+- **CAP-20 [R1] Know when something arrives**
+  - **intent:** A person learns that a file arrived, or that someone got their file, without watching the screen.
+  - **success:** When a file finishes arriving, and when someone finishes getting a shared file, the operating system shows a notification; clicking it opens the item in ComParta.
+- **CAP-21 [R1] First run and settings**
+  - **intent:** A person understands the app the first time and can change the few things that matter.
+  - **success:** The first run explains in three short steps what ComParta does, that files stay where they are, and that ComParta must stay open; it asks for the name to show in invites (optional) and whether to start with Windows; it explains the network permission before Windows asks. Settings holds language, received folder, start with Windows, your name, and about (version and licenses).
+- **CAP-22 [R1] Get help without a technician**
+  - **intent:** A person, or the relative who helps them, can find out what is wrong.
+  - **success:** An in-app help page answers the common questions offline. "Copy a report" copies a plain-text summary (version, system, connection state, recent error codes, no file names or contents) that the person can paste into a message to whoever helps them. Nothing is sent automatically (AD-9).
+- **CAP-23 [R1] Usable by older people**
+  - **intent:** People with weaker eyesight, less precise hands or a screen reader use ComParta comfortably.
+  - **success:** Base text is at least 16 px, touch and click targets are at least 44 px, contrast meets WCAG 2.2 AA, every action works by keyboard with a visible focus, every control has a screen-reader name, and the layout still works at 200 % text size. An automated accessibility check runs in the UI tests.
+- **CAP-24 [R3] People I share with**
+  - **intent:** After the first invite, a person sends to the same person again without copying anything, and only the people a share was sent to can get it.
+  - **success:** Accepting an invite can also add the sender to "My people"; later shares sent to someone in "My people" appear in their "Shared with me" view when both devices are on; the content's fingerprint is no longer announced in the clear on the public lookup network. The design is settled by the spike in epic 13 before stories are written.
 
 ## Constraints
 
@@ -72,16 +111,24 @@ Capabilities marked **[MVP]** form the first release (Windows desktop: add or re
 - Cloud storage, or hosted relays as a requirement.
 - Power-user torrent features: opening `.torrent` files, trackers, speed limits, queues, RSS. (An invite is technically a magnet link, but the app never calls it that.)
 - In the MVP: mobile, an installer.
+- An update check, crash reporting or usage statistics of any kind (AD-9, AD-17).
+- iOS, macOS and Linux before R3.
+- Editing, previewing or syncing files inside ComParta. It looks like a file drive, but it is not a sync service: a share is a snapshot sent to people, not a folder kept in step.
+- A hosted relay run by the project. A relay run by someone the family chooses is decision D-3 in the roadmap.
 
 ## Success signal
 
 - **MVP:** a person who has never used a torrent program adds a file on Windows, sends its invite to someone, and that person receives the file on their own PC; the original file is untouched.
 - **Product:** two people in different homes move a large family video directly between their devices with no account and no hosted service.
+- **R1 family pilot:** three non-technical relatives in at least two homes install ComParta from a link, send and receive a large file in Portuguese without help, and at least one transfer crosses two homes.
+- **R2:** a folder of 200 photos goes from a PC to an Android phone and back, started from the phone's share menu or a chat link.
 
 ## Assumptions
 
-- The MVP shares single files only; folders (photo albums) come in a later story.
-- Both people keep ComParta open during a transfer, and at least one of the two computers can accept incoming connections (see the architecture's Deferred table).
+- The MVP shares single files only; folders and several files come in R2 (CAP-19).
+- Both people keep ComParta running during a transfer (CAP-17 makes that the default), and at least one of the two devices can accept incoming connections (CAP-18, AD-15).
+- The pilot family speaks Brazilian Portuguese; English stays the source language of the catalog.
+- A person's name in invites is whatever they type; it is not verified and the UI never calls it an account.
 - Unfinished received data is kept in a hidden folder inside the Received folder and moved to its final name when complete.
 - CAP-5 is not in the input; it follows from sharing files in place (AD-6).
 - Remove asks for confirmation and states that the original file is kept.
@@ -89,8 +136,9 @@ Capabilities marked **[MVP]** form the first release (Windows desktop: add or re
 
 ## Open Questions
 
-- OQ-1: Answered for the first release by AD-8 (invite carries the sender's address, plus local discovery and the public lookup network). Still open: a stronger model where only chosen people can download, and reliable connection when both people are behind strict routers.
-- OQ-2: Which Windows sandbox mechanism is used, and are received files scanned or marked? Blocks CAP-9.
-- OQ-3: Which open source license (MIT, Apache-2.0, AGPL-3.0)? Needed before the repository goes public.
-- OQ-4: How is the app packaged, signed and updated, given an update check is a network call (AD-9)? Blocks CAP-11.
-- OQ-5: Is sharing a whole folder in the MVP or the first follow-up?
+- OQ-1: Answered for the first release by AD-8 (invite carries the sender's address, plus local discovery and the public lookup network). The stronger model where only chosen people can download is CAP-24, settled by the epic 13 spike. Reliable connection when both people are behind strict routers is CAP-18; whether a chosen relay is allowed is decision D-3 in the roadmap.
+- OQ-2: Answered 2026-10-10 by AD-13: no AppContainer; received files carry the Windows internet mark and go through the attachment services API, which runs the installed antivirus; programs and scripts ask before opening.
+- OQ-3: Which open source license? Recommendation Apache-2.0; decision D-1 in the roadmap. Needed before the repository goes public and before epic 5 story 1.
+- OQ-4: Answered in part by AD-17: no in-app update check; updates come from the store. The channel (Microsoft Store recommended, or paid code signing) is decision D-2 in the roadmap.
+- OQ-5: Answered 2026-10-10: folders and several files are CAP-19, in R2, before Android.
+- OQ-6: What success rate between homes is good enough to call CAP-18 met? Set from the epic 9 field test.

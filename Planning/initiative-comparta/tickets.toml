@@ -1,4 +1,5 @@
 # The epics of initiative-comparta, in build order.
+# Releases (see roadmap-comparta): R1 = epics 1, 2, 9, 6, 8, 4, 10, 3, 12, 5; R2 = 11, 7; R3 = 13.
 
 [[epic]]
 id = 1
@@ -10,29 +11,15 @@ covers = ["CAP-1", "CAP-2", "CAP-3", "CAP-4", "CAP-5"]
 id = 2
 slug = "epic-send-to-a-person"
 title = "A person sends a share to someone they choose, who receives it"
-covers = ["CAP-6", "CAP-7"]
+covers = ["CAP-6", "CAP-7", "CAP-16"]
 after = [{ epic = 1, needs = "the running app with shares, the bridge contract and the engine port" }]
 
 [[epic]]
-id = 3
-slug = "epic-safe-received-content"
-title = "Received files cannot harm the computer"
-covers = ["CAP-9"]
-after = [{ epic = 2, needs = "the receive path that writes into the Received root" }]
-
-[[epic]]
-id = 4
-slug = "epic-follow-a-transfer"
-title = "A person sees how a transfer is going"
-covers = ["CAP-8"]
-after = [{ epic = 2, needs = "transfers between two devices" }]
-
-[[epic]]
-id = 5
-slug = "epic-install-and-update"
-title = "A non-technical person installs and updates the app"
-covers = ["CAP-11"]
-after = [{ epic = 1, needs = "the Windows app to package" }]
+id = 9
+slug = "epic-connect-between-homes"
+title = "Two people in different homes connect without knowing about networks"
+covers = ["CAP-18"]
+after = [{ epic = 2, needs = "the receive path being measured and improved" }]
 
 [[epic]]
 id = 6
@@ -42,8 +29,64 @@ covers = ["CAP-12"]
 after = [{ epic = 1, needs = "the translation catalog and the check that every string goes through it" }]
 
 [[epic]]
+id = 8
+slug = "epic-drive-like-home"
+title = "ComParta looks and works like a simple file drive"
+covers = ["CAP-13", "CAP-14", "CAP-15", "CAP-23"]
+after = [{ epic = 1, needs = "the screen, bridge and commands to redesign, after the refactor sweep" }, { epic = 6, needs = "the settings store for the remembered view" }]
+
+[[epic]]
+id = 4
+slug = "epic-follow-a-transfer"
+title = "A person sees how a transfer is going"
+covers = ["CAP-8", "CAP-20"]
+after = [{ epic = 2, needs = "transfers between two devices" }, { epic = 8, needs = "the cards and details panel the states render in" }]
+
+[[epic]]
+id = 10
+slug = "epic-keep-sharing-in-background"
+title = "Closing the window does not stop a transfer"
+covers = ["CAP-17"]
+after = [{ epic = 2, needs = "the single running copy" }, { epic = 6, needs = "the settings store for start with Windows" }]
+
+[[epic]]
+id = 3
+slug = "epic-safe-received-content"
+title = "Received files cannot harm the computer"
+covers = ["CAP-9"]
+after = [{ epic = 2, needs = "the receive path that writes into the Received root" }, { epic = 4, needs = "the blocked transfer state" }, { epic = 8, needs = "the Open action to guard" }]
+
+[[epic]]
+id = 12
+slug = "epic-help-and-settings"
+title = "A person is welcomed, can change the few things that matter, and can get help"
+covers = ["CAP-21", "CAP-22"]
+after = [{ epic = 6, needs = "the settings store and language choice" }, { epic = 8, needs = "the frame and components" }, { epic = 9, needs = "connection facts for the report" }]
+
+[[epic]]
+id = 5
+slug = "epic-install-and-update"
+title = "A non-technical person installs and updates the app"
+covers = ["CAP-11"]
+after = [{ epic = 1, needs = "the Windows app to package, checked on a second PC" }]
+
+[[epic]]
+id = 11
+slug = "epic-share-a-folder"
+title = "A person sends a whole folder or several files as one share"
+covers = ["CAP-19"]
+after = [{ epic = 8, needs = "the drop target and folder cards" }, { epic = 3, needs = "the hostile metadata tests to extend" }]
+
+[[epic]]
 id = 7
 slug = "epic-android"
 title = "A person uses ComParta on an Android phone"
-covers = ["CAP-10"]
-after = [{ epic = 1, needs = "the core, contracts and UI the Android shell hosts" }, { epic = 2, needs = "invite and receive flows to carry over" }]
+covers = ["CAP-10", "CAP-15", "CAP-16", "CAP-17"]
+after = [{ epic = 11, needs = "the final share model with items" }, { epic = 8, needs = "the frame and phone layout base" }, { epic = 10, needs = "the background presence port" }, { epic = 2, needs = "invite links and the receive confirmation" }, { epic = 9, needs = "reachability facts and IPv6" }]
+
+[[epic]]
+id = 13
+slug = "epic-people-and-shared-with-me"
+title = "A person sends to the people they know, and only they can get it"
+covers = ["CAP-24"]
+after = [{ epic = 7, needs = "R2 done, so pairing works between phones and PCs from the start" }]

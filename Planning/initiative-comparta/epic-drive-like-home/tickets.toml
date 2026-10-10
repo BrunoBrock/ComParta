@@ -1,0 +1,137 @@
+# Stories of epic-drive-like-home, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Design tokens and base components"
+description = "Adds the UX design's tokens as CSS custom properties with light and dark values (dark checked for the same contrast), the system font stack, and the base components in `src/ui/src/components/ui` (Button, IconButton, Card, Row, StatusChip, ProgressBar, Dialog, Toast, EmptyState, Sheet, FileIcon) with bundled Lucide icons. A development-only gallery page shows each component in each state. Adds `vitest-axe` and runs it on the gallery."
+verify = "Vitest renders every component state with no axe violations; the gallery shows in `npm run dev` and is absent from the production build; a contrast script checks every token pair the design lists."
+covers = ["CAP-13", "CAP-23"]
+after = []
+hitl = false
+risk = "low"
+references = ["ux-comparta/ux-comparta.md#visual-design", "architecture-comparta/architecture-comparta.md#ad-18"]
+
+[[entry]]
+id = 2
+type = "story"
+title = "App frame: rail, header, sections, phone navigation"
+description = "Replaces the single page with the UX design's layout: header with search box and help and settings buttons, left rail with the two primary actions, the sections Shared by me and Received with counts, and the connection indicator slot; icon rail between 600 and 900 px; bottom navigation and floating action button below 600 px. The selected section is view state (AD-4). Existing share and receive features keep working inside the new frame."
+verify = "UI tests at three widths: the right navigation appears; switching sections shows the right list; every existing UI test still passes; axe passes."
+covers = ["CAP-13", "CAP-23"]
+after = [1, "1.13"]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Items as a grid or a list"
+description = "Shows shared and received items as cards or rows from the same data, with file-type icons from the extension, middle-ellipsis names, formatted size and the status chip from the UX design's States tables. A view toggle switches between grid and list and stores the choice through `settings.set` (field `view`)."
+verify = "UI tests: each state renders its chip text and icon; long names keep their extension visible; the toggle switches and the stored view is used after reload of the fake bridge."
+covers = ["CAP-13"]
+after = [2, "6.2"]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Thumbnails for photos and videos"
+description = "Adds `thumbnails.get { id, size }` to the contract (AD-18), `IThumbnailProvider` in core with the Windows implementation in the shell (Windows shell thumbnail API, cached under `IAppPaths`), and the `Thumbnail` component that loads lazily when a card is visible and falls back to the file icon. Works for shared items and finished received items."
+verify = "Core tests with a fake provider; UI tests show the fallback icon until the fake returns a picture; manual on Windows: a JPG and an MP4 show thumbnails, a ZIP shows its icon; no path crosses the bridge."
+covers = ["CAP-13"]
+after = [3]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Use what I received"
+description = "Turns finished transfers into received items with Open, Show in folder, Remove from list and Delete file. Adds `received.open { id }`, `received.reveal { id }`, `received.delete { id }` (deletes only under the Received root, after the UI confirms), `IContentOpener` methods for one item, and the error codes `received.notFound` and `received.openFailed` with catalog messages. Transfers still running are pinned at the top under 'On the way'."
+verify = "Core tests: delete refuses anything outside the Received root and removes the record; open and reveal call the opener with the item. UI tests: delete asks first; a missing file shows its message. Manual: open a received PDF and show a received video in Explorer."
+covers = ["CAP-14"]
+after = [3]
+hitl = false
+risk = "medium"
+references = ["architecture-comparta/architecture-comparta.md#ad-6"]
+
+[[entry]]
+id = 6
+type = "story"
+title = "Drop files onto the window to share them"
+description = "Spike first: a native drop target over the `HybridWebView`, or WebView2's drop forwarded to the shell, which resolves the dropped items natively. The shell implements `IIncomingItems` (AD-7 amended) and raises one event per drop; core shares each file as if picked; a folder dropped before epic 11 shares nothing and shows `share.folderNotYet`. The UI shows the drop overlay from the UX design. No path reaches the UI."
+verify = "Manual on Windows: dropping two files shares both; dropping a folder shows the message; core tests for the incoming-items event with fakes; the architecture guard finds no path in any bridge DTO."
+covers = ["CAP-15"]
+after = [2]
+hitl = false
+risk = "high"
+references = ["architecture-comparta/architecture-comparta.md#ad-7"]
+unknown = "Which drop mechanism works with MAUI HybridWebView on Windows."
+
+[[entry]]
+id = 7
+type = "story"
+title = "Search and sort"
+description = "The header search filters the current section by name as the person types (accent- and case-insensitive, so 'aniversario' finds 'Aniversário'); the sort menu orders by name, date added or size and the choice is stored as a setting."
+verify = "UI tests: accent-insensitive search; each sort order; empty search result shows a sentence and a clear button."
+covers = ["CAP-13"]
+after = [3]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 8
+type = "story"
+title = "Details panel"
+description = "Selecting an item opens the details panel (a sheet on narrow windows) with the large picture, name, type, size, date, state sentence and the actions from the UX design, primary first and destructive last. Double-click or Enter runs the main action. Keyboard: arrows move between items, Delete asks to stop sharing or remove, Escape closes."
+verify = "UI tests for shared and received items, keyboard navigation and focus return to the item when the panel closes; axe passes."
+covers = ["CAP-13", "CAP-14", "CAP-23"]
+after = [3, 5]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 9
+type = "story"
+title = "Guided first send"
+description = "The Share files button runs the UX design's three steps (choose, getting ready with progress, send the invite) the first three times, with 'Don't show the steps again' afterwards stored as a setting. Step 3 uses the friendly message from epic 2 when it exists, the plain invite otherwise."
+verify = "UI tests: the steps appear for the first three sends and not after opting out; cancelling the picker closes the dialog with nothing shared; progress shows while the fake reports preparing."
+covers = ["CAP-13", "CAP-16"]
+after = [2]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 10
+type = "story"
+title = "Toasts and empty states"
+description = "Replaces the current notice with toasts for confirmations and dialogs for errors that need a decision, as the UX design says; gives each section an empty state with a sentence and the primary action. Toasts are announced to screen readers."
+verify = "UI tests: copying an invite and stopping a share show their toasts; each empty section shows its sentence and button; axe passes."
+covers = ["CAP-13", "CAP-23"]
+after = [2]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 11
+type = "story"
+title = "Accessibility pass"
+description = "Runs a keyboard-only pass, a Windows Narrator pass and a 200 % text pass over every screen, fixes what is found, and adds the reduced-motion rule."
+verify = "A checklist in this epic's Notes with each screen passed; axe still passes; no horizontal scroll at 200 % text and 1280 px."
+covers = ["CAP-23"]
+after = [4, 5, 6, 7, 8, 9, 10]
+hitl = true                 # a person uses Narrator
+risk = "low"
+
+[[entry]]
+id = 12
+type = "story"
+title = "Usability sessions with three people"
+description = "Runs the UX design's usability tasks with three people matching Maria and Paulo, on the release build, in Portuguese; records where each one hesitated or asked for help; each failed task becomes a ticket."
+verify = "Session notes in this folder and one ticket per failed task."
+covers = ["CAP-13", "CAP-14", "CAP-15"]
+after = [11]
+hitl = true                 # real people
+risk = "low"
