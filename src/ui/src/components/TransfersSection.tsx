@@ -1,43 +1,49 @@
-import { type FormEvent, useState } from 'react'
+import { FolderOpen, X } from 'lucide-react'
 import type { Bridge, ErrorCode, TransferDto } from '../bridge/index.ts'
 import { formatSize, t } from '../i18n/index.ts'
+import { matches } from '../search.ts'
+import ItemView, { type ViewMode } from './ItemView.tsx'
+import SectionHead from './SectionHead.tsx'
+import type { ChipTone } from './StatusChip.tsx'
 
 interface TransfersSectionProps {
   bridge: Bridge
   /** null while the first snapshot is loading. */
   transfers: TransferDto[] | null
+  query: string
+  view: ViewMode
+  onViewChange: (view: ViewMode) => void
   onError: (code: ErrorCode) => void
   onStart: () => void
+  onClearSearch: () => void
 }
+
+const tones: Record<TransferDto['state'], ChipTone> = { connecting: 'busy', receiving: 'busy', done: 'ok', failed: 'warn' }
+
+const percentOf = (transfer: TransferDto) =>
+  transfer.sizeBytes ? Math.floor((transfer.receivedBytes / transfer.sizeBytes) * 100) : 0
+
+/** Receiving without a known size reads as still looking for the other computer. */
+const shownState = (transfer: TransferDto) =>
+  transfer.state === 'receiving' && !transfer.sizeBytes ? 'connecting' : transfer.state
 
 function describe(transfer: TransferDto): string {
-  if (transfer.state === 'receiving' && transfer.sizeBytes) {
+  const state = shownState(transfer)
+  if (state === 'receiving') {
     return t('transfers.state.receiving', {
-      percent: Math.floor((transfer.receivedBytes / transfer.sizeBytes) * 100),
+      percent: percentOf(transfer),
       received: formatSize(transfer.receivedBytes),
-      total: formatSize(transfer.sizeBytes),
+      total: formatSize(transfer.sizeBytes!),
     })
   }
-  return t(`transfers.state.${transfer.state === 'receiving' ? 'connecting' : transfer.state}`)
+  return t(`transfers.state.${state}`)
 }
 
-export default function TransfersSection({ bridge, transfers, onError, onStart }: TransfersSectionProps) {
-  // View state only: the text being typed and whether a request is on its way.
-  const [invite, setInvite] = useState('')
-  const [busy, setBusy] = useState(false)
+/** Files on their way are pinned on top, finished ones follow (UX design, "On the way"). */
+const order = (a: TransferDto, b: TransferDto) => Number(a.state === 'done') - Number(b.state === 'done')
 
-  async function receive(event: FormEvent) {
-    event.preventDefault()
-    onStart()
-    setBusy(true)
-    try {
-      const result = await bridge.invoke('transfers.receive', { invite })
-      if (result.ok) setInvite('')
-      else onError(result.error.code)
-    } finally {
-      setBusy(false)
-    }
-  }
+export default function TransfersSection(props: TransfersSectionProps) {
+  const { bridge, transfers, query, view, onViewChange, onError, onStart, onClearSearch } = props
 
   async function remove(transfer: TransferDto) {
     onStart()
@@ -50,61 +56,60 @@ export default function TransfersSection({ bridge, transfers, onError, onStart }
     if (!result.ok) onError(result.error.code)
   }
 
+  const shown = transfers?.filter((transfer) => matches(transfer.name ?? '', query)).sort(order) ?? null
+
   return (
-    <section aria-labelledby="transfers-heading">
-      <div className="section-head">
-        <h2 id="transfers-heading">{t('transfers.heading')}</h2>
+    <section aria-labelledby="transfers-heading" className="content-section">
+      <SectionHead id="transfers-heading" title={t('transfers.heading')} view={view} onViewChange={onViewChange}>
         <button type="button" onClick={openFolder}>
+          <FolderOpen size={18} aria-hidden="true" />
           {t('transfers.openFolder')}
         </button>
-      </div>
-
-      <form className="invite-form" onSubmit={receive}>
-        <label htmlFor="invite-input">{t('transfers.inviteLabel')}</label>
-        <div className="invite-row">
-          <input
-            id="invite-input"
-            type="text"
-            value={invite}
-            onChange={(event) => setInvite(event.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <button type="submit" className="primary" disabled={busy || invite.trim() === ''}>
-            {t('transfers.receive')}
-          </button>
-        </div>
-      </form>
+      </SectionHead>
 
       {transfers !== null && transfers.length === 0 && <p className="empty">{t('transfers.empty')}</p>}
+      {transfers !== null && transfers.length > 0 && shown!.length === 0 && (
+        <p className="empty">
+          {t('search.none', { query: query.trim() })}{' '}
+          <button type="button" className="link" onClick={onClearSearch}>
+            {t('search.clear')}
+          </button>
+        </p>
+      )}
 
-      {transfers !== null && transfers.length > 0 && (
-        <ul className="items">
-          {transfers.map((transfer) => {
+      {shown !== null && shown.length > 0 && (
+        <ul className={`items items-${view}`}>
+          {shown.map((transfer) => {
             const name = transfer.name ?? t('transfers.unnamed')
+            const state = shownState(transfer)
             const finished = transfer.state === 'done'
             return (
-              <li key={transfer.id} className={transfer.state === 'failed' ? 'item item-problem' : 'item'}>
-                <div className="item-text">
-                  <span className="item-name">{name}</span>
-                  {transfer.sizeBytes !== null && <span className="item-detail">{formatSize(transfer.sizeBytes)}</span>}
-                  <span className={`item-status status-${transfer.state}`}>{describe(transfer)}</span>
-                  {transfer.state === 'receiving' && transfer.sizeBytes !== null && (
-                    <progress value={transfer.receivedBytes} max={transfer.sizeBytes} aria-label={name} />
-                  )}
-                  {transfer.state === 'connecting' && <progress aria-label={name} />}
-                </div>
-                <div className="item-actions">
+              <ItemView
+                key={transfer.id}
+                name={name}
+                size={transfer.sizeBytes !== null ? formatSize(transfer.sizeBytes) : null}
+                tone={tones[state]}
+                chip={t(`transfers.chip.${state}`, { percent: percentOf(transfer) })}
+                note={describe(transfer)}
+                progress={
+                  state === 'receiving'
+                    ? { value: transfer.receivedBytes, max: transfer.sizeBytes! }
+                    : state === 'connecting'
+                      ? 'unknown'
+                      : undefined
+                }
+                actions={
                   <button
                     type="button"
                     className="quiet"
                     onClick={() => remove(transfer)}
                     aria-label={t(finished ? 'transfers.clearFor' : 'transfers.cancelFor', { name })}
                   >
+                    <X size={18} aria-hidden="true" />
                     {t(finished ? 'transfers.clear' : 'transfers.cancel')}
                   </button>
-                </div>
-              </li>
+                }
+              />
             )
           })}
         </ul>
