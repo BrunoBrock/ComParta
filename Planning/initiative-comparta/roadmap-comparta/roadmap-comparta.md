@@ -17,10 +17,10 @@ architecture owns *how*, the UX design owns *how it looks and reads*, and each e
 
 | Document | Owns |
 | --- | --- |
-| [spec](../spec-comparta/spec-comparta.md) | Capabilities CAP-1 to CAP-24, constraints, non-goals |
-| [architecture](../architecture-comparta/architecture-comparta.md) | AD-1 to AD-20, Deferred |
+| [spec](../spec-comparta/spec-comparta.md) | Capabilities CAP-1 to CAP-25, constraints, non-goals |
+| [architecture](../architecture-comparta/architecture-comparta.md) | AD-1 to AD-21, Deferred |
 | [UX design](../ux-comparta/ux-comparta.md) | Screens, flows, words, design tokens, accessibility |
-| [initiative tickets](../tickets.toml) | The 13 epics in build order |
+| [initiative tickets](../tickets.toml) | The 14 epics in build order |
 | `epic-*/tickets.toml` | The stories of each epic |
 
 ## Where we are (2026-10-10)
@@ -135,7 +135,7 @@ can be built and checked on their own, and every story's blocker is named.
 
 | Check | Result |
 | --- | --- |
-| Ticket tree is consistent | `python3 _bmad/method/scripts/tickets.py status Planning/initiative-comparta` reports 13 epics, 96 tickets, and no unpinned, undeclared or out-of-order dependency. |
+| Ticket tree is consistent | `python3 _bmad/method/scripts/tickets.py status Planning/initiative-comparta` reports 14 epics, 101 tickets, and no unpinned, undeclared or out-of-order dependency. |
 | Every CAP is covered by an epic | Yes; see the `covers` field in [tickets.toml](../tickets.toml). CAP-24 (people) is covered by epic 13, whose stories after the spike carry `refine = true`. |
 | Every AD is cited by at least one epic | Yes. |
 | Every epic in R1 and R2 has stories with a `verify` | Yes. |
