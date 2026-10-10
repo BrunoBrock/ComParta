@@ -26,3 +26,13 @@ export function formatSize(bytes: number): string {
   if (bytes < 1024 ** 3) return t('size.mb', { value: number(bytes / 1024 ** 2, 1) })
   return t('size.gb', { value: number(bytes / 1024 ** 3, 2) })
 }
+
+/** Rough on purpose: people want "about 5 minutes", not a countdown. */
+export function formatTimeLeft(seconds: number): string {
+  if (seconds < 60) return t('transfers.left.seconds')
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return minutes === 1 ? t('transfers.left.minute') : t('transfers.left.minutes', { count: minutes })
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return hours === 1 ? t('transfers.left.hour') : t('transfers.left.hours', { count: hours })
+  return t('transfers.left.days')
+}

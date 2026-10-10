@@ -515,6 +515,10 @@ button.link {
   color: var(--color-warn);
 }
 
+.chip-paused {
+  color: var(--color-text-muted);
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -685,4 +689,16 @@ dialog textarea {
   .section-head h2 {
     font-size: var(--text-lg);
   }
+}
+
+.receive-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space);
+  margin-block: calc(var(--space) * 1.5);
+}
+
+.receive-file .hint {
+  margin: 0;
 }

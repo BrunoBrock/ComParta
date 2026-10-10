@@ -1,4 +1,4 @@
-import { Inbox, Mail, Plus, Upload } from 'lucide-react'
+import { Download, Inbox, Plus, Upload } from 'lucide-react'
 import { t } from '../i18n/index.ts'
 
 export type Section = 'shared' | 'received'
@@ -31,7 +31,7 @@ export default function Rail({ section, sharedCount, receivedCount, adding, onSe
           <span>{t('shares.add')}</span>
         </button>
         <button type="button" className="big" onClick={onReceive}>
-          <Mail size={22} aria-hidden="true" />
+          <Download size={22} aria-hidden="true" />
           <span>{t('transfers.open')}</span>
         </button>
       </div>

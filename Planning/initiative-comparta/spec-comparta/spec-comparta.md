@@ -90,6 +90,9 @@ Capabilities marked **[MVP]** form the first build (Windows desktop: add or remo
 - **CAP-23 [R1] Usable by older people**
   - **intent:** People with weaker eyesight, less precise hands or a screen reader use ComParta comfortably.
   - **success:** Base text is at least 16 px, touch and click targets are at least 44 px, contrast meets WCAG 2.2 AA, every action works by keyboard with a visible focus, every control has a screen-reader name, and the layout still works at 200 % text size. An automated accessibility check runs in the UI tests.
+- **CAP-25 [R1] Download from any link**
+  - **intent:** A person downloads things published on the internet the way they would with qBittorrent, without learning its vocabulary.
+  - **success:** Pasting a download link from a website, or opening a download file a website gave them, adds it to Received next to files from people; it shows progress, speed and time left; the person can pause and continue it; the file lands in the Received folder under the same safety rules (CAP-9). Advanced controls (choosing which files of a download to get, speed limits, how long to keep sharing after it finishes) sit under "More options", never on the main screen. Added 2026-10-10 after Bruno chose "Both" (roadmap decision P-10).
 - **CAP-24 [R3] People I share with**
   - **intent:** After the first invite, a person sends to the same person again without copying anything, and only the people a share was sent to can get it.
   - **success:** Accepting an invite can also add the sender to "My people"; later shares sent to someone in "My people" appear in their "Shared with me" view when both devices are on; the content's fingerprint is no longer announced in the clear on the public lookup network. The design is settled by the spike in epic 13 before stories are written.
@@ -109,7 +112,7 @@ Capabilities marked **[MVP]** form the first build (Windows desktop: add or remo
 
 - Public search or discovery of content from strangers.
 - Cloud storage, or hosted relays as a requirement.
-- Power-user torrent features: opening `.torrent` files, trackers, speed limits, queues, RSS. (An invite is technically a magnet link, but the app never calls it that.)
+- Power-user features on the main screen: queues, RSS, search plugins, per-connection detail. (Opening download links and download files, with speed limits and file choice under "More options", moved into scope as CAP-25 on 2026-10-10.)
 - In the MVP: mobile, an installer.
 - An update check, crash reporting or usage statistics of any kind (AD-9, AD-17).
 - iOS, macOS and Linux before R3.

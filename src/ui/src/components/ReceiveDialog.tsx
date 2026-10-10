@@ -1,3 +1,4 @@
+import { FileDown } from 'lucide-react'
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import type { Bridge } from '../bridge/index.ts'
 import { errorMessage, t } from '../i18n/index.ts'
@@ -9,7 +10,10 @@ interface ReceiveDialogProps {
   onCancel: () => void
 }
 
-/** One large box for the invite, like attaching something in a chat. */
+/**
+ * One large box for an invite or a download link, like attaching something in a chat, and a
+ * second way in for a download file saved from a website (AD-21).
+ */
 export default function ReceiveDialog({ bridge, onStarted, onCancel }: ReceiveDialogProps) {
   const dialog = useRef<HTMLDialogElement>(null)
   // View state only: the text being typed, a request on its way, and the last problem.
@@ -30,6 +34,19 @@ export default function ReceiveDialog({ bridge, onStarted, onCancel }: ReceiveDi
       const result = await bridge.invoke('transfers.receive', { invite })
       if (result.ok) onStarted()
       else setProblem(errorMessage(result.error.code))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function openFile() {
+    setProblem(null)
+    setBusy(true)
+    try {
+      const result = await bridge.invoke('transfers.openFile')
+      // null means the person closed the file dialog; the dialog stays as it was.
+      if (result.ok && result.value !== null) onStarted()
+      else if (!result.ok) setProblem(errorMessage(result.error.code))
     } finally {
       setBusy(false)
     }
@@ -57,6 +74,14 @@ export default function ReceiveDialog({ bridge, onStarted, onCancel }: ReceiveDi
           autoFocus
         />
         <p className="hint">{t('receive.hint')}</p>
+        <div className="receive-file">
+          <span className="hint">{t('receive.or')}</span>
+          <button type="button" onClick={openFile} disabled={busy}>
+            <FileDown size={18} aria-hidden="true" />
+            {t('receive.openFile')}
+          </button>
+          <span className="hint">{t('receive.openFileHint')}</span>
+        </div>
         {problem && (
           <p className="notice notice-error" role="alert">
             {problem}

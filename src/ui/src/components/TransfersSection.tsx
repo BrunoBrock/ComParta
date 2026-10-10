@@ -1,6 +1,6 @@
-import { FolderOpen, X } from 'lucide-react'
+import { FolderOpen, Pause, Play, X } from 'lucide-react'
 import type { Bridge, ErrorCode, TransferDto } from '../bridge/index.ts'
-import { formatSize, t } from '../i18n/index.ts'
+import { formatSize, formatTimeLeft, t } from '../i18n/index.ts'
 import { matches } from '../search.ts'
 import ItemView, { type ViewMode } from './ItemView.tsx'
 import SectionHead from './SectionHead.tsx'
@@ -18,7 +18,13 @@ interface TransfersSectionProps {
   onClearSearch: () => void
 }
 
-const tones: Record<TransferDto['state'], ChipTone> = { connecting: 'busy', receiving: 'busy', done: 'ok', failed: 'warn' }
+const tones: Record<TransferDto['state'], ChipTone> = {
+  connecting: 'busy',
+  receiving: 'busy',
+  paused: 'paused',
+  done: 'ok',
+  failed: 'warn',
+}
 
 const percentOf = (transfer: TransferDto) =>
   transfer.sizeBytes ? Math.floor((transfer.receivedBytes / transfer.sizeBytes) * 100) : 0
@@ -30,11 +36,16 @@ const shownState = (transfer: TransferDto) =>
 function describe(transfer: TransferDto): string {
   const state = shownState(transfer)
   if (state === 'receiving') {
-    return t('transfers.state.receiving', {
-      percent: percentOf(transfer),
-      received: formatSize(transfer.receivedBytes),
-      total: formatSize(transfer.sizeBytes!),
-    })
+    const parts = [
+      t('transfers.state.receiving', {
+        percent: percentOf(transfer),
+        received: formatSize(transfer.receivedBytes),
+        total: formatSize(transfer.sizeBytes!),
+      }),
+    ]
+    if (transfer.bytesPerSecond > 0) parts.push(t('transfers.speed', { speed: formatSize(transfer.bytesPerSecond) }))
+    if (transfer.secondsLeft !== null) parts.push(formatTimeLeft(transfer.secondsLeft))
+    return parts.join(' · ')
   }
   return t(`transfers.state.${state}`)
 }
@@ -48,6 +59,12 @@ export default function TransfersSection(props: TransfersSectionProps) {
   async function remove(transfer: TransferDto) {
     onStart()
     const result = await bridge.invoke('transfers.remove', { id: transfer.id })
+    if (!result.ok) onError(result.error.code)
+  }
+
+  async function setPaused(transfer: TransferDto, paused: boolean) {
+    onStart()
+    const result = await bridge.invoke(paused ? 'transfers.pause' : 'transfers.resume', { id: transfer.id })
     if (!result.ok) onError(result.error.code)
   }
 
@@ -83,6 +100,8 @@ export default function TransfersSection(props: TransfersSectionProps) {
             const name = transfer.name ?? t('transfers.unnamed')
             const state = shownState(transfer)
             const finished = transfer.state === 'done'
+            const canPause = transfer.state === 'connecting' || transfer.state === 'receiving'
+            const paused = transfer.state === 'paused'
             return (
               <ItemView
                 key={transfer.id}
@@ -92,22 +111,35 @@ export default function TransfersSection(props: TransfersSectionProps) {
                 chip={t(`transfers.chip.${state}`, { percent: percentOf(transfer) })}
                 note={describe(transfer)}
                 progress={
-                  state === 'receiving'
+                  state === 'receiving' || (state === 'paused' && transfer.sizeBytes)
                     ? { value: transfer.receivedBytes, max: transfer.sizeBytes! }
                     : state === 'connecting'
                       ? 'unknown'
                       : undefined
                 }
                 actions={
-                  <button
-                    type="button"
-                    className="quiet"
-                    onClick={() => remove(transfer)}
-                    aria-label={t(finished ? 'transfers.clearFor' : 'transfers.cancelFor', { name })}
-                  >
-                    <X size={18} aria-hidden="true" />
-                    {t(finished ? 'transfers.clear' : 'transfers.cancel')}
-                  </button>
+                  <>
+                    {(canPause || paused) && (
+                      <button
+                        type="button"
+                        className="quiet"
+                        onClick={() => setPaused(transfer, canPause)}
+                        aria-label={t(paused ? 'transfers.continueFor' : 'transfers.pauseFor', { name })}
+                      >
+                        {paused ? <Play size={18} aria-hidden="true" /> : <Pause size={18} aria-hidden="true" />}
+                        {t(paused ? 'transfers.continue' : 'transfers.pause')}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="quiet"
+                      onClick={() => remove(transfer)}
+                      aria-label={t(finished ? 'transfers.clearFor' : 'transfers.cancelFor', { name })}
+                    >
+                      <X size={18} aria-hidden="true" />
+                      {t(finished ? 'transfers.clear' : 'transfers.cancel')}
+                    </button>
+                  </>
                 }
               />
             )

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { errorCodes } from '../bridge/contract.generated.ts'
 import { en } from './en.ts'
-import { formatSize } from './index.ts'
+import { formatSize, formatTimeLeft } from './index.ts'
 
 // Words a person should never have to learn (AD-5). The same list is enforced for code in
 // tests/ComParta.Core.Tests/GuardTests.cs.
@@ -41,5 +41,19 @@ describe('sizes', () => {
     [1_288_490_188, '1.20 GB'],
   ])('shows %d bytes as %s', (bytes, expected) => {
     expect(formatSize(bytes)).toBe(expected)
+  })
+})
+
+describe('time left', () => {
+  it.each([
+    [0, 'less than a minute left'],
+    [59, 'less than a minute left'],
+    [80, 'about 1 minute left'],
+    [600, 'about 10 minutes left'],
+    [3600, 'about 1 hour left'],
+    [5 * 3600 + 100, 'about 5 hours left'],
+    [3 * 86400, 'more than a day left'],
+  ])('shows %d seconds as %s', (seconds, expected) => {
+    expect(formatTimeLeft(seconds)).toBe(expected)
   })
 })

@@ -67,6 +67,7 @@ crosses two homes on ordinary home internet.
 | 7 | 10 Keep sharing in the background | Closing the window must not silently stop a transfer. |
 | 8 | 3 Safe received content | Nothing from another person reaches a relative's PC without Windows' own protection. |
 | 9 | 12 Help, settings and first run | Welcome, your name in invites, support report. |
+| 6b | 14 Download from any link | Bruno's "Both" decision: paste a download link or open a download file, with pause, speed and time left; More options later. |
 | 10 | 5 Install and update | One download, signed, updates without uninstalling. Stories 1 and 2 can start as soon as epic 1 is done. |
 
 This is the order in [tickets.toml](../tickets.toml). With one builder, follow it. With more,
@@ -113,6 +114,7 @@ recorded where it binds.
 | P-6 | Files and folders enter only through native pickers, native drag and drop, and the operating system's share menu; the UI still never sends a path. | AD-7 (amended) |
 | P-7 | Connection work starts with a measured field test; IPv6 and router port mapping come before any thought of a relay or another engine. | AD-15, epic 9 |
 | P-8 | No in-app update check, so AD-9 stays strict. Updates come from the store the app was installed from. | AD-17, epic 5 |
+| P-10 | Bruno chose "Both" (2026-10-10): ComParta also downloads from any public link or download file, like qBittorrent but simpler. CAP-25, AD-21, epic 14 in R1. | Spec CAP-25, AD-8 (amended), AD-21, epic 14 |
 | P-9 | The UI uses its own small component set and CSS variables, with bundled Lucide icons; no UI framework. Thumbnails come from the operating system through a shell port. | AD-18, UX design |
 
 ## Decisions only Bruno can make

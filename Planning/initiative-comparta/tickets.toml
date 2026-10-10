@@ -1,5 +1,5 @@
 # The epics of initiative-comparta, in build order.
-# Releases (see roadmap-comparta): R1 = epics 1, 2, 9, 6, 8, 4, 10, 3, 12, 5; R2 = 11, 7; R3 = 13.
+# Releases (see roadmap-comparta): R1 = epics 1, 2, 9, 6, 8, 4, 14, 10, 3, 12, 5; R2 = 11, 7; R3 = 13.
 
 [[epic]]
 id = 1
@@ -41,6 +41,13 @@ slug = "epic-follow-a-transfer"
 title = "A person sees how a transfer is going"
 covers = ["CAP-8", "CAP-20"]
 after = [{ epic = 2, needs = "transfers between two devices" }, { epic = 8, needs = "the cards and details panel the states render in" }]
+
+[[epic]]
+id = 14
+slug = "epic-download-any-link"
+title = "A person downloads from any link, like qBittorrent but simpler"
+covers = ["CAP-25"]
+after = [{ epic = 2, needs = "the receive path and the single running copy" }]
 
 [[epic]]
 id = 10

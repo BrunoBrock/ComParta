@@ -94,6 +94,7 @@ An arrow means "may depend on". `ComParta.Core` depends on no other project and 
 - **Binds:** engine, core
 - **Prevents:** a story switching on wider discovery and exposing family files; inconsistent network settings per share.
 - **Rule:** All discovery, encryption and port settings come from one `SharingPolicy` object in core, applied only by the engine adapter. The policy (decided 2026-10-08) allows three ways for two devices to meet, all keyed by the invite: the sender's own network address carried inside the invite, local-network discovery, and the public BitTorrent lookup network (DHT). Peer exchange and trackers stay off, addresses of servers found in a pasted invite are dropped, and connections are encrypted. No other code sets engine network options.
+- **Amended 2026-10-10 (CAP-25):** a *download link* or *download file* the person brings from elsewhere is public content, not an invite. For those only, and only when `SharingPolicy.AllowServersInDownloadLinks` is on, the servers named in the link or file are kept and exchanging addresses with other devices is allowed for that transfer. Invites made by ComParta keep the closed rules above. The engine adapter decides which is which; core never sees the difference.
 - **Accepted trade-off:** the content's fingerprint is announced on the public lookup network, so a share is unlisted, not secret: only someone holding the invite can ask for it, but the fingerprint is not hidden from that network. A stronger model (per-person keys) stays in Deferred.
 
 ### AD-9 — No hosted services, no accounts, no telemetry
@@ -119,6 +120,12 @@ An arrow means "may depend on". `ComParta.Core` depends on no other project and 
 - **Binds:** UI, core, engine
 - **Prevents:** stories that can only be built or checked with the whole app running.
 - **Rule:** `src/ui` runs in a normal browser against a fake bridge that implements the full contract. `ComParta.Core` is tested against in-memory fakes of every port. A story that adds a command adds it to the contract, the fake bridge and the core tests in the same change.
+
+### AD-21 — Downloads from public links share the receive path
+
+- **Binds:** core, engine, contracts, UI, shell
+- **Prevents:** a second, unsafe download path; torrent vocabulary spreading into core and UI because the feature resembles a classic client.
+- **Rule:** A download from a public link or file is a `Transfer` like any other: same use cases, same Received root, same sanitising and containment (AD-6, AD-13), same states plus `paused`. Core passes link text or the bytes of a download file (read through `IFileSystem` after the native picker, AD-7) to the engine as opaque data; only the engine adapter parses them (AD-2). The UI calls them "download link" and "download file"; the extension and the classic words stay out of the catalog (AD-5). Advanced controls live behind one "More options" panel per transfer and are added as commands one at a time.
 
 ### AD-13 — Received content is marked and checked by Windows, not by us
 

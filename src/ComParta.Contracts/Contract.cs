@@ -15,6 +15,9 @@ public static class Commands
     public const string TransfersList = "transfers.list";
     public const string TransfersReceive = "transfers.receive";
     public const string TransfersRemove = "transfers.remove";
+    public const string TransfersOpenFile = "transfers.openFile";
+    public const string TransfersPause = "transfers.pause";
+    public const string TransfersResume = "transfers.resume";
     public const string ReceivedOpenFolder = "received.openFolder";
 }
 
@@ -34,22 +37,27 @@ public static class ErrorCodes
     public const string InviteInvalid = "invite.invalid";
     public const string TransferDuplicate = "transfer.duplicate";
     public const string TransferNotFound = "transfer.notFound";
+    public const string TransferFinished = "transfer.finished";
+    public const string DownloadInvalidFile = "download.invalidFile";
     public const string Unexpected = "unexpected";
 
     public static IReadOnlyList<string> All { get; } =
     [
         ShareDuplicate, ShareNotFound, ShareNotReady, FileUnreadable,
-        InviteInvalid, TransferDuplicate, TransferNotFound, Unexpected,
+        InviteInvalid, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, Unexpected,
     ];
 }
 
 public enum ShareStatusDto { Preparing, Ready, Unavailable }
 
-public enum TransferStateDto { Connecting, Receiving, Done, Failed }
+public enum TransferStateDto { Connecting, Receiving, Paused, Done, Failed }
 
 public sealed record ShareDto(string Id, string Name, long SizeBytes, ShareStatusDto Status);
 
-public sealed record TransferDto(string Id, string? Name, long? SizeBytes, long ReceivedBytes, TransferStateDto State);
+/// <param name="BytesPerSecond">Current speed while receiving, else 0.</param>
+/// <param name="SecondsLeft">Roughly how long is left, or null when it cannot be told.</param>
+public sealed record TransferDto(
+    string Id, string? Name, long? SizeBytes, long ReceivedBytes, TransferStateDto State, long BytesPerSecond, long? SecondsLeft);
 
 public sealed record IdArgs(string Id);
 
@@ -87,6 +95,9 @@ public static class Contract
         new(Commands.TransfersList, null, typeof(TransferDto[])),
         new(Commands.TransfersReceive, typeof(ReceiveArgs), typeof(TransferDto)),
         new(Commands.TransfersRemove, typeof(IdArgs), null),
+        new(Commands.TransfersOpenFile, null, typeof(TransferDto), ResultMayBeNull: true),
+        new(Commands.TransfersPause, typeof(IdArgs), null),
+        new(Commands.TransfersResume, typeof(IdArgs), null),
         new(Commands.ReceivedOpenFolder, null, null),
     ];
 

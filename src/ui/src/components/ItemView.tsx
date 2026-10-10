@@ -31,7 +31,9 @@ export default function ItemView({ name, size, tone, chip, note, progress, actio
       </div>
       <div className="item-text">
         {start === '' ? (
-          <span className="item-name">{name}</span>
+          <span className="item-name" title={name}>
+            <span className="name-start">{name}</span>
+          </span>
         ) : (
           <span className="item-name" title={name}>
             <span className="visually-hidden">{name}</span>
