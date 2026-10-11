@@ -59,6 +59,12 @@ internal sealed class FakeEngine : ITransferEngine
     public string? ReadInviteKey(string inviteText) =>
         inviteText.StartsWith(InvitePrefix, StringComparison.Ordinal) ? inviteText[InvitePrefix.Length..] : null;
 
+    /// <summary>What an invite announces, by content key; anything else announces nothing.</summary>
+    public Dictionary<string, InviteSummary> Announced { get; } = [];
+
+    public InviteSummary? DescribeInvite(string inviteText) =>
+        ReadInviteKey(inviteText) is { } key ? Announced.GetValueOrDefault(key) ?? new InviteSummary(null, null) : null;
+
     public string? GetReceiveKey(TransferId id) => Receiving.GetValueOrDefault(id);
 
     public Task<bool> ReceiveAsync(TransferId id, string inviteText, CancellationToken ct = default)
@@ -125,4 +131,10 @@ internal sealed class FakeFileSystem : IFileSystem
         Locked.Contains(path) || !Contents.TryGetValue(path, out var content) ? throw new UnauthorizedAccessException()
         : content.Length > maxBytes ? throw new IOException()
         : content;
+}
+
+internal sealed class FakeStorage : IStorageInfo
+{
+    public long? FreeBytes { get; set; }
+    public long? GetReceivedFreeBytes() => FreeBytes;
 }

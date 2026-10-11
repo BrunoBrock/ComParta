@@ -57,6 +57,16 @@ public enum TransferState
     Failed,
 }
 
+/// <summary>
+/// What the person sees before agreeing to receive: the hints, whether they come from a ComParta
+/// invite, and the room left for received files.
+/// </summary>
+public sealed record InvitePreview(InviteHints Hints, bool IsInvite, long? FreeBytes)
+{
+    /// <summary>True when the size is known and larger than the room left.</summary>
+    public bool NotEnoughSpace => Hints.SizeBytes is { } size && FreeBytes is { } free && size > free;
+}
+
 public sealed record TransferView(Transfer Transfer, TransferState State, long ReceivedBytes, long BytesPerSecond = 0)
 {
     /// <summary>Roughly how long is left at the current speed, or null when it cannot be told.</summary>
@@ -114,6 +124,7 @@ public enum ErrorKind
     TransferNotFound,
     DownloadFileInvalid,
     TransferFinished,
+    DiskFull,
     Unexpected,
 }
 

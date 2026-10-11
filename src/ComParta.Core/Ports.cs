@@ -17,6 +17,9 @@ public interface ITransferRepository
 
 public enum OfferState { Preparing, Ready, Failed }
 
+/// <summary>What the engine can tell from invite text alone: the name and size it announces.</summary>
+public sealed record InviteSummary(string? Name, long? SizeBytes);
+
 public sealed record ReceiveProgress(
     TransferId Id, string? Name, long? SizeBytes, long ReceivedBytes, bool Done, bool Failed = false, long BytesPerSecond = 0);
 
@@ -40,6 +43,8 @@ public interface ITransferEngine
 
     /// <summary>A stable key for the content an invite points to, or null when the text is not an invite.</summary>
     string? ReadInviteKey(string inviteText);
+    /// <summary>The name and size the invite text announces, or null when it is not an invite.</summary>
+    InviteSummary? DescribeInvite(string inviteText);
     /// <summary>The content key of a transfer the engine knows, or null.</summary>
     string? GetReceiveKey(TransferId id);
     /// <summary>Starts receiving into the Received root. Returns false when the text is not an invite.</summary>
@@ -70,6 +75,15 @@ public interface IFilePicker
 public interface IClipboard
 {
     Task SetTextAsync(string text, CancellationToken ct = default);
+    /// <summary>The text on the clipboard, or null. Read only when the person asks for it (AD-16).</summary>
+    Task<string?> GetTextAsync(CancellationToken ct = default);
+}
+
+/// <summary>How much room there is where received files are written.</summary>
+public interface IStorageInfo
+{
+    /// <summary>Free bytes on the drive that holds the Received root, or null when it cannot be told.</summary>
+    long? GetReceivedFreeBytes();
 }
 
 /// <summary>Shows received content to the person with the platform's own file browser.</summary>

@@ -30,7 +30,8 @@ public sealed class AppServices
 			var store = await SqliteStore.OpenAsync(_paths.DatabasePath);
 			_engine = new MonoTorrentTransferEngine(_paths);
 			var shares = new ShareUseCases(store, _engine, new NativeFilePicker(), new LocalFileSystem());
-			var transfers = new TransferUseCases(store, _engine, picker: new NativeFilePicker(), files: new LocalFileSystem());
+			var transfers = new TransferUseCases(
+				store, _engine, picker: new NativeFilePicker(), files: new LocalFileSystem(), storage: new LocalStorageInfo(_paths));
 			var router = new BridgeRouter(shares, transfers, new NativeClipboard(), new ReceivedFolderOpener(_paths));
 
 			await _engine.StartAsync(SharingPolicy.Default);

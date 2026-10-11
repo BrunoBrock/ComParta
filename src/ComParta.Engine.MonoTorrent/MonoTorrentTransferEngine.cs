@@ -272,6 +272,9 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
     public string? ReadInviteKey(string inviteText) =>
         TryReadInvite(inviteText, out var link, out _) ? KeyOf(link.InfoHashes) : null;
 
+    public InviteSummary? DescribeInvite(string inviteText) =>
+        TryReadInvite(inviteText, out var link, out _) ? new InviteSummary(link.Name, link.Size) : null;
+
     public string? GetReceiveKey(TransferId id) =>
         _incoming.TryGetValue(id, out var incoming) ? KeyOf(incoming.Manager.InfoHashes) : null;
 

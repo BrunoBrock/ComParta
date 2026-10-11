@@ -1,6 +1,6 @@
 import { Search, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import type { Bridge, ErrorCode, ShareDto, TransferDto } from './bridge/index.ts'
+import type { Bridge, ErrorCode, InvitePreviewDto, ShareDto, TransferDto } from './bridge/index.ts'
 import type { ViewMode } from './components/ItemView.tsx'
 import Notice, { type NoticeContent } from './components/Notice.tsx'
 import Rail, { type Section } from './components/Rail.tsx'
@@ -27,6 +27,8 @@ export default function App({ bridge }: AppProps) {
   const [view, setView] = useState<ViewMode>(loadView)
   const [query, setQuery] = useState('')
   const [receiving, setReceiving] = useState(false)
+  // An invite pasted anywhere in the window, already read, for the confirmation.
+  const [pasted, setPasted] = useState<{ text: string; preview: InvitePreviewDto } | undefined>()
   const [adding, setAdding] = useState(false)
 
   const showError = useCallback((code: ErrorCode) => setNotice({ kind: 'error', text: errorMessage(code) }), [])
@@ -58,6 +60,26 @@ export default function App({ bridge }: AppProps) {
     }
   }, [bridge, showError])
 
+  // Ctrl+V anywhere with an invite or download link opens "Get this file?" (UX design, Receive a file).
+  // The app decides what the text is; ordinary text pasted outside a text box does nothing.
+  useEffect(() => {
+    if (receiving) return
+    const onPaste = (event: ClipboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, [contenteditable="true"]')) return
+      const text = event.clipboardData?.getData('text') ?? ''
+      if (text.trim() === '') return
+      void bridge.invoke('transfers.preview', { invite: text }).then((result) => {
+        if (!result.ok) return
+        setNotice(null)
+        setPasted({ text, preview: result.value })
+        setReceiving(true)
+      })
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [bridge, receiving])
+
   function changeView(next: ViewMode) {
     setView(next)
     saveView(next)
@@ -78,7 +100,13 @@ export default function App({ bridge }: AppProps) {
 
   function startReceiving() {
     clearNotice()
+    setPasted(undefined)
     setReceiving(true)
+  }
+
+  function stopReceiving() {
+    setReceiving(false)
+    setPasted(undefined)
   }
 
   const shared = (
@@ -149,11 +177,12 @@ export default function App({ bridge }: AppProps) {
       {receiving && (
         <ReceiveDialog
           bridge={bridge}
+          pasted={pasted}
           onStarted={() => {
-            setReceiving(false)
+            stopReceiving()
             setSection('received')
           }}
-          onCancel={() => setReceiving(false)}
+          onCancel={stopReceiving}
         />
       )}
     </div>

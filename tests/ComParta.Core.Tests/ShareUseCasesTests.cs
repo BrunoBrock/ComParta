@@ -5,7 +5,8 @@ namespace ComParta.Core.Tests;
 
 public sealed class ShareUseCasesTests
 {
-    private const string Video = @"C:\Videos\birthday.mp4";
+    // A rooted path on whichever system runs the tests, so the full-path check leaves it alone.
+    private static readonly string Video = Path.Combine(Path.GetTempPath(), "Videos", "birthday.mp4");
 
     private readonly FakeShareRepository _repository = new();
     private readonly FakeEngine _engine = new();
@@ -155,11 +156,15 @@ public sealed class ShareUseCasesTests
     {
         var shares = Create();
         var ready = await AddVideoAsync(shares);
-        Assert.Equal(FakeEngine.InvitePrefix + ready.Share.Id, (await shares.GetInviteAsync(ready.Share.Id)).Value);
+        Assert.True(InviteCodec.TryRead((await shares.GetInviteAsync(ready.Share.Id)).Value, out var invite));
+        Assert.Equal(FakeEngine.InvitePrefix + ready.Share.Id, invite.EngineText);
+        Assert.Equal(ready.Share.Name, invite.Hints.Name);
+        Assert.Equal(ready.Share.SizeBytes, invite.Hints.SizeBytes);
 
         _engine.OfferOutcome = OfferState.Preparing;
-        _files.Files[@"C:\big.iso"] = 9;
-        _picker.NextPick = @"C:\big.iso";
+        var big = Path.Combine(Path.GetTempPath(), "big.iso");
+        _files.Files[big] = 9;
+        _picker.NextPick = big;
         var preparing = (await shares.AddAsync()).Value!;
 
         Assert.Equal(ErrorKind.ShareNotReady, (await shares.GetInviteAsync(preparing.Share.Id)).Error);

@@ -1,5 +1,6 @@
-import { Copy, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { Check, Copy, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { getComPartaUrl } from '../appLinks.ts'
 import type { Bridge, ErrorCode, ShareDto } from '../bridge/index.ts'
 import { formatSize, t } from '../i18n/index.ts'
 import { matches } from '../search.ts'
@@ -28,12 +29,29 @@ export default function SharesSection(props: SharesSectionProps) {
   const { bridge, shares, query, view, onViewChange, onError, onInfo, onStart, onClearSearch } = props
   // View state only: which share the confirmation is open for.
   const [removing, setRemoving] = useState<ShareDto | null>(null)
+  // The share whose button says "Copied" for a moment.
+  const [copied, setCopied] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (copied === null) return
+    const timer = setTimeout(() => setCopied(null), 3000)
+    return () => clearTimeout(timer)
+  }, [copied])
 
   async function copyInvite(share: ShareDto) {
     onStart()
-    const result = await bridge.invoke('shares.copyInvite', { id: share.id })
-    if (result.ok) onInfo(t('shares.inviteCopied', { name: share.name }))
-    else onError(result.error.code)
+    // The friendly message is written here, in the person's language; the app puts the link in (AD-16).
+    const message = t('invite.message', {
+      sender: t('invite.someone'),
+      name: share.name,
+      size: formatSize(share.sizeBytes),
+      store: getComPartaUrl,
+    })
+    const result = await bridge.invoke('shares.copyInvite', { id: share.id, message })
+    if (result.ok) {
+      setCopied(share.id)
+      onInfo(t('shares.inviteCopied', { name: share.name }))
+    } else onError(result.error.code)
   }
 
   async function confirmRemove(share: ShareDto) {
@@ -79,8 +97,8 @@ export default function SharesSection(props: SharesSectionProps) {
                       onClick={() => copyInvite(share)}
                       aria-label={t('shares.copyInviteFor', { name: share.name })}
                     >
-                      <Copy size={18} aria-hidden="true" />
-                      {t('shares.copyInvite')}
+                      {copied === share.id ? <Check size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}
+                      {t(copied === share.id ? 'shares.copied' : 'shares.copyInvite')}
                     </button>
                   )}
                   <button

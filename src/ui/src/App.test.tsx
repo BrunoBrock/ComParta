@@ -30,11 +30,18 @@ const navButton = (label: string) =>
   within(screen.getByRole('navigation', { name: en['nav.label'] })).getByRole('button', { name: new RegExp(`^${label}`) })
 const goToReceived = (user: User) => user.click(navButton(en['nav.received']))
 
-async function pasteInvite(user: User, invite: string) {
+/** Types the text into the receive box and continues; stops at the confirmation or the problem. */
+async function enterInvite(user: User, invite: string) {
   await user.click(await screen.findByRole('button', { name: en['transfers.open'] }))
   const dialog = screen.getByRole('dialog', { name: en['receive.title'] })
   await user.type(within(dialog).getByLabelText(en['transfers.inviteLabel']), invite)
-  await user.click(within(dialog).getByRole('button', { name: en['transfers.receive'] }))
+  await user.click(within(dialog).getByRole('button', { name: en['receive.continue'] }))
+}
+
+async function pasteInvite(user: User, invite: string) {
+  await enterInvite(user, invite)
+  const confirm = await screen.findByRole('dialog', { name: en['confirm.title'] })
+  await user.click(within(confirm).getByRole('button', { name: en['transfers.receive'] }))
 }
 
 describe('the list of my shares', () => {
@@ -152,8 +159,13 @@ describe('sending to another person', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Copy invite for Birthday party.mp4' }))
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Paste it into an email or chat message')
-    expect(bridge.copiedInvite).not.toBeNull()
+    expect(await screen.findByRole('status')).toHaveTextContent('Paste it into WhatsApp or an email')
+    expect(bridge.copiedInvite).toBe(
+      'Someone wants to send you “Birthday party.mp4” (1.20 GB) with ComParta.\n' +
+        '1. Get ComParta: https://github.com/BrunoBrock/ComParta/releases\n' +
+        '2. Open this invite in ComParta: comparta://receive/v1/s1',
+    )
+    expect(screen.getByRole('button', { name: 'Copy invite for Birthday party.mp4' })).toHaveTextContent(en['shares.copied'])
   })
 })
 
@@ -189,7 +201,7 @@ describe('receiving from another person', () => {
   it('explains when the text is not an invite and keeps what was typed', async () => {
     const { user } = setup()
 
-    await pasteInvite(user, 'hello grandma')
+    await enterInvite(user, 'hello grandma')
 
     const dialog = screen.getByRole('dialog', { name: en['receive.title'] })
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(en['error.invite.invalid'])
@@ -236,6 +248,92 @@ describe('receiving from another person', () => {
     await user.click(await screen.findByRole('button', { name: en['transfers.openFolder'] }))
 
     expect(bridge.openedFolder).toBe(1)
+  })
+})
+
+describe('confirming before receiving', () => {
+  it('shows what the invite says before anything is received', async () => {
+    const { bridge, user } = setup()
+
+    await enterInvite(user, `Oi! Abra isto: ${sampleFakeInvite} 😀`)
+
+    const confirm = await screen.findByRole('dialog', { name: en['confirm.title'] })
+    expect(within(confirm).getByText('Birthday party.mp4')).toBeInTheDocument()
+    expect(within(confirm).getByText('238.4 MB · from Paulo')).toBeInTheDocument()
+    expect(within(confirm).getByText(en['confirm.fromInvite'])).toBeInTheDocument()
+    expect(within(confirm).getByText('You have 120.00 GB free.')).toBeInTheDocument()
+    expect(await bridge.invoke('transfers.list')).toEqual({ ok: true, value: [] })
+  })
+
+  it('starts nothing when the person says not now', async () => {
+    const { bridge, user } = setup()
+    await enterInvite(user, sampleFakeInvite)
+
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: en['receive.cancel'] }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(await bridge.invoke('transfers.list')).toEqual({ ok: true, value: [] })
+  })
+
+  it('says how much to free when the file does not fit', async () => {
+    const { user } = setup({ freeBytes: 100 * 1024 * 1024 })
+
+    await enterInvite(user, sampleFakeInvite)
+
+    const confirm = await screen.findByRole('dialog', { name: en['confirm.title'] })
+    expect(within(confirm).getByRole('alert')).toHaveTextContent('Free up 138.4 MB on this computer')
+    expect(within(confirm).getByRole('button', { name: en['transfers.receive'] })).toBeDisabled()
+  })
+
+  it('fills in an invite found on the clipboard and says so', async () => {
+    const { bridge, user } = setup()
+    bridge.clipboardText = `Paulo sent you this: ${sampleFakeInvite}`
+
+    await user.click(await screen.findByRole('button', { name: en['transfers.open'] }))
+
+    const dialog = screen.getByRole('dialog', { name: en['receive.title'] })
+    expect(await within(dialog).findByText(en['receive.found'])).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(en['transfers.inviteLabel'])).toHaveValue(sampleFakeInvite)
+  })
+
+  it('leaves the box empty when the clipboard holds no invite', async () => {
+    const { bridge, user } = setup()
+    bridge.clipboardText = 'shopping list'
+
+    await user.click(await screen.findByRole('button', { name: en['transfers.open'] }))
+
+    const dialog = screen.getByRole('dialog', { name: en['receive.title'] })
+    expect(within(dialog).getByLabelText(en['transfers.inviteLabel'])).toHaveValue('')
+    expect(within(dialog).getByText(en['receive.hint'])).toBeInTheDocument()
+  })
+})
+
+describe('pasting an invite anywhere', () => {
+  function paste(text: string) {
+    const event = new Event('paste', { bubbles: true }) as Event & { clipboardData: unknown }
+    event.clipboardData = { getData: () => text }
+    act(() => {
+      document.body.dispatchEvent(event)
+    })
+  }
+
+  it('opens the confirmation for a message holding an invite', async () => {
+    setup()
+    await screen.findByText(en['shares.empty'])
+
+    paste(`Oi vó!\n${sampleFakeInvite}\nBeijos`)
+
+    expect(await screen.findByRole('dialog', { name: en['confirm.title'] })).toBeInTheDocument()
+  })
+
+  it('does nothing with ordinary text', async () => {
+    setup()
+    await screen.findByText(en['shares.empty'])
+
+    paste('shopping list')
+
+    await act(() => Promise.resolve())
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
 

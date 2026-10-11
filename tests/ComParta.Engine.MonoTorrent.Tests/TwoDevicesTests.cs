@@ -115,6 +115,7 @@ public sealed class TwoDevicesTests : IAsyncLifetime
                 done.TrySetResult(progress);
         };
         var transferId = TransferId.New();
+        Assert.Equal("family video.mp4", receiver.DescribeInvite(invite)!.Name);
         Assert.True(await receiver.ReceiveAsync(transferId, invite));
         Assert.Equal(receiver.ReadInviteKey(invite), receiver.GetReceiveKey(transferId));
         await receiver.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
@@ -268,6 +269,7 @@ public sealed class TwoDevicesTests : IAsyncLifetime
         var (engine, _) = await StartDeviceAsync("receiver");
 
         Assert.Null(engine.ReadInviteKey(text));
+        Assert.Null(engine.DescribeInvite(text));
         Assert.False(await engine.ReceiveAsync(TransferId.New(), text));
     }
 

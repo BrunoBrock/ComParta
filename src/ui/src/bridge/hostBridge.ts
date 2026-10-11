@@ -41,7 +41,10 @@ export function createHostBridge(): Bridge {
       try {
         await ready
         const reply = await window.HybridWebView!.InvokeDotNet('Invoke', [command, JSON.stringify(args ?? null)])
-        return (typeof reply === 'string' ? JSON.parse(reply) : reply) as CommandResult<never>
+        const result = (typeof reply === 'string' ? JSON.parse(reply) : reply) as CommandResult<never>
+        // The app leaves out a null value; the contract promises null, as the fake bridge gives.
+        if (result.ok && !('value' in result)) return { ok: true, value: null } as CommandResult<never>
+        return result
       } catch {
         return unexpected
       }

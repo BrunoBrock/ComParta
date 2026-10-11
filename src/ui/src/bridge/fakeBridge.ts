@@ -3,7 +3,9 @@ import type {
   CommandResult,
   ErrorCode,
   EventEnvelope,
+  CopyInviteArgs,
   IdArgs,
+  InvitePreviewDto,
   ReceiveArgs,
   ShareDto,
   TransferDto,
@@ -19,6 +21,8 @@ export interface FakeBridgeOptions {
   transfers?: TransferDto[]
   /** Milliseconds a new share stays "preparing" and between steps of a transfer. 0 means never advance on its own. */
   stepMs?: number
+  /** Room left for received files; null when it cannot be told. */
+  freeBytes?: number | null
 }
 
 export interface FakeBridge extends Bridge {
@@ -28,16 +32,21 @@ export interface FakeBridge extends Bridge {
   failNextWith: ErrorCode | null
   /** What the next "open a download file" dialog returns; null means cancelled, 'invalid' a wrong file. */
   nextDownloadFile: PickedFile | 'invalid' | null
-  /** Text of the last invite "copied". */
+  /** Text of the last invite message "copied". */
   copiedInvite: string | null
+  /** What the system clipboard holds, for the "found an invite you copied" path. */
+  clipboardText: string | null
   openedFolder: number
   /** Change state from outside, as the app does when something happens on its own. */
   setShares(shares: ShareDto[]): void
   setTransfers(transfers: TransferDto[]): void
 }
 
-const invitePrefix = 'comparta-invite:'
+// The fake's invites look like the app's ComParta links (AD-16) but carry the share id in the clear.
+const invitePrefix = 'comparta://receive/v1/'
+const invitePattern = /comparta:\/\/receive\/v1\/([A-Za-z0-9_-]+)/i
 const downloadLinkPrefix = 'https://example.org/download/'
+const demoInvite = { senderName: 'Paulo', name: 'Birthday party.mp4', sizeBytes: 250_000_000 }
 const ok = <T>(value: T): CommandResult<T> => ({ ok: true, value })
 const fail = (code: ErrorCode): CommandResult<never> => ({ ok: false, error: { code } })
 
@@ -127,6 +136,27 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     return ok(null)
   }
 
+  const freeBytes = options.freeBytes === undefined ? 120 * 1024 ** 3 : options.freeBytes
+
+  /** Reads text the way the app's invite codec and engine do, or null when it is neither. */
+  const read = (text: string): { key: string; preview: InvitePreviewDto } | null => {
+    const found = invitePattern.exec(text)
+    if (found) {
+      const share = shares.find((s) => s.id === found[1])
+      const hints = share ? { senderName: null, name: share.name, sizeBytes: share.sizeBytes } : demoInvite
+      return { key: `from-${found[1]}`, preview: { ...hints, itemCount: 1, isInvite: true, freeBytes } }
+    }
+    const trimmed = text.trim()
+    if (trimmed.startsWith(downloadLinkPrefix)) {
+      const name = decodeURIComponent(trimmed.slice(downloadLinkPrefix.length)) || 'Download'
+      return {
+        key: `link-${name}`,
+        preview: { senderName: null, name, sizeBytes: 1_800_000_000, itemCount: null, isInvite: false, freeBytes },
+      }
+    }
+    return null
+  }
+
   const handlers: Record<string, (args: unknown) => CommandResult<unknown>> = {
     'shares.list': () => ok([...shares]),
 
@@ -158,24 +188,34 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     },
 
     'shares.copyInvite': (args) => {
-      const share = shares.find((s) => s.id === (args as IdArgs).id)
+      const { id, message } = args as CopyInviteArgs
+      const share = shares.find((s) => s.id === id)
       if (!share) return fail('share.notFound')
       if (share.status !== 'ready') return fail('share.notReady')
-      fake.copiedInvite = invitePrefix + share.id
+      const link = invitePrefix + share.id
+      fake.copiedInvite = message ? (message.includes('{link}') ? message.replace('{link}', link) : `${message}\n${link}`) : link
       return ok(null)
     },
 
     'transfers.list': () => ok([...transfers]),
 
+    'transfers.preview': (args) => {
+      const found = read((args as ReceiveArgs).invite ?? '')
+      return found ? ok(found.preview) : fail('invite.invalid')
+    },
+
     'transfers.receive': (args) => {
-      const invite = (args as ReceiveArgs).invite.trim()
-      if (invite.startsWith(invitePrefix))
-        return startTransfer(`from-${invite.slice(invitePrefix.length)}`, 'Birthday party.mp4', 250_000_000)
-      if (invite.startsWith(downloadLinkPrefix)) {
-        const name = decodeURIComponent(invite.slice(downloadLinkPrefix.length)) || 'Download'
-        return startTransfer(`link-${name}`, name, 1_800_000_000, { name })
-      }
-      return fail('invite.invalid')
+      const found = read((args as ReceiveArgs).invite ?? '')
+      if (!found) return fail('invite.invalid')
+      const { name, sizeBytes, isInvite } = found.preview
+      if (sizeBytes !== null && freeBytes !== null && sizeBytes > freeBytes) return fail('disk.full')
+      // Names from an invite are hints only; the name appears once the file's details arrive.
+      return startTransfer(found.key, name ?? 'File', sizeBytes ?? 250_000_000, isInvite ? {} : { name })
+    },
+
+    'clipboard.findInvite': () => {
+      const found = invitePattern.exec(fake.clipboardText ?? '')
+      return ok(found ? found[0] : null)
     },
 
     'transfers.openFile': () => {
@@ -208,6 +248,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     nextDownloadFile: { name: 'Free documentary.mkv', sizeBytes: 2_147_483_648 } as PickedFile | 'invalid' | null,
     failNextWith: null as ErrorCode | null,
     copiedInvite: null as string | null,
+    clipboardText: null as string | null,
     openedFolder: 0,
 
     async invoke(command: string, args?: unknown) {

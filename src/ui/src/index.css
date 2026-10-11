@@ -702,3 +702,25 @@ dialog textarea {
 .receive-file .hint {
   margin: 0;
 }
+
+.confirm-item {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(var(--space) * 1.5);
+  margin-block: calc(var(--space) * 2);
+}
+
+.confirm-item svg {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+}
+
+.confirm-item p {
+  margin: 0 0 4px;
+}
+
+.confirm-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

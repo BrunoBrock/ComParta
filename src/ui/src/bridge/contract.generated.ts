@@ -15,6 +15,11 @@ export interface IdArgs {
   id: string;
 }
 
+export interface CopyInviteArgs {
+  id: string;
+  message: string | null;
+}
+
 export interface TransferDto {
   id: string;
   name: string | null;
@@ -29,6 +34,15 @@ export interface ReceiveArgs {
   invite: string;
 }
 
+export interface InvitePreviewDto {
+  senderName: string | null;
+  name: string | null;
+  sizeBytes: number | null;
+  itemCount: number | null;
+  isInvite: boolean;
+  freeBytes: number | null;
+}
+
 export const errorCodes = [
   "share.duplicate",
   "share.notFound",
@@ -39,6 +53,7 @@ export const errorCodes = [
   "transfer.notFound",
   "transfer.finished",
   "download.invalidFile",
+  "disk.full",
   "unexpected",
 ] as const;
 
@@ -48,9 +63,11 @@ export interface Commands {
   "shares.list": { args: undefined; result: ShareDto[] };
   "shares.add": { args: undefined; result: ShareDto | null };
   "shares.remove": { args: IdArgs; result: null };
-  "shares.copyInvite": { args: IdArgs; result: null };
+  "shares.copyInvite": { args: CopyInviteArgs; result: null };
   "transfers.list": { args: undefined; result: TransferDto[] };
+  "transfers.preview": { args: ReceiveArgs; result: InvitePreviewDto };
   "transfers.receive": { args: ReceiveArgs; result: TransferDto };
+  "clipboard.findInvite": { args: undefined; result: string | null };
   "transfers.remove": { args: IdArgs; result: null };
   "transfers.openFile": { args: undefined; result: TransferDto | null };
   "transfers.pause": { args: IdArgs; result: null };

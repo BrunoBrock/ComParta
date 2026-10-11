@@ -65,12 +65,24 @@ public sealed class BridgeRouter
 
             case Commands.SharesCopyInvite:
             {
-                var invite = await GetInviteAsync(argsJson);
+                var args = Args<CopyInviteArgs>(argsJson);
+                var invite = ShareId.TryParse(args?.Id, out var shareId)
+                    ? await _shares.GetInviteAsync(shareId)
+                    : Result<string>.Fail(ErrorKind.ShareNotFound);
                 if (!invite.Ok)
                     return Failure(invite.Error);
-                await _clipboard.SetTextAsync(invite.Value!);
+                await _clipboard.SetTextAsync(ComposeMessage(args!.Message, invite.Value!));
                 return CommandResult.Success(null);
             }
+
+            case Commands.TransfersPreview:
+            {
+                var preview = _transfers.Preview(Args<ReceiveArgs>(argsJson)?.Invite);
+                return preview.Ok ? CommandResult.Success(ToDto(preview.Value!)) : Failure(preview.Error);
+            }
+
+            case Commands.ClipboardFindInvite:
+                return CommandResult.Success(TransferUseCases.FindInvite(await _clipboard.GetTextAsync()));
 
             case Commands.TransfersList:
                 return CommandResult.Success(_transfers.List().Select(ToDto).ToArray());
@@ -111,10 +123,16 @@ public sealed class BridgeRouter
         }
     }
 
-    private async Task<Result<string>> GetInviteAsync(string? argsJson) =>
-        ShareId.TryParse(Args<IdArgs>(argsJson)?.Id, out var id)
-            ? await _shares.GetInviteAsync(id)
-            : Result<string>.Fail(ErrorKind.ShareNotFound);
+    /// <summary>The UI's message with the link put in, or the link alone.</summary>
+    private static string ComposeMessage(string? message, string link)
+    {
+        const string placeholder = "{link}";
+        if (string.IsNullOrWhiteSpace(message))
+            return link;
+        return message.Contains(placeholder, StringComparison.Ordinal)
+            ? message.Replace(placeholder, link, StringComparison.Ordinal)
+            : message.TrimEnd() + Environment.NewLine + link;
+    }
 
     private void Raise(string name, object payload) =>
         EventRaised?.Invoke(JsonSerializer.Serialize(new EventEnvelope(name, payload), Contract.Json));
@@ -154,6 +172,14 @@ public sealed class BridgeRouter
         view.BytesPerSecond,
         view.SecondsLeft);
 
+    public static InvitePreviewDto ToDto(InvitePreview preview) => new(
+        preview.Hints.SenderName,
+        preview.Hints.Name,
+        preview.Hints.SizeBytes,
+        preview.Hints.ItemCount,
+        preview.IsInvite,
+        preview.FreeBytes);
+
     public static string ToCode(ErrorKind error) => error switch
     {
         ErrorKind.ShareDuplicate => ErrorCodes.ShareDuplicate,
@@ -165,6 +191,7 @@ public sealed class BridgeRouter
         ErrorKind.TransferNotFound => ErrorCodes.TransferNotFound,
         ErrorKind.TransferFinished => ErrorCodes.TransferFinished,
         ErrorKind.DownloadFileInvalid => ErrorCodes.DownloadInvalidFile,
+        ErrorKind.DiskFull => ErrorCodes.DiskFull,
         _ => ErrorCodes.Unexpected,
     };
 }

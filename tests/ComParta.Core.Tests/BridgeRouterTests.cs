@@ -8,7 +8,8 @@ namespace ComParta.Core.Tests;
 /// <summary>The whole contract, exercised as JSON the way the UI does, with no window.</summary>
 public sealed class BridgeRouterTests
 {
-    private const string Video = @"C:\Videos\birthday.mp4";
+    // A rooted path on whichever system runs the tests, so the full-path check leaves it alone.
+    private static readonly string Video = Path.Combine(Path.GetTempPath(), "Videos", "birthday.mp4");
 
     private readonly FakeEngine _engine = new();
     private readonly FakeFilePicker _picker = new();
@@ -30,6 +31,8 @@ public sealed class BridgeRouterTests
     private sealed class FakeShell : IClipboard, IContentOpener
     {
         public string? Copied { get; private set; }
+        public string? OnClipboard { get; set; }
+        public Task<string?> GetTextAsync(CancellationToken ct = default) => Task.FromResult(OnClipboard);
         public int Opened { get; private set; }
         public Task SetTextAsync(string text, CancellationToken ct = default) { Copied = text; return Task.CompletedTask; }
         public Task OpenReceivedFolderAsync(CancellationToken ct = default) { Opened++; return Task.CompletedTask; }
@@ -101,10 +104,54 @@ public sealed class BridgeRouterTests
     {
         var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
 
-        var result = await InvokeAsync(Commands.SharesCopyInvite, new { id });
+        var result = await InvokeAsync(Commands.SharesCopyInvite, new { id, message = "Paulo sends you a file.\n{link}\nOpen it in ComParta." });
 
         Assert.True(result.GetProperty("ok").GetBoolean());
-        Assert.Equal(FakeEngine.InvitePrefix + id, _shell.Copied);
+        var link = InviteCodec.FindLink(_shell.Copied)!;
+        Assert.Equal($"Paulo sends you a file.\n{link}\nOpen it in ComParta.", _shell.Copied);
+        Assert.True(InviteCodec.TryRead(link, out var invite));
+        Assert.Equal(FakeEngine.InvitePrefix + id, invite.EngineText);
+        Assert.Equal("birthday.mp4", invite.Hints.Name);
+        Assert.Equal(5_000, invite.Hints.SizeBytes);
+    }
+
+    [Fact]
+    public async Task Without_a_message_only_the_link_is_copied()
+    {
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
+
+        await InvokeAsync(Commands.SharesCopyInvite, new { id });
+
+        Assert.Equal(InviteCodec.FindLink(_shell.Copied), _shell.Copied);
+    }
+
+    [Fact]
+    public async Task An_invite_is_previewed_with_what_it_says_about_the_file()
+    {
+        var link = InviteCodec.Write("invite:abc", new InviteHints("Paulo", "Natal 2024.mp4", 4_200, 1));
+
+        var preview = (await InvokeAsync(Commands.TransfersPreview, new { invite = $"Oi! {link} 🎄" })).GetProperty("value");
+
+        Assert.Equal("Paulo", preview.GetProperty("senderName").GetString());
+        Assert.Equal("Natal 2024.mp4", preview.GetProperty("name").GetString());
+        Assert.Equal(4_200, preview.GetProperty("sizeBytes").GetInt64());
+        Assert.True(preview.GetProperty("isInvite").GetBoolean());
+        Assert.Empty(_engine.Receiving);
+        Assert.Equal(ErrorCodes.InviteInvalid, ErrorCode(await InvokeAsync(Commands.TransfersPreview, new { invite = "hello" })));
+    }
+
+    [Fact]
+    public async Task An_invite_on_the_clipboard_is_found_and_other_text_is_not()
+    {
+        var link = InviteCodec.Write("invite:abc", InviteHints.None);
+        _shell.OnClipboard = "Here you go:\n" + link;
+
+        Assert.Equal(link, (await InvokeAsync(Commands.ClipboardFindInvite)).GetProperty("value").GetString());
+
+        _shell.OnClipboard = "shopping list";
+        var nothing = await InvokeAsync(Commands.ClipboardFindInvite);
+        Assert.True(nothing.GetProperty("ok").GetBoolean());
+        Assert.False(nothing.TryGetProperty("value", out _));
     }
 
     [Fact]

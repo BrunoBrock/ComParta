@@ -14,6 +14,7 @@ public sealed class TransferUseCases
     private readonly ITransferEngine _engine;
     private readonly IFilePicker? _picker;
     private readonly IFileSystem? _files;
+    private readonly IStorageInfo? _storage;
     private readonly TimeProvider _clock;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Dictionary<TransferId, TransferView> _transfers = [];
@@ -23,12 +24,14 @@ public sealed class TransferUseCases
         ITransferEngine engine,
         TimeProvider? clock = null,
         IFilePicker? picker = null,
-        IFileSystem? files = null)
+        IFileSystem? files = null,
+        IStorageInfo? storage = null)
     {
         _repository = repository;
         _engine = engine;
         _picker = picker;
         _files = files;
+        _storage = storage;
         _clock = clock ?? TimeProvider.System;
         _engine.ReceiveProgressed += OnReceiveProgressed;
     }
@@ -71,14 +74,56 @@ public sealed class TransferUseCases
             return [.. _transfers.Values.OrderBy(v => v.Transfer.AddedAt)];
     }
 
-    /// <summary>Starts receiving the file an invite or a download link points to.</summary>
-    public async Task<Result<TransferView>> ReceiveAsync(string? inviteText, CancellationToken ct = default)
+    /// <summary>
+    /// What an invite or download link says about the file, and the room left for it, so the person
+    /// can agree before anything is received (AD-16).
+    /// </summary>
+    public Result<InvitePreview> Preview(string? text)
     {
-        inviteText = inviteText?.Trim() ?? "";
-        var key = _engine.ReadInviteKey(inviteText);
+        if (!TryReadInvite(text, out var invite, out var summary))
+            return Result<InvitePreview>.Fail(ErrorKind.InviteInvalid);
+
+        // The invite's own hints win; the engine fills in what a link without hints announces.
+        var hints = invite.Hints with
+        {
+            Name = invite.Hints.Name ?? summary.Name,
+            SizeBytes = invite.Hints.SizeBytes ?? summary.SizeBytes,
+        };
+        return Result<InvitePreview>.Success(new InvitePreview(hints, invite.IsLink, _storage?.GetReceivedFreeBytes()));
+    }
+
+    /// <summary>Starts receiving the file an invite or a download link points to.</summary>
+    public async Task<Result<TransferView>> ReceiveAsync(string? text, CancellationToken ct = default)
+    {
+        var preview = Preview(text);
+        if (!preview.Ok)
+            return Result<TransferView>.Fail(preview.Error!.Value);
+        if (preview.Value!.NotEnoughSpace)
+            return Result<TransferView>.Fail(ErrorKind.DiskFull);
+
+        TryReadInvite(text, out var invite, out _);
+        var key = _engine.ReadInviteKey(invite.EngineText);
         if (key is null)
             return Result<TransferView>.Fail(ErrorKind.InviteInvalid);
-        return await StartAsync(key, id => _engine.ReceiveAsync(id, inviteText, ct), ErrorKind.InviteInvalid, ct);
+        return await StartAsync(key, id => _engine.ReceiveAsync(id, invite.EngineText, ct), ErrorKind.InviteInvalid, ct);
+    }
+
+    /// <summary>
+    /// The clipboard's ComParta invite, if it holds one. The clipboard is read only when the person
+    /// opens the receive dialog, and nothing is kept.
+    /// </summary>
+    public static string? FindInvite(string? clipboardText) => InviteCodec.FindLink(clipboardText);
+
+    private bool TryReadInvite(string? text, out Invite invite, out InviteSummary summary)
+    {
+        summary = null!;
+        if (!InviteCodec.TryRead(text, out invite))
+            return false;
+        var described = _engine.DescribeInvite(invite.EngineText);
+        if (described is null)
+            return false;
+        summary = described;
+        return true;
     }
 
     /// <summary>

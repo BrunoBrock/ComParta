@@ -56,6 +56,26 @@ public sealed class NativeClipboard : Ports.IClipboard
 {
 	public Task SetTextAsync(string text, CancellationToken ct = default) =>
 		MainThread.InvokeOnMainThreadAsync(() => Clipboard.Default.SetTextAsync(text));
+
+	public Task<string?> GetTextAsync(CancellationToken ct = default) =>
+		MainThread.InvokeOnMainThreadAsync(() => Clipboard.Default.HasText ? Clipboard.Default.GetTextAsync() : Task.FromResult<string?>(null));
+}
+
+public sealed class LocalStorageInfo(Ports.IAppPaths paths) : Ports.IStorageInfo
+{
+	public long? GetReceivedFreeBytes()
+	{
+		try
+		{
+			Directory.CreateDirectory(paths.ReceivedRoot);
+			var root = Path.GetPathRoot(Path.GetFullPath(paths.ReceivedRoot));
+			return root is null ? null : new DriveInfo(root).AvailableFreeSpace;
+		}
+		catch (Exception)
+		{
+			return null;
+		}
+	}
 }
 
 public sealed class ReceivedFolderOpener(Ports.IAppPaths paths) : Ports.IContentOpener
