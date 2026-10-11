@@ -7,7 +7,8 @@ import Rail, { type Section } from './components/Rail.tsx'
 import ReceiveDialog from './components/ReceiveDialog.tsx'
 import SharesSection from './components/SharesSection.tsx'
 import TransfersSection from './components/TransfersSection.tsx'
-import { errorMessage, t } from './i18n/index.ts'
+import LanguageMenu from './components/LanguageMenu.tsx'
+import { errorMessage, getLanguage, type Language, pickLanguage, setLanguage, t } from './i18n/index.ts'
 import { loadView, saveView } from './viewPrefs.ts'
 
 interface AppProps {
@@ -30,6 +31,8 @@ export default function App({ bridge }: AppProps) {
   // An invite pasted anywhere in the window, already read, for the confirmation.
   const [pasted, setPasted] = useState<{ text: string; preview: InvitePreviewDto } | undefined>()
   const [adding, setAdding] = useState(false)
+  // Mirrors the catalog's current language so the whole screen re-renders when it changes.
+  const [language, setShownLanguage] = useState<Language>(getLanguage)
 
   const showError = useCallback((code: ErrorCode) => setNotice({ kind: 'error', text: errorMessage(code) }), [])
   const showInfo = useCallback((text: string) => setNotice({ kind: 'info', text }), [])
@@ -38,9 +41,20 @@ export default function App({ bridge }: AppProps) {
 
   useEffect(() => {
     let active = true
+    const applySettings = (settings: { language: string | null; systemLanguage: string }) => {
+      const chosen = pickLanguage(settings.language, settings.systemLanguage)
+      setLanguage(chosen)
+      document.documentElement.lang = chosen
+      setShownLanguage(chosen)
+    }
     const unsubscribe = bridge.subscribe((event) => {
       if (event.event === 'shares.changed') setShares(event.payload)
       else if (event.event === 'transfers.changed') setTransfers(event.payload)
+      else if (event.event === 'settings.changed') applySettings(event.payload)
+    })
+
+    void bridge.invoke('settings.get').then((result) => {
+      if (active && result.ok) applySettings(result.value)
     })
 
     void bridge.invoke('shares.list').then((result) => {
@@ -79,6 +93,11 @@ export default function App({ bridge }: AppProps) {
     document.addEventListener('paste', onPaste)
     return () => document.removeEventListener('paste', onPaste)
   }, [bridge, receiving])
+
+  async function chooseLanguage(next: Language) {
+    const result = await bridge.invoke('settings.set', { language: next })
+    if (!result.ok) showError(result.error.code)
+  }
 
   function changeView(next: ViewMode) {
     setView(next)
@@ -157,6 +176,7 @@ export default function App({ bridge }: AppProps) {
             </button>
           )}
         </div>
+        <LanguageMenu language={language} onChange={chooseLanguage} />
       </header>
 
       <Rail

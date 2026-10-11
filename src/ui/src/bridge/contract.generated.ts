@@ -43,6 +43,15 @@ export interface InvitePreviewDto {
   freeBytes: number | null;
 }
 
+export interface SettingsDto {
+  language: string | null;
+  systemLanguage: string;
+}
+
+export interface SetSettingsArgs {
+  language: string | null;
+}
+
 export const errorCodes = [
   "share.duplicate",
   "share.notFound",
@@ -54,6 +63,7 @@ export const errorCodes = [
   "transfer.finished",
   "download.invalidFile",
   "disk.full",
+  "settings.invalid",
   "unexpected",
 ] as const;
 
@@ -73,11 +83,14 @@ export interface Commands {
   "transfers.pause": { args: IdArgs; result: null };
   "transfers.resume": { args: IdArgs; result: null };
   "received.openFolder": { args: undefined; result: null };
+  "settings.get": { args: undefined; result: SettingsDto };
+  "settings.set": { args: SetSettingsArgs; result: null };
 }
 
 export interface Events {
   "shares.changed": ShareDto[];
   "transfers.changed": TransferDto[];
+  "settings.changed": SettingsDto;
 }
 
 export type CommandResult<T> = { ok: true; value: T } | { ok: false; error: { code: ErrorCode } };

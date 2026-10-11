@@ -1,8 +1,10 @@
 // Every word the person sees lives here (AD-11). No technical file-sharing terms (AD-5).
+// English is the source: every other catalog has exactly these keys.
 export const en = {
   'app.title': 'ComParta',
   'app.tagline': 'Send files straight to people you know. No account, no cloud.',
   'notice.dismiss': 'Close this message',
+  'language.label': 'Language',
 
   'nav.label': 'Sections',
   'nav.shared': 'Shared by me',
@@ -51,7 +53,6 @@ export const en = {
   'receive.cancel': 'Not now',
   'receive.found': 'We found an invite you copied.',
   'receive.continue': 'Continue',
-  'receive.back': 'Back',
   'confirm.title': 'Get this file?',
   'confirm.unnamed': 'A file',
   'confirm.from': 'from {sender}',
@@ -104,6 +105,7 @@ export const en = {
   'error.download.invalidFile':
     'ComParta cannot download from that file. Choose the download file you saved from the website, or paste its download link instead.',
   'error.transfer.notFound': 'That file is no longer in your list.',
+  'error.settings.invalid': 'That choice could not be saved. Try again.',
   'error.unexpected': 'Something went wrong. Close ComParta, open it again and try once more.',
 
   'size.bytes': '{value} bytes',
@@ -113,3 +115,4 @@ export const en = {
 } as const
 
 export type MessageKey = keyof typeof en
+export type Catalog = Record<MessageKey, string>

@@ -32,7 +32,8 @@ public sealed class AppServices
 			var shares = new ShareUseCases(store, _engine, new NativeFilePicker(), new LocalFileSystem());
 			var transfers = new TransferUseCases(
 				store, _engine, picker: new NativeFilePicker(), files: new LocalFileSystem(), storage: new LocalStorageInfo(_paths));
-			var router = new BridgeRouter(shares, transfers, new NativeClipboard(), new ReceivedFolderOpener(_paths));
+			var settings = new SettingsUseCases(store, new SystemInfo());
+			var router = new BridgeRouter(shares, transfers, settings, new NativeClipboard(), new ReceivedFolderOpener(_paths));
 
 			await _engine.StartAsync(SharingPolicy.Default);
 			await shares.StartAsync();

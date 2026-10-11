@@ -7,6 +7,8 @@ import type {
   IdArgs,
   InvitePreviewDto,
   ReceiveArgs,
+  SetSettingsArgs,
+  SettingsDto,
   ShareDto,
   TransferDto,
 } from './contract.generated.ts'
@@ -23,6 +25,10 @@ export interface FakeBridgeOptions {
   stepMs?: number
   /** Room left for received files; null when it cannot be told. */
   freeBytes?: number | null
+  /** The operating system's language; English when left out. */
+  systemLanguage?: string
+  /** A language the person chose earlier. */
+  language?: string | null
 }
 
 export interface FakeBridge extends Bridge {
@@ -136,6 +142,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     return ok(null)
   }
 
+  let settings: SettingsDto = { language: options.language ?? null, systemLanguage: options.systemLanguage ?? 'en' }
   const freeBytes = options.freeBytes === undefined ? 120 * 1024 ** 3 : options.freeBytes
 
   /** Reads text the way the app's invite codec and engine do, or null when it is neither. */
@@ -234,6 +241,14 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       if (!transfers.some((t) => t.id === id)) return fail('transfer.notFound')
       transfers = transfers.filter((t) => t.id !== id)
       emitTransfers()
+      return ok(null)
+    },
+
+    'settings.get': () => ok({ ...settings }),
+
+    'settings.set': (args) => {
+      settings = { ...settings, language: (args as SetSettingsArgs).language }
+      emit({ event: 'settings.changed', payload: { ...settings } })
       return ok(null)
     },
 

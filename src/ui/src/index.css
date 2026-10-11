@@ -487,8 +487,15 @@ button.link {
   width: 100%;
 }
 
-.item-actions button {
+.items-list .item-actions button {
   white-space: nowrap;
+}
+
+/* Longer words in some languages wrap inside the button instead of spilling out of the card. */
+.items-grid .item-actions button {
+  min-width: 0;
+  white-space: normal;
+  text-align: center;
 }
 
 .chip {
@@ -678,7 +685,15 @@ dialog textarea {
   }
 
   .nav-label {
-    flex: none;
+    flex: initial;
+    min-width: 0;
+    text-align: center;
+  }
+
+  .nav-item {
+    min-width: 0;
+    gap: 6px;
+    padding-inline: 6px;
   }
 
   .items-grid {
@@ -723,4 +738,22 @@ dialog textarea {
 .confirm-name {
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+.language-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: auto;
+  color: var(--color-text-muted);
+}
+
+.language-menu select {
+  font: inherit;
+  color: var(--color-text);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  min-height: var(--target);
 }

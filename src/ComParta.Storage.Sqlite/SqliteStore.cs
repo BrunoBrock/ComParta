@@ -8,9 +8,9 @@ namespace ComParta.Storage.Sqlite;
 /// <summary>
 /// The product database (AD-10). Created and upgraded when opened; the only writer of this file.
 /// </summary>
-public sealed class SqliteStore : IShareRepository, ITransferRepository
+public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettingsRepository
 {
-    private const int SchemaVersion = 2;
+    private const int SchemaVersion = 3;
     private readonly string _connectionString;
 
     private SqliteStore(string databasePath)
@@ -56,6 +56,10 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository
         if (version < 2)
         {
             await Command(connection, "ALTER TABLE transfers ADD COLUMN paused INTEGER NOT NULL DEFAULT 0", transaction).ExecuteNonQueryAsync(ct);
+        }
+        if (version < 3)
+        {
+            await Command(connection, "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)", transaction).ExecuteNonQueryAsync(ct);
         }
         await Command(connection, $"PRAGMA user_version = {SchemaVersion}", transaction).ExecuteNonQueryAsync(ct);
         await transaction.CommitAsync(ct);
@@ -137,6 +141,26 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository
         await using var connection = await ConnectAsync(ct);
         var command = Command(connection, "DELETE FROM transfers WHERE id = $id");
         command.Parameters.AddWithValue("$id", id.ToString());
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task<string?> GetAsync(string key, CancellationToken ct = default)
+    {
+        await using var connection = await ConnectAsync(ct);
+        var command = Command(connection, "SELECT value FROM settings WHERE key = $key");
+        command.Parameters.AddWithValue("$key", key);
+        return await command.ExecuteScalarAsync(ct) as string;
+    }
+
+    public async Task SetAsync(string key, string? value, CancellationToken ct = default)
+    {
+        await using var connection = await ConnectAsync(ct);
+        var command = value is null
+            ? Command(connection, "DELETE FROM settings WHERE key = $key")
+            : Command(connection, "INSERT INTO settings (key, value) VALUES ($key, $value) ON CONFLICT(key) DO UPDATE SET value = $value");
+        command.Parameters.AddWithValue("$key", key);
+        if (value is not null)
+            command.Parameters.AddWithValue("$value", value);
         await command.ExecuteNonQueryAsync(ct);
     }
 

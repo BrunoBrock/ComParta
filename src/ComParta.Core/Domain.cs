@@ -125,6 +125,7 @@ public enum ErrorKind
     DownloadFileInvalid,
     TransferFinished,
     DiskFull,
+    SettingsInvalid,
     Unexpected,
 }
 

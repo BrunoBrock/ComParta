@@ -15,6 +15,7 @@ public sealed class BridgeRouterTests
     private readonly FakeFilePicker _picker = new();
     private readonly FakeFileSystem _files = new();
     private readonly FakeShell _shell = new();
+    private readonly FakeSettingsRepository _settings = new();
     private readonly List<JsonElement> _events = [];
     private readonly BridgeRouter _router;
 
@@ -22,7 +23,8 @@ public sealed class BridgeRouterTests
     {
         var shares = new ShareUseCases(new FakeShareRepository(), _engine, _picker, _files);
         var transfers = new TransferUseCases(new FakeTransferRepository(), _engine, picker: _picker, files: _files);
-        _router = new BridgeRouter(shares, transfers, _shell, _shell);
+        var settings = new SettingsUseCases(_settings, new FakeSystem("pt-BR"));
+        _router = new BridgeRouter(shares, transfers, settings, _shell, _shell);
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
         _picker.NextPick = Video;
@@ -228,5 +230,20 @@ public sealed class BridgeRouterTests
     {
         Assert.All(Contract.CommandSpecs, spec => Assert.Matches(@"^[a-z]+\.[a-z][A-Za-z]+$", spec.Name));
         Assert.All(Contract.EventSpecs, spec => Assert.Matches(@"^[a-z]+\.changed$", spec.Name));
+    }
+
+    [Fact]
+    public async Task The_language_follows_the_system_until_the_person_chooses_one()
+    {
+        var first = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.Equal(JsonValueKind.Null, first.GetProperty("language").ValueKind);
+        Assert.Equal("pt-BR", first.GetProperty("systemLanguage").GetString());
+
+        Assert.True((await InvokeAsync(Commands.SettingsSet, new { language = "en" })).GetProperty("ok").GetBoolean());
+
+        Assert.Equal("en", (await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("language").GetString());
+        var changed = Assert.Single(_events, e => e.GetProperty("event").GetString() == Events.SettingsChanged);
+        Assert.Equal("en", changed.GetProperty("payload").GetProperty("language").GetString());
+        Assert.Equal(ErrorCodes.SettingsInvalid, ErrorCode(await InvokeAsync(Commands.SettingsSet, new { language = "../evil" })));
     }
 }

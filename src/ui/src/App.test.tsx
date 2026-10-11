@@ -10,11 +10,16 @@ import {
   type FakeBridgeOptions,
 } from './bridge/fakeBridge.ts'
 import { en } from './i18n/en.ts'
+import { setLanguage } from './i18n/index.ts'
+import { ptBR } from './i18n/pt-BR.ts'
 
 const video: ShareDto = { id: 's1', name: 'Birthday party.mp4', sizeBytes: 1_288_490_188, status: 'ready' }
 const album: ShareDto = { id: 's2', name: 'Holiday photos.zip', sizeBytes: 2048, status: 'unavailable' }
 
-beforeEach(() => localStorage.clear())
+beforeEach(() => {
+  localStorage.clear()
+  setLanguage('en')
+})
 
 function setup(options: FakeBridgeOptions = {}) {
   const bridge = createFakeBridge(options)
@@ -476,5 +481,36 @@ describe('finding my files', () => {
     const items = await within(transfersSection()).findAllByRole('listitem')
     expect(items[0]).toHaveTextContent('New video.mp4')
     expect(items[1]).toHaveTextContent('Old photo.jpg')
+  })
+})
+
+describe('the language', () => {
+  it('starts in Portuguese on a computer set to Brazilian Portuguese', async () => {
+    setup({ systemLanguage: 'pt-BR' })
+
+    expect(await screen.findByText(ptBR['shares.empty'])).toBeInTheDocument()
+    expect(document.documentElement.lang).toBe('pt-BR')
+  })
+
+  it('starts in English on a computer set to a language ComParta does not speak', async () => {
+    setup({ systemLanguage: 'fr-FR' })
+
+    expect(await screen.findByText(en['shares.empty'])).toBeInTheDocument()
+  })
+
+  it('keeps the chosen language after the app starts again', async () => {
+    const bridge = createFakeBridge({ systemLanguage: 'pt-BR' })
+    const user = userEvent.setup()
+    const first = render(<App bridge={bridge} />)
+    await screen.findByText(ptBR['shares.empty'])
+
+    await user.selectOptions(screen.getByRole('combobox', { name: ptBR['language.label'] }), 'en')
+
+    expect(await screen.findByText(en['shares.empty'])).toBeInTheDocument()
+    first.unmount()
+    setLanguage('pt-BR')
+    render(<App bridge={bridge} />)
+    expect(await screen.findByText(en['shares.empty'])).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: en['language.label'] })).toHaveValue('en')
   })
 })

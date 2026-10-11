@@ -14,17 +14,21 @@ public sealed class BridgeRouter
 {
     private readonly ShareUseCases _shares;
     private readonly TransferUseCases _transfers;
+    private readonly SettingsUseCases _settings;
     private readonly IClipboard _clipboard;
     private readonly IContentOpener _opener;
 
-    public BridgeRouter(ShareUseCases shares, TransferUseCases transfers, IClipboard clipboard, IContentOpener opener)
+    public BridgeRouter(
+        ShareUseCases shares, TransferUseCases transfers, SettingsUseCases settings, IClipboard clipboard, IContentOpener opener)
     {
         _shares = shares;
         _transfers = transfers;
+        _settings = settings;
         _clipboard = clipboard;
         _opener = opener;
         _shares.Changed += () => Raise(Events.SharesChanged, _shares.Current().Select(ToDto).ToArray());
         _transfers.Changed += () => Raise(Events.TransfersChanged, _transfers.List().Select(ToDto).ToArray());
+        _settings.Changed += () => _ = RaiseSettingsAsync();
     }
 
     /// <summary>An event envelope as JSON, ready to be sent to the UI.</summary>
@@ -118,6 +122,12 @@ public sealed class BridgeRouter
                 await _opener.OpenReceivedFolderAsync();
                 return CommandResult.Success(null);
 
+            case Commands.SettingsGet:
+                return CommandResult.Success(ToDto(await _settings.GetAsync()));
+
+            case Commands.SettingsSet:
+                return ToResult(await _settings.SetLanguageAsync(Args<SetSettingsArgs>(argsJson)?.Language));
+
             default:
                 return CommandResult.Failure(ErrorCodes.Unexpected);
         }
@@ -132,6 +142,12 @@ public sealed class BridgeRouter
         return message.Contains(placeholder, StringComparison.Ordinal)
             ? message.Replace(placeholder, link, StringComparison.Ordinal)
             : message.TrimEnd() + Environment.NewLine + link;
+    }
+
+    private async Task RaiseSettingsAsync()
+    {
+        try { Raise(Events.SettingsChanged, ToDto(await _settings.GetAsync())); }
+        catch (Exception) { /* the UI reads settings again on its next start */ }
     }
 
     private void Raise(string name, object payload) =>
@@ -172,6 +188,8 @@ public sealed class BridgeRouter
         view.BytesPerSecond,
         view.SecondsLeft);
 
+    public static SettingsDto ToDto(Settings settings) => new(settings.Language, settings.SystemLanguage);
+
     public static InvitePreviewDto ToDto(InvitePreview preview) => new(
         preview.Hints.SenderName,
         preview.Hints.Name,
@@ -192,6 +210,7 @@ public sealed class BridgeRouter
         ErrorKind.TransferFinished => ErrorCodes.TransferFinished,
         ErrorKind.DownloadFileInvalid => ErrorCodes.DownloadInvalidFile,
         ErrorKind.DiskFull => ErrorCodes.DiskFull,
+        ErrorKind.SettingsInvalid => ErrorCodes.SettingsInvalid,
         _ => ErrorCodes.Unexpected,
     };
 }

@@ -109,3 +109,8 @@ public sealed class LocalFileSystem : Ports.IFileSystem
 		return content;
 	}
 }
+
+public sealed class SystemInfo : Ports.ISystemInfo
+{
+	public string UiLanguage => System.Globalization.CultureInfo.CurrentUICulture.Name is { Length: > 0 } name ? name : "en";
+}

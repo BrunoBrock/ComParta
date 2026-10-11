@@ -7,5 +7,5 @@ export type * from './contract.generated.ts'
 
 /** The real bridge inside the app; the fake one in a normal browser. */
 export function getBridge(): Bridge {
-  return isInsideApp() ? createHostBridge() : createFakeBridge({ stepMs: 700 })
+  return isInsideApp() ? createHostBridge() : createFakeBridge({ stepMs: 700, systemLanguage: navigator.language })
 }

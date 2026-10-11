@@ -1,13 +1,46 @@
 import type { ErrorCode } from '../bridge/contract.generated.ts'
-import { en, type MessageKey } from './en.ts'
+import { en, type Catalog, type MessageKey } from './en.ts'
+import { ptBR } from './pt-BR.ts'
 
 export type { MessageKey }
 
-const catalog: Record<MessageKey, string> = en
+/** The languages ComParta speaks, in the order the language menu lists them. */
+export const languages = ['en', 'pt-BR'] as const
+export type Language = (typeof languages)[number]
 
-/** Looks a message up in the catalog and fills in its {placeholders}. */
+/** Each language's own name, so a person can find theirs whatever is showing. */
+export const languageNames: Record<Language, string> = { en: 'English', 'pt-BR': 'Português (Brasil)' }
+
+export const catalogs: Record<Language, Catalog> = { en, 'pt-BR': ptBR }
+
+let current: Language = 'en'
+
+/** Switches every message and number to this language. The app re-renders after calling it. */
+export function setLanguage(language: Language) {
+  current = language
+}
+
+export function getLanguage(): Language {
+  return current
+}
+
+/**
+ * The saved choice when there is one, else the system language when ComParta speaks it (any
+ * Portuguese gets Brazilian Portuguese), else English.
+ */
+export function pickLanguage(saved: string | null | undefined, system: string | null | undefined): Language {
+  const known = (tag: string | null | undefined): Language | null => {
+    if (!tag) return null
+    const exact = languages.find((language) => language.toLowerCase() === tag.toLowerCase())
+    if (exact) return exact
+    return tag.toLowerCase().split('-')[0] === 'pt' ? 'pt-BR' : tag.toLowerCase().startsWith('en') ? 'en' : null
+  }
+  return known(saved) ?? known(system) ?? 'en'
+}
+
+/** Looks a message up in the current language's catalog and fills in its {placeholders}. */
 export function t(key: MessageKey, values: Record<string, string | number> = {}): string {
-  return catalog[key].replace(/\{(\w+)\}/g, (whole, name: string) =>
+  return catalogs[current][key].replace(/\{(\w+)\}/g, (whole, name: string) =>
     name in values ? String(values[name]) : whole,
   )
 }
@@ -17,7 +50,7 @@ export function errorMessage(code: ErrorCode): string {
 }
 
 const number = (value: number, digits: number) =>
-  value.toLocaleString('en', { minimumFractionDigits: digits, maximumFractionDigits: digits })
+  new Intl.NumberFormat(current, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value)
 
 /** Sizes cross the bridge as whole bytes; the UI chooses how to show them. */
 export function formatSize(bytes: number): string {

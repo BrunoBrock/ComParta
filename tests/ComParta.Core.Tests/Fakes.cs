@@ -138,3 +138,20 @@ internal sealed class FakeStorage : IStorageInfo
     public long? FreeBytes { get; set; }
     public long? GetReceivedFreeBytes() => FreeBytes;
 }
+
+internal sealed class FakeSettingsRepository : ISettingsRepository
+{
+    public Dictionary<string, string> Values { get; } = [];
+    public Task<string?> GetAsync(string key, CancellationToken ct = default) => Task.FromResult(Values.GetValueOrDefault(key));
+    public Task SetAsync(string key, string? value, CancellationToken ct = default)
+    {
+        if (value is null) Values.Remove(key);
+        else Values[key] = value;
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class FakeSystem(string uiLanguage) : ISystemInfo
+{
+    public string UiLanguage { get; } = uiLanguage;
+}

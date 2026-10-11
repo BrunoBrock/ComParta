@@ -15,6 +15,20 @@ public interface ITransferRepository
     Task RemoveAsync(TransferId id, CancellationToken ct = default);
 }
 
+/// <summary>The person's choices, kept in the product database (AD-10). Null removes a value.</summary>
+public interface ISettingsRepository
+{
+    Task<string?> GetAsync(string key, CancellationToken ct = default);
+    Task SetAsync(string key, string? value, CancellationToken ct = default);
+}
+
+/// <summary>Facts about the computer the app runs on.</summary>
+public interface ISystemInfo
+{
+    /// <summary>The language the operating system shows, as a tag like "pt-BR".</summary>
+    string UiLanguage { get; }
+}
+
 public enum OfferState { Preparing, Ready, Failed }
 
 /// <summary>What the engine can tell from invite text alone: the name and size it announces.</summary>

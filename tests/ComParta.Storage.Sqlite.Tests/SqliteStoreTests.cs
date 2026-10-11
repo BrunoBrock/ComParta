@@ -99,4 +99,39 @@ public sealed class SqliteStoreTests : IDisposable
         Assert.Equal("album.zip", transfer.Name);
         Assert.False(transfer.Paused);
     }
+
+    [Fact]
+    public async Task A_setting_survives_a_new_instance_and_can_be_removed()
+    {
+        ISettingsRepository store = await SqliteStore.OpenAsync(DatabasePath);
+        Assert.Null(await store.GetAsync("language"));
+        await store.SetAsync("language", "pt-BR");
+        await store.SetAsync("language", "en");
+
+        ISettingsRepository reopened = await SqliteStore.OpenAsync(DatabasePath);
+        Assert.Equal("en", await reopened.GetAsync("language"));
+        await reopened.SetAsync("language", null);
+        Assert.Null(await reopened.GetAsync("language"));
+    }
+
+    [Fact]
+    public async Task A_database_from_the_second_version_gains_settings_and_keeps_its_transfers()
+    {
+        var transfer = new Transfer(TransferId.New(), "film.mkv", 10, false, DateTimeOffset.UtcNow, Paused: true);
+        ITransferRepository first = await SqliteStore.OpenAsync(DatabasePath);
+        await first.AddAsync(transfer);
+        await using (var connection = new SqliteConnection($"Data Source={DatabasePath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            var command = connection.CreateCommand();
+            command.CommandText = "DROP TABLE settings; PRAGMA user_version = 2;";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var store = await SqliteStore.OpenAsync(DatabasePath);
+
+        Assert.Equal([transfer], await ((ITransferRepository)store).GetAllAsync());
+        await ((ISettingsRepository)store).SetAsync("language", "pt-BR");
+        Assert.Equal("pt-BR", await ((ISettingsRepository)store).GetAsync("language"));
+    }
 }
