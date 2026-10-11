@@ -4,6 +4,8 @@ export type ShareStatusDto = "preparing" | "ready" | "unavailable";
 
 export type TransferStateDto = "connecting" | "receiving" | "paused" | "done" | "failed";
 
+export type ConnectionHealthDto = "good" | "limited" | "blocked";
+
 export interface ShareDto {
   id: string;
   name: string;
@@ -52,6 +54,10 @@ export interface SetSettingsArgs {
   language: string | null;
 }
 
+export interface ConnectionDto {
+  health: ConnectionHealthDto;
+}
+
 export const errorCodes = [
   "share.duplicate",
   "share.notFound",
@@ -85,12 +91,17 @@ export interface Commands {
   "received.openFolder": { args: undefined; result: null };
   "settings.get": { args: undefined; result: SettingsDto };
   "settings.set": { args: SetSettingsArgs; result: null };
+  "connection.get": { args: undefined; result: ConnectionDto };
+  "connection.openSettings": { args: undefined; result: null };
+  "invites.takeOpened": { args: undefined; result: string | null };
 }
 
 export interface Events {
   "shares.changed": ShareDto[];
   "transfers.changed": TransferDto[];
   "settings.changed": SettingsDto;
+  "connection.changed": ConnectionDto;
+  "invites.changed": boolean;
 }
 
 export type CommandResult<T> = { ok: true; value: T } | { ok: false; error: { code: ErrorCode } };

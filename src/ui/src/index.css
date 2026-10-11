@@ -206,6 +206,81 @@ body {
   font-size: var(--text-sm);
 }
 
+/* This computer's connection: a dot and a few words (UX design, Layout). */
+.connection {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+  color: var(--color-text);
+  text-align: left;
+}
+
+button.connection {
+  width: 100%;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-size: var(--text-sm);
+}
+
+.rail-tagline + .connection {
+  margin-top: calc(var(--space) * -1);
+}
+
+.connection-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-ok);
+}
+
+.connection-limited .connection-dot {
+  background: var(--color-warn);
+}
+
+.connection-blocked .connection-dot {
+  background: var(--color-danger);
+}
+
+.connection-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.connection-state {
+  align-items: flex-start;
+}
+
+.connection-state .connection-dot {
+  margin-top: 6px;
+}
+
+.connection-fix {
+  padding: calc(var(--space) * 1.5) calc(var(--space) * 2);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius);
+}
+
+.connection-fix p {
+  margin-top: 0;
+}
+
+dialog h3 {
+  margin: calc(var(--space) * 2) 0 var(--space);
+  font-size: var(--text-base);
+}
+
+.connection-tries {
+  margin: 0;
+  padding-left: 1.4em;
+}
+
+.connection-tries li + li {
+  margin-top: var(--space);
+}
+
 .content {
   grid-area: content;
   min-width: 0;
@@ -662,6 +737,12 @@ dialog textarea {
 
   .rail-actions {
     flex-direction: row;
+  }
+
+  button.connection {
+    justify-content: center;
+    min-height: 32px;
+    padding-block: 0;
   }
 
   .rail-actions button {

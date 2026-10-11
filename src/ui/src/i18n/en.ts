@@ -92,6 +92,28 @@ export const en = {
   'transfers.clearFor': 'Clear {name} from list',
   'transfers.openFolder': 'Open my received files',
 
+  'connection.good': 'Others can reach this computer',
+  'connection.limited': 'Limited connection',
+  'connection.blocked': 'Others cannot reach this computer',
+  'connection.open': 'Connection: {state}. What does this mean?',
+  'connection.title': 'Can others reach this computer?',
+  'connection.state.good': 'Yes. The people you send to can reach this computer, so files go straight across.',
+  'connection.state.limited':
+    'Maybe not. Files still arrive when the other computer can be reached, so most of the time this works.',
+  'connection.state.blocked':
+    'No. Windows is not letting other computers reach ComParta, so nobody can get your files from here.',
+  'connection.fix.blocked':
+    'Choose “Open Windows settings”. In the list, choose “Change settings”, tick ComParta, and choose OK.',
+  'connection.openSettings': 'Open Windows settings',
+  'connection.tryHeading': 'Things to try',
+  'connection.try.open': 'Check that ComParta is open on both computers and that both are on the internet.',
+  'connection.try.later': 'Leave both open for a while. ComParta keeps trying by itself.',
+  'connection.try.network':
+    'If both computers say “Limited connection”, one of you can try from another network, such as a phone hotspot.',
+  'connection.close': 'Close',
+  'transfers.help': 'What can I do?',
+  'transfers.helpFor': 'What can I do about {name}?',
+
   'error.share.duplicate': 'You are already sharing this file.',
   'error.share.notFound': 'That file is no longer in your list.',
   'error.share.notReady': 'This file is still getting ready. Try again in a moment.',

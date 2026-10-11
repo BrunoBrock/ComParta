@@ -6,6 +6,8 @@
 
   <ItemGroup>
     <PackageReference Include="MonoTorrent" Version="3.0.2" />
+    <!-- Shipped with MonoTorrent; referenced directly for router port mapping we control (AD-15). -->
+    <PackageReference Include="Mono.Nat" Version="3.0.0" />
   </ItemGroup>
 
   <PropertyGroup>

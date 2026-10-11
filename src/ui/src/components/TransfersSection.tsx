@@ -1,4 +1,4 @@
-import { FolderOpen, Pause, Play, X } from 'lucide-react'
+import { CircleHelp, FolderOpen, Pause, Play, X } from 'lucide-react'
 import type { Bridge, ErrorCode, TransferDto } from '../bridge/index.ts'
 import { formatSize, formatTimeLeft, t } from '../i18n/index.ts'
 import { matches } from '../search.ts'
@@ -16,6 +16,9 @@ interface TransfersSectionProps {
   onError: (code: ErrorCode) => void
   onStart: () => void
   onClearSearch: () => void
+  /** Transfers that have waited long enough to offer the connection help (UX design, "Stuck transfer"). */
+  stuck: ReadonlySet<string>
+  onHelp: () => void
 }
 
 const tones: Record<TransferDto['state'], ChipTone> = {
@@ -54,7 +57,7 @@ function describe(transfer: TransferDto): string {
 const order = (a: TransferDto, b: TransferDto) => Number(a.state === 'done') - Number(b.state === 'done')
 
 export default function TransfersSection(props: TransfersSectionProps) {
-  const { bridge, transfers, query, view, onViewChange, onError, onStart, onClearSearch } = props
+  const { bridge, transfers, query, view, onViewChange, onError, onStart, onClearSearch, stuck, onHelp } = props
 
   async function remove(transfer: TransferDto) {
     onStart()
@@ -119,6 +122,17 @@ export default function TransfersSection(props: TransfersSectionProps) {
                 }
                 actions={
                   <>
+                    {state === 'connecting' && stuck.has(transfer.id) && (
+                      <button
+                        type="button"
+                        className="quiet"
+                        onClick={onHelp}
+                        aria-label={t('transfers.helpFor', { name })}
+                      >
+                        <CircleHelp size={18} aria-hidden="true" />
+                        {t('transfers.help')}
+                      </button>
+                    )}
                     {(canPause || paused) && (
                       <button
                         type="button"

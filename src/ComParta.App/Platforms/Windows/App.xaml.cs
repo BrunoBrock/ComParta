@@ -1,7 +1,4 @@
-﻿using Microsoft.UI.Xaml;
-
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
+using Microsoft.UI.Xaml;
 
 namespace ComParta.App.WinUI;
 
@@ -20,5 +17,15 @@ public partial class App : MauiWinUIApplication
 	}
 
 	protected override MauiApp CreateMauiApp() => MauiProgram.CreateMauiApp();
-}
 
+	protected override void OnLaunched(LaunchActivatedEventArgs args)
+	{
+		// A second launch, for example from a clicked link, hands over to the running copy (AD-14).
+		if (!Launch.ClaimOrForward(LaunchArguments.Current()))
+		{
+			Exit();
+			return;
+		}
+		base.OnLaunched(args);
+	}
+}

@@ -23,6 +23,9 @@ public static class Commands
     public const string ReceivedOpenFolder = "received.openFolder";
     public const string SettingsGet = "settings.get";
     public const string SettingsSet = "settings.set";
+    public const string ConnectionGet = "connection.get";
+    public const string ConnectionOpenSettings = "connection.openSettings";
+    public const string InvitesTakeOpened = "invites.takeOpened";
 }
 
 public static class Events
@@ -30,6 +33,9 @@ public static class Events
     public const string SharesChanged = "shares.changed";
     public const string TransfersChanged = "transfers.changed";
     public const string SettingsChanged = "settings.changed";
+    public const string ConnectionChanged = "connection.changed";
+    /// <summary>True when an invite opened from outside the app waits; the UI takes it with <c>invites.takeOpened</c>.</summary>
+    public const string InvitesChanged = "invites.changed";
 }
 
 /// <summary>Stable codes; the words for them live in the UI's translation catalog (AD-11).</summary>
@@ -58,6 +64,8 @@ public static class ErrorCodes
 public enum ShareStatusDto { Preparing, Ready, Unavailable }
 
 public enum TransferStateDto { Connecting, Receiving, Paused, Done, Failed }
+
+public enum ConnectionHealthDto { Good, Limited, Blocked }
 
 public sealed record ShareDto(string Id, string Name, long SizeBytes, ShareStatusDto Status);
 
@@ -91,6 +99,9 @@ public sealed record SettingsDto(string? Language, string SystemLanguage);
 
 /// <param name="Language">A language tag, or null to follow the system again.</param>
 public sealed record SetSettingsArgs(string? Language);
+
+/// <param name="Health">How well others can reach this computer (AD-15).</param>
+public sealed record ConnectionDto(ConnectionHealthDto Health);
 
 public sealed record ErrorDto(string Code);
 
@@ -132,6 +143,9 @@ public static class Contract
         new(Commands.ReceivedOpenFolder, null, null),
         new(Commands.SettingsGet, null, typeof(SettingsDto)),
         new(Commands.SettingsSet, typeof(SetSettingsArgs), null),
+        new(Commands.ConnectionGet, null, typeof(ConnectionDto)),
+        new(Commands.ConnectionOpenSettings, null, null),
+        new(Commands.InvitesTakeOpened, null, typeof(string), ResultMayBeNull: true),
     ];
 
     public static IReadOnlyList<EventSpec> EventSpecs { get; } =
@@ -139,6 +153,8 @@ public static class Contract
         new(Events.SharesChanged, typeof(ShareDto[])),
         new(Events.TransfersChanged, typeof(TransferDto[])),
         new(Events.SettingsChanged, typeof(SettingsDto)),
+        new(Events.ConnectionChanged, typeof(ConnectionDto)),
+        new(Events.InvitesChanged, typeof(bool)),
     ];
 
     /// <summary>camelCase JSON with enums as camelCase strings, as the conventions require.</summary>

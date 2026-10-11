@@ -2,6 +2,7 @@ using ComParta.Contracts;
 using ComParta.Core;
 using ComParta.Core.UseCases;
 using ComParta.Engine.MonoTorrent;
+using ComParta.Shell;
 using ComParta.Storage.Sqlite;
 
 namespace ComParta.App;
@@ -20,6 +21,9 @@ public sealed class AppServices
 	/// <summary>Completes when the app is ready to answer commands.</summary>
 	public Task<BridgeRouter> Router { get; }
 
+	/// <summary>Invites handed to the app from outside, such as a clicked link (AD-16).</summary>
+	public OpenedInvites Opened { get; } = new();
+
 	public static AppServices Start() => new();
 
 	private async Task<BridgeRouter> StartAsync()
@@ -33,7 +37,13 @@ public sealed class AppServices
 			var transfers = new TransferUseCases(
 				store, _engine, picker: new NativeFilePicker(), files: new LocalFileSystem(), storage: new LocalStorageInfo(_paths));
 			var settings = new SettingsUseCases(store, new SystemInfo());
-			var router = new BridgeRouter(shares, transfers, settings, new NativeClipboard(), new ReceivedFolderOpener(_paths));
+			var executable = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "ComParta.exe");
+			var connection = new ConnectionUseCases(_engine, new WindowsFirewall(executable));
+			var router = new BridgeRouter(
+				shares, transfers, settings, connection, Opened, new NativeClipboard(), new ReceivedFolderOpener(_paths));
+
+			// Written at every start so a clicked link finds the app even after its folder moved.
+			LinkScheme.Register(executable);
 
 			await _engine.StartAsync(SharingPolicy.Default);
 			await shares.StartAsync();
