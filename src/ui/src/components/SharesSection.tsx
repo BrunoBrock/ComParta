@@ -1,34 +1,33 @@
+import { Copy, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import type { Bridge, ErrorCode, ShareDto } from '../bridge/index.ts'
 import { formatSize, t } from '../i18n/index.ts'
+import { matches } from '../search.ts'
+import ItemView, { type ViewMode } from './ItemView.tsx'
+import type { ChipTone } from './StatusChip.tsx'
 import RemoveShareDialog from './RemoveShareDialog.tsx'
+import SectionHead from './SectionHead.tsx'
 
 interface SharesSectionProps {
   bridge: Bridge
   /** null while the first snapshot is loading. */
   shares: ShareDto[] | null
+  query: string
+  view: ViewMode
+  onViewChange: (view: ViewMode) => void
   onError: (code: ErrorCode) => void
   onInfo: (text: string) => void
   /** Called when the person starts a new action, so an old message can go away. */
   onStart: () => void
+  onClearSearch: () => void
 }
 
-export default function SharesSection({ bridge, shares, onError, onInfo, onStart }: SharesSectionProps) {
-  const [adding, setAdding] = useState(false)
+const tones: Record<ShareDto['status'], ChipTone> = { preparing: 'busy', ready: 'ok', unavailable: 'warn' }
+
+export default function SharesSection(props: SharesSectionProps) {
+  const { bridge, shares, query, view, onViewChange, onError, onInfo, onStart, onClearSearch } = props
   // View state only: which share the confirmation is open for.
   const [removing, setRemoving] = useState<ShareDto | null>(null)
-
-  async function add() {
-    onStart()
-    setAdding(true)
-    try {
-      // The app opens the file dialog; a cancel comes back as ok with no value.
-      const result = await bridge.invoke('shares.add')
-      if (!result.ok) onError(result.error.code)
-    } finally {
-      setAdding(false)
-    }
-  }
 
   async function copyInvite(share: ShareDto) {
     onStart()
@@ -44,46 +43,58 @@ export default function SharesSection({ bridge, shares, onError, onInfo, onStart
     if (!result.ok) onError(result.error.code)
   }
 
+  const shown = shares?.filter((share) => matches(share.name, query)) ?? null
+
   return (
-    <section aria-labelledby="shares-heading">
-      <div className="section-head">
-        <h2 id="shares-heading">{t('shares.heading')}</h2>
-        <button type="button" className="primary" onClick={add} disabled={adding}>
-          {t('shares.add')}
-        </button>
-      </div>
+    <section aria-labelledby="shares-heading" className="content-section">
+      <SectionHead id="shares-heading" title={t('shares.heading')} view={view} onViewChange={onViewChange} />
 
       {shares !== null && shares.length === 0 && <p className="empty">{t('shares.empty')}</p>}
+      {shares !== null && shares.length > 0 && shown!.length === 0 && (
+        <p className="empty">
+          {t('search.none', { query: query.trim() })}{' '}
+          <button type="button" className="link" onClick={onClearSearch}>
+            {t('search.clear')}
+          </button>
+        </p>
+      )}
 
-      {shares !== null && shares.length > 0 && (
-        <ul className="items">
-          {shares.map((share) => (
-            <li key={share.id} className={share.status === 'unavailable' ? 'item item-problem' : 'item'}>
-              <div className="item-text">
-                <span className="item-name">{share.name}</span>
-                <span className="item-detail">{formatSize(share.sizeBytes)}</span>
-                <span className={`item-status status-${share.status}`}>{t(`shares.status.${share.status}`)}</span>
-              </div>
-              <div className="item-actions">
-                {share.status === 'ready' && (
+      {shown !== null && shown.length > 0 && (
+        <ul className={`items items-${view}`}>
+          {shown.map((share) => (
+            <ItemView
+              key={share.id}
+              name={share.name}
+              size={formatSize(share.sizeBytes)}
+              tone={tones[share.status]}
+              chip={t(`shares.chip.${share.status}`)}
+              note={share.status === 'ready' ? undefined : t(`shares.status.${share.status}`)}
+              progress={share.status === 'preparing' ? 'unknown' : undefined}
+              actions={
+                <>
+                  {share.status === 'ready' && (
+                    <button
+                      type="button"
+                      className="primary"
+                      onClick={() => copyInvite(share)}
+                      aria-label={t('shares.copyInviteFor', { name: share.name })}
+                    >
+                      <Copy size={18} aria-hidden="true" />
+                      {t('shares.copyInvite')}
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => copyInvite(share)}
-                    aria-label={t('shares.copyInviteFor', { name: share.name })}
+                    className="quiet"
+                    onClick={() => setRemoving(share)}
+                    aria-label={t('shares.removeFor', { name: share.name })}
                   >
-                    {t('shares.copyInvite')}
+                    <Trash2 size={18} aria-hidden="true" />
+                    {t('shares.remove')}
                   </button>
-                )}
-                <button
-                  type="button"
-                  className="quiet"
-                  onClick={() => setRemoving(share)}
-                  aria-label={t('shares.removeFor', { name: share.name })}
-                >
-                  {t('shares.remove')}
-                </button>
-              </div>
-            </li>
+                </>
+              }
+            />
           ))}
         </ul>
       )}

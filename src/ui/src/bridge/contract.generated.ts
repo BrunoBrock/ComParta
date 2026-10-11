@@ -2,7 +2,7 @@
 
 export type ShareStatusDto = "preparing" | "ready" | "unavailable";
 
-export type TransferStateDto = "connecting" | "receiving" | "done" | "failed";
+export type TransferStateDto = "connecting" | "receiving" | "paused" | "done" | "failed";
 
 export interface ShareDto {
   id: string;
@@ -21,6 +21,8 @@ export interface TransferDto {
   sizeBytes: number | null;
   receivedBytes: number;
   state: TransferStateDto;
+  bytesPerSecond: number;
+  secondsLeft: number | null;
 }
 
 export interface ReceiveArgs {
@@ -35,6 +37,8 @@ export const errorCodes = [
   "invite.invalid",
   "transfer.duplicate",
   "transfer.notFound",
+  "transfer.finished",
+  "download.invalidFile",
   "unexpected",
 ] as const;
 
@@ -48,6 +52,9 @@ export interface Commands {
   "transfers.list": { args: undefined; result: TransferDto[] };
   "transfers.receive": { args: ReceiveArgs; result: TransferDto };
   "transfers.remove": { args: IdArgs; result: null };
+  "transfers.openFile": { args: undefined; result: TransferDto | null };
+  "transfers.pause": { args: IdArgs; result: null };
+  "transfers.resume": { args: IdArgs; result: null };
   "received.openFolder": { args: undefined; result: null };
 }
 

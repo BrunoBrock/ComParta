@@ -1,0 +1,116 @@
+# Stories of epic-connect-between-homes, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Field test: how often do two homes connect today"
+description = "Writes a short test protocol (who, which internet provider, router model, IPv6 or not, Windows Firewall answer) and runs a 500 MB transfer for each pair in a matrix: same network; two homes on fibre; home and phone hotspot; two phone hotspots. Records connected or not, time to first byte and speed in `field-test.md` in this folder. Adds a hidden diagnostic log line for the addresses tried (local log only)."
+verify = "`field-test.md` holds at least six pairs with results, and the roadmap's risk table and OQ-6 are updated from it."
+covers = ["CAP-18"]
+after = ["2.1"]
+hitl = true                 # people in different homes run it
+risk = "medium"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Engine reports reachability facts; core turns them into health"
+description = "Adds `ReachabilityFacts` (port mapping obtained and its external port, global IPv6 address present, listening, firewall rule present, an incoming connection seen in the last hour) to `ITransferEngine` as an event, `ConnectionHealth` (good, limited, blocked) computed in core, the `connection.get` command and `connection.changed` event, the fake bridge and core tests."
+verify = "Core tests map each combination of facts to the expected health; the engine integration test reports listening and no mapping under the closed policy; UI tests can seed each health in the fake bridge."
+covers = ["CAP-18"]
+after = ["2.1"]
+hitl = false
+risk = "medium"
+references = ["architecture-comparta/architecture-comparta.md#ad-15"]
+
+[[entry]]
+id = 3
+type = "story"
+title = "Connection indicator and help page"
+description = "Shows the health in the rail (UX design, Layout; in the current single-page screen until epic 8 brings the rail) and adds the connection help page reached from it and from a transfer that waits over 10 minutes: what the state means and three things to try, in the catalog, no networking words. The support report (epic 12) reuses the facts."
+verify = "UI tests against the fake bridge for each health; the plain-language guard passes; the waiting transfer shows the 'What can I do?' link after the time threshold (fake clock)."
+covers = ["CAP-18", "CAP-4"]
+after = [2]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Windows Firewall rule without a confusing prompt"
+description = "The unpackaged build explains the coming Windows prompt (epic 12 first run) and detects whether the inbound rule exists; the MSIX build declares the firewall rule in its manifest so no prompt appears. The fact feeds `ReachabilityFacts`."
+verify = "Manual on a clean Windows PC: the MSIX install accepts incoming connections without a prompt; refusing the prompt in the unpackaged build shows health 'blocked' with the fix."
+covers = ["CAP-18"]
+after = [2]
+hitl = true                 # needs a clean Windows PC
+risk = "medium"
+
+[[entry]]
+id = 5
+type = "story"
+title = "IPv6 everywhere"
+description = "Makes the engine adapter listen on IPv6 as well as IPv4, use the lookup network over IPv6 if MonoTorrent supports it, and put global IPv6 addresses in the invite when `SharingPolicy.AllowAddressInInvite` is on. If MonoTorrent lacks a piece, the story records it and patches the adapter around it, or opens an upstream issue."
+verify = "Engine integration test: two engines on IPv6 loopback transfer a file using only the address in the invite. Field test row on two IPv6 homes connects."
+covers = ["CAP-18"]
+after = [2]
+hitl = false
+risk = "high"
+unknown = "How much IPv6 MonoTorrent 3.0.2 supports for listening and for the lookup network."
+
+[[entry]]
+id = 6
+type = "story"
+title = "Router port mapping that lasts"
+description = "Checks that the adapter asks for a mapping with UPnP and NAT-PMP (and PCP if Mono.Nat supports it), renews it before it expires, removes it on quit, and puts the mapped external address in the invite. Reports the result as a fact."
+verify = "Engine test with a fake NAT device for request, renewal and removal; manual on a home router with UPnP on: health becomes 'good' and the invite carries the external address."
+covers = ["CAP-18"]
+after = [2]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 7
+type = "story"
+title = "Either side reachable is enough"
+description = "Makes sure the sharing side keeps looking up its own content on the lookup network and connects out to a receiver that announced itself, so a transfer works when only the receiver is reachable. Adds an engine integration test where the sender refuses incoming connections."
+verify = "Engine integration test: sender with incoming connections blocked, receiver reachable, the file arrives. Field test row where only the receiver is reachable connects."
+covers = ["CAP-18"]
+after = [2]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 8
+type = "story"
+title = "Field test again"
+description = "Repeats story 1's matrix with the release build and records the change; sets the target success rate for OQ-6 with Bruno."
+verify = "`field-test.md` has the second run; OQ-6 in the spec has an answer."
+covers = ["CAP-18"]
+after = [1, 4, 5, 6, 7]
+hitl = true
+risk = "low"
+
+[[entry]]
+id = 9
+type = "story"
+title = "A relay run by someone the family chooses (only if decided)"
+description = "Only if decision D-3 says yes after story 8: an opt-in setting where one ComParta, on a PC that is always on and reachable, passes encrypted bytes between two others it knows, as another adapter behind AD-15. Scope is set when it starts."
+verify = "Set when refined."
+covers = ["CAP-18"]
+after = [8]
+hitl = true
+risk = "high"
+refine = true
+unknown = "Decision D-3 in the roadmap."
+
+[[entry]]
+id = 10
+type = "story"
+title = "Evaluate another engine (only if the field test calls for it)"
+description = "Only if story 8 shows failures that uTP or hole punching would fix without a server: a spike comparing an engine with those features behind `ITransferEngine` (AD-2) on the field-test cases. Output is a recommendation, not a swap."
+verify = "A written comparison in this folder and an architecture update proposal."
+covers = ["CAP-18"]
+after = [8]
+hitl = false
+risk = "medium"
+refine = true

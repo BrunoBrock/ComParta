@@ -20,7 +20,7 @@ public sealed class BridgeRouterTests
     public BridgeRouterTests()
     {
         var shares = new ShareUseCases(new FakeShareRepository(), _engine, _picker, _files);
-        var transfers = new TransferUseCases(new FakeTransferRepository(), _engine);
+        var transfers = new TransferUseCases(new FakeTransferRepository(), _engine, picker: _picker, files: _files);
         _router = new BridgeRouter(shares, transfers, _shell, _shell);
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
@@ -123,6 +123,45 @@ public sealed class BridgeRouterTests
 
         Assert.True((await InvokeAsync(Commands.TransfersRemove, new { id })).GetProperty("ok").GetBoolean());
         Assert.Equal(0, (await InvokeAsync(Commands.TransfersList)).GetProperty("value").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task A_transfer_can_be_paused_and_continued_and_shows_its_speed()
+    {
+        var started = await InvokeAsync(Commands.TransfersReceive, new { invite = "invite:abc" });
+        var id = started.GetProperty("value").GetProperty("id").GetString()!;
+        _engine.Report(new ReceiveProgress(new TransferId(Guid.Parse(id)), "a.mp4", 1_000, 250, false, BytesPerSecond: 50));
+
+        var receiving = (await InvokeAsync(Commands.TransfersList)).GetProperty("value")[0];
+        Assert.Equal(50, receiving.GetProperty("bytesPerSecond").GetInt64());
+        Assert.Equal(15, receiving.GetProperty("secondsLeft").GetInt64());
+
+        Assert.True((await InvokeAsync(Commands.TransfersPause, new { id })).GetProperty("ok").GetBoolean());
+        var paused = (await InvokeAsync(Commands.TransfersList)).GetProperty("value")[0];
+        Assert.Equal("paused", paused.GetProperty("state").GetString());
+        Assert.Equal(JsonValueKind.Null, paused.GetProperty("secondsLeft").ValueKind);
+
+        Assert.True((await InvokeAsync(Commands.TransfersResume, new { id })).GetProperty("ok").GetBoolean());
+        Assert.Equal("transfer.notFound", ErrorCode(await InvokeAsync(Commands.TransfersPause, new { id = "nope" })));
+    }
+
+    [Fact]
+    public async Task A_download_file_is_opened_through_the_file_dialog()
+    {
+        const string file = @"C:\Downloads\film.download";
+        _picker.NextPick = file;
+        _files.Contents[file] = "download-file:film"u8.ToArray();
+
+        var opened = await InvokeAsync(Commands.TransfersOpenFile);
+        Assert.Equal("connecting", opened.GetProperty("value").GetProperty("state").GetString());
+
+        _files.Contents[file] = "not one"u8.ToArray();
+        Assert.Equal("download.invalidFile", ErrorCode(await InvokeAsync(Commands.TransfersOpenFile)));
+
+        _picker.NextPick = null;
+        var cancelled = await InvokeAsync(Commands.TransfersOpenFile);
+        Assert.True(cancelled.GetProperty("ok").GetBoolean());
+        Assert.False(cancelled.TryGetProperty("value", out _));
     }
 
     [Fact]

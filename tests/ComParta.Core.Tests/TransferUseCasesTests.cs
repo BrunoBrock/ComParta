@@ -7,8 +7,12 @@ public sealed class TransferUseCasesTests
 {
     private readonly FakeTransferRepository _repository = new();
     private readonly FakeEngine _engine = new();
+    private readonly FakeFilePicker _picker = new();
+    private readonly FakeFileSystem _files = new();
 
-    private TransferUseCases Create() => new(_repository, _engine);
+    private TransferUseCases Create() => new(_repository, _engine, picker: _picker, files: _files);
+
+    private const string DownloadFile = @"C:\Users\Ana\Downloads\film.download";
 
     [Fact]
     public async Task Receiving_from_an_invite_starts_a_transfer_that_is_looking_for_the_other_device()
@@ -130,5 +134,122 @@ public sealed class TransferUseCasesTests
 
         Assert.Empty(restarted.List());
         Assert.Empty(_repository.Items);
+    }
+
+    [Fact]
+    public async Task A_download_file_starts_a_transfer_like_an_invite()
+    {
+        var transfers = Create();
+        _picker.NextPick = DownloadFile;
+        _files.Contents[DownloadFile] = "download-file:film"u8.ToArray();
+
+        var result = await transfers.OpenFileAsync();
+
+        Assert.True(result.Ok);
+        var listed = Assert.Single(transfers.List());
+        Assert.Equal(TransferState.Connecting, listed.State);
+        Assert.Equal("film", _engine.Receiving[listed.Transfer.Id]);
+        Assert.Single(_repository.Items);
+    }
+
+    [Fact]
+    public async Task Cancelling_the_download_file_dialog_changes_nothing()
+    {
+        var transfers = Create();
+        _picker.NextPick = null;
+
+        var result = await transfers.OpenFileAsync();
+
+        Assert.True(result.Ok);
+        Assert.Null(result.Value);
+        Assert.Empty(transfers.List());
+    }
+
+    [Fact]
+    public async Task A_file_that_is_not_a_download_file_or_cannot_be_read_is_refused()
+    {
+        var transfers = Create();
+        _picker.NextPick = DownloadFile;
+        _files.Contents[DownloadFile] = "a holiday letter"u8.ToArray();
+
+        Assert.Equal(ErrorKind.DownloadFileInvalid, (await transfers.OpenFileAsync()).Error);
+
+        _files.Locked.Add(DownloadFile);
+        Assert.Equal(ErrorKind.FileUnreadable, (await transfers.OpenFileAsync()).Error);
+        Assert.Empty(transfers.List());
+    }
+
+    [Fact]
+    public async Task The_same_download_file_twice_while_still_receiving_is_refused()
+    {
+        var transfers = Create();
+        _picker.NextPick = DownloadFile;
+        _files.Contents[DownloadFile] = "download-file:film"u8.ToArray();
+        await transfers.OpenFileAsync();
+
+        Assert.Equal(ErrorKind.TransferDuplicate, (await transfers.OpenFileAsync()).Error);
+    }
+
+    [Fact]
+    public async Task Pausing_stops_progress_until_the_transfer_continues()
+    {
+        var transfers = Create();
+        var id = (await transfers.ReceiveAsync("invite:abc")).Value!.Transfer.Id;
+        _engine.Report(new ReceiveProgress(id, "a.mp4", 100, 20, false, BytesPerSecond: 10));
+
+        Assert.True((await transfers.PauseAsync(id)).Ok);
+        _engine.Report(new ReceiveProgress(id, "a.mp4", 100, 30, false, BytesPerSecond: 10));
+
+        var paused = Assert.Single(transfers.List());
+        Assert.Equal(TransferState.Paused, paused.State);
+        Assert.Equal(20, paused.ReceivedBytes);
+        Assert.Null(paused.SecondsLeft);
+        Assert.Contains(id, _engine.Paused);
+        Assert.True(Assert.Single(_repository.Items).Paused);
+
+        Assert.True((await transfers.ContinueAsync(id)).Ok);
+        Assert.Equal(TransferState.Receiving, Assert.Single(transfers.List()).State);
+        Assert.DoesNotContain(id, _engine.Paused);
+        Assert.False(Assert.Single(_repository.Items).Paused);
+    }
+
+    [Fact]
+    public async Task A_paused_transfer_stays_paused_after_a_restart()
+    {
+        var id = (await Create().ReceiveAsync("invite:abc")).Value!.Transfer.Id;
+        var first = Create();
+        await first.StartAsync();
+        await first.PauseAsync(id);
+        _engine.Paused.Clear();
+
+        var restarted = Create();
+        await restarted.StartAsync();
+
+        Assert.Equal(TransferState.Paused, Assert.Single(restarted.List()).State);
+        Assert.Contains(id, _engine.Paused);
+    }
+
+    [Fact]
+    public async Task A_finished_transfer_cannot_be_paused()
+    {
+        var transfers = Create();
+        var id = (await transfers.ReceiveAsync("invite:abc")).Value!.Transfer.Id;
+        _engine.Report(new ReceiveProgress(id, "a.txt", 10, 10, true));
+
+        Assert.Equal(ErrorKind.TransferFinished, (await transfers.PauseAsync(id)).Error);
+        Assert.Equal(ErrorKind.TransferNotFound, (await transfers.PauseAsync(TransferId.New())).Error);
+    }
+
+    [Fact]
+    public async Task Time_left_comes_from_the_current_speed()
+    {
+        var transfers = Create();
+        var id = (await transfers.ReceiveAsync("invite:abc")).Value!.Transfer.Id;
+
+        _engine.Report(new ReceiveProgress(id, "a.mp4", 1000, 400, false, BytesPerSecond: 100));
+
+        var listed = Assert.Single(transfers.List());
+        Assert.Equal(100, listed.BytesPerSecond);
+        Assert.Equal(6, listed.SecondsLeft);
     }
 }

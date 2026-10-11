@@ -1,0 +1,57 @@
+# Stories of epic-follow-a-transfer, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "The sender sees who is getting a file"
+description = "Adds to `ITransferEngine` an event with, per offered share, how many devices are getting it, their combined progress and how many have finished (counts only, no addresses). Core keeps it as live state (not stored) and adds `activity` (`idle`, `sending`, `sent`) with `receiverCount`, `percent` and `finishedCount` to `ShareDto`. The fake bridge simulates a receiver."
+verify = "Engine integration test with two engines: the sender reports one receiver and its progress rising to done. Core and UI tests show 'Sending to 1: 45 %' and 'Sent 1 time'."
+covers = ["CAP-8"]
+after = ["2.1", "8.3"]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Time left in plain words"
+description = "Core computes a smoothed speed per transfer and per sending share from engine progress and adds `secondsLeft` (null while unknown) to the DTOs; the UI says 'About 5 minutes left', 'Less than a minute left', or nothing when unknown, never a speed figure."
+verify = "Core tests with a fake clock: steady progress gives a stable estimate; a stall makes it unknown; UI tests for each wording in en and pt-BR."
+covers = ["CAP-8"]
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Waiting, no space and blocked states"
+description = "Extends `TransferStateDto` with `waiting` (no connection for 2 minutes), `noSpace` (the engine reports a write failure for lack of space, or free space is below what is left; the transfer pauses and retries every minute) and `blocked` (AD-13, used by epic 3). Each gets its catalog sentence from the UX design. Adds the `disk.full` error code if epic 2 story 4 has not."
+verify = "Core tests with fakes for each transition and back; engine test where the Received root's volume is full (a small temporary volume or a fake piece writer) pauses and resumes; UI tests for each sentence."
+covers = ["CAP-8"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Progress that is honest after a restart"
+description = "On start, transfers resumed from an earlier run show their real received amount at once (from engine resume data) instead of 0 %, and finished ones never go back to 'Looking for'. Shares that were sending show 'Ready' until a receiver reconnects."
+verify = "Engine integration test: stop the receiving engine half way, start a new one on the same data, the first progress event is above 40 %. Core test for the done-stays-done rule."
+covers = ["CAP-8"]
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Notifications when the window is not watched"
+description = "Adds `INotifier` in core with the Windows implementation (app notifications from the Windows App SDK). Core notifies when a file arrives, when a receiver finishes a shared file, and when a transfer has waited over an hour; never while the window is in front. Words come from the catalog: core sends a message key and values, the shell asks the UI's catalog through a bridge query `i18n.format` or keeps a small generated copy of those keys (the story picks one and records why)."
+verify = "Core tests with a fake notifier and fake window focus; manual on Windows: the notification appears in Portuguese and clicking it opens the item's details."
+covers = ["CAP-20"]
+after = [1]
+hitl = false
+risk = "medium"
+references = ["architecture-comparta/architecture-comparta.md#ad-11"]
