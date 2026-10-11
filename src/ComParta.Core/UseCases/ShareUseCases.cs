@@ -129,7 +129,10 @@ public sealed class ShareUseCases
         return Result.Success;
     }
 
-    /// <summary>The invite text another person pastes to receive this share.</summary>
+    /// <summary>
+    /// The ComParta link another person opens to receive this share (AD-16). It carries the name
+    /// and size so they can see what it is before they agree.
+    /// </summary>
     public async Task<Result<string>> GetInviteAsync(ShareId id, CancellationToken ct = default)
     {
         ShareView? view;
@@ -141,7 +144,10 @@ public sealed class ShareUseCases
             return Result<string>.Fail(ErrorKind.ShareNotReady);
 
         var invite = await _engine.GetInviteAsync(id, ct);
-        return invite is null ? Result<string>.Fail(ErrorKind.ShareNotReady) : Result<string>.Success(invite);
+        if (invite is null)
+            return Result<string>.Fail(ErrorKind.ShareNotReady);
+        var hints = new InviteHints(SenderName: null, view.Share.Name, view.Share.SizeBytes, ItemCount: 1);
+        return Result<string>.Success(InviteCodec.Write(invite, hints));
     }
 
     private void OnOfferChanged(ShareId id, OfferState state)

@@ -13,15 +13,23 @@ public static class Commands
     public const string SharesRemove = "shares.remove";
     public const string SharesCopyInvite = "shares.copyInvite";
     public const string TransfersList = "transfers.list";
+    public const string TransfersPreview = "transfers.preview";
     public const string TransfersReceive = "transfers.receive";
+    public const string ClipboardFindInvite = "clipboard.findInvite";
     public const string TransfersRemove = "transfers.remove";
+    public const string TransfersOpenFile = "transfers.openFile";
+    public const string TransfersPause = "transfers.pause";
+    public const string TransfersResume = "transfers.resume";
     public const string ReceivedOpenFolder = "received.openFolder";
+    public const string SettingsGet = "settings.get";
+    public const string SettingsSet = "settings.set";
 }
 
 public static class Events
 {
     public const string SharesChanged = "shares.changed";
     public const string TransfersChanged = "transfers.changed";
+    public const string SettingsChanged = "settings.changed";
 }
 
 /// <summary>Stable codes; the words for them live in the UI's translation catalog (AD-11).</summary>
@@ -34,26 +42,55 @@ public static class ErrorCodes
     public const string InviteInvalid = "invite.invalid";
     public const string TransferDuplicate = "transfer.duplicate";
     public const string TransferNotFound = "transfer.notFound";
+    public const string TransferFinished = "transfer.finished";
+    public const string DownloadInvalidFile = "download.invalidFile";
+    public const string DiskFull = "disk.full";
+    public const string SettingsInvalid = "settings.invalid";
     public const string Unexpected = "unexpected";
 
     public static IReadOnlyList<string> All { get; } =
     [
         ShareDuplicate, ShareNotFound, ShareNotReady, FileUnreadable,
-        InviteInvalid, TransferDuplicate, TransferNotFound, Unexpected,
+        InviteInvalid, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, DiskFull, SettingsInvalid, Unexpected,
     ];
 }
 
 public enum ShareStatusDto { Preparing, Ready, Unavailable }
 
-public enum TransferStateDto { Connecting, Receiving, Done, Failed }
+public enum TransferStateDto { Connecting, Receiving, Paused, Done, Failed }
 
 public sealed record ShareDto(string Id, string Name, long SizeBytes, ShareStatusDto Status);
 
-public sealed record TransferDto(string Id, string? Name, long? SizeBytes, long ReceivedBytes, TransferStateDto State);
+/// <param name="BytesPerSecond">Current speed while receiving, else 0.</param>
+/// <param name="SecondsLeft">Roughly how long is left, or null when it cannot be told.</param>
+public sealed record TransferDto(
+    string Id, string? Name, long? SizeBytes, long ReceivedBytes, TransferStateDto State, long BytesPerSecond, long? SecondsLeft);
 
 public sealed record IdArgs(string Id);
 
 public sealed record ReceiveArgs(string Invite);
+
+/// <param name="Message">
+/// The words the UI wrote in the person's language, with <c>{link}</c> where the invite goes.
+/// Without it, only the link is copied.
+/// </param>
+public sealed record CopyInviteArgs(string Id, string? Message);
+
+/// <summary>
+/// What an invite or download link says, before anything is received. Name, size and sender come
+/// from the invite and are shown as such; they never become names on disk (AD-16).
+/// </summary>
+/// <param name="IsInvite">True for a ComParta invite, false for a public download link.</param>
+/// <param name="FreeBytes">Room left for received files, or null when it cannot be told.</param>
+public sealed record InvitePreviewDto(
+    string? SenderName, string? Name, long? SizeBytes, int? ItemCount, bool IsInvite, long? FreeBytes);
+
+/// <param name="Language">The language the person chose, or null to follow the system.</param>
+/// <param name="SystemLanguage">The language the operating system shows, as a tag like "pt-BR".</param>
+public sealed record SettingsDto(string? Language, string SystemLanguage);
+
+/// <param name="Language">A language tag, or null to follow the system again.</param>
+public sealed record SetSettingsArgs(string? Language);
 
 public sealed record ErrorDto(string Code);
 
@@ -83,17 +120,25 @@ public static class Contract
         new(Commands.SharesList, null, typeof(ShareDto[])),
         new(Commands.SharesAdd, null, typeof(ShareDto), ResultMayBeNull: true),
         new(Commands.SharesRemove, typeof(IdArgs), null),
-        new(Commands.SharesCopyInvite, typeof(IdArgs), null),
+        new(Commands.SharesCopyInvite, typeof(CopyInviteArgs), null),
         new(Commands.TransfersList, null, typeof(TransferDto[])),
+        new(Commands.TransfersPreview, typeof(ReceiveArgs), typeof(InvitePreviewDto)),
         new(Commands.TransfersReceive, typeof(ReceiveArgs), typeof(TransferDto)),
+        new(Commands.ClipboardFindInvite, null, typeof(string), ResultMayBeNull: true),
         new(Commands.TransfersRemove, typeof(IdArgs), null),
+        new(Commands.TransfersOpenFile, null, typeof(TransferDto), ResultMayBeNull: true),
+        new(Commands.TransfersPause, typeof(IdArgs), null),
+        new(Commands.TransfersResume, typeof(IdArgs), null),
         new(Commands.ReceivedOpenFolder, null, null),
+        new(Commands.SettingsGet, null, typeof(SettingsDto)),
+        new(Commands.SettingsSet, typeof(SetSettingsArgs), null),
     ];
 
     public static IReadOnlyList<EventSpec> EventSpecs { get; } =
     [
         new(Events.SharesChanged, typeof(ShareDto[])),
         new(Events.TransfersChanged, typeof(TransferDto[])),
+        new(Events.SettingsChanged, typeof(SettingsDto)),
     ];
 
     /// <summary>camelCase JSON with enums as camelCase strings, as the conventions require.</summary>

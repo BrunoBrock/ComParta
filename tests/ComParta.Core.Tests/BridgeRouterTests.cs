@@ -8,20 +8,23 @@ namespace ComParta.Core.Tests;
 /// <summary>The whole contract, exercised as JSON the way the UI does, with no window.</summary>
 public sealed class BridgeRouterTests
 {
-    private const string Video = @"C:\Videos\birthday.mp4";
+    // A rooted path on whichever system runs the tests, so the full-path check leaves it alone.
+    private static readonly string Video = Path.Combine(Path.GetTempPath(), "Videos", "birthday.mp4");
 
     private readonly FakeEngine _engine = new();
     private readonly FakeFilePicker _picker = new();
     private readonly FakeFileSystem _files = new();
     private readonly FakeShell _shell = new();
+    private readonly FakeSettingsRepository _settings = new();
     private readonly List<JsonElement> _events = [];
     private readonly BridgeRouter _router;
 
     public BridgeRouterTests()
     {
         var shares = new ShareUseCases(new FakeShareRepository(), _engine, _picker, _files);
-        var transfers = new TransferUseCases(new FakeTransferRepository(), _engine);
-        _router = new BridgeRouter(shares, transfers, _shell, _shell);
+        var transfers = new TransferUseCases(new FakeTransferRepository(), _engine, picker: _picker, files: _files);
+        var settings = new SettingsUseCases(_settings, new FakeSystem("pt-BR"));
+        _router = new BridgeRouter(shares, transfers, settings, _shell, _shell);
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
         _picker.NextPick = Video;
@@ -30,6 +33,8 @@ public sealed class BridgeRouterTests
     private sealed class FakeShell : IClipboard, IContentOpener
     {
         public string? Copied { get; private set; }
+        public string? OnClipboard { get; set; }
+        public Task<string?> GetTextAsync(CancellationToken ct = default) => Task.FromResult(OnClipboard);
         public int Opened { get; private set; }
         public Task SetTextAsync(string text, CancellationToken ct = default) { Copied = text; return Task.CompletedTask; }
         public Task OpenReceivedFolderAsync(CancellationToken ct = default) { Opened++; return Task.CompletedTask; }
@@ -101,10 +106,54 @@ public sealed class BridgeRouterTests
     {
         var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
 
-        var result = await InvokeAsync(Commands.SharesCopyInvite, new { id });
+        var result = await InvokeAsync(Commands.SharesCopyInvite, new { id, message = "Paulo sends you a file.\n{link}\nOpen it in ComParta." });
 
         Assert.True(result.GetProperty("ok").GetBoolean());
-        Assert.Equal(FakeEngine.InvitePrefix + id, _shell.Copied);
+        var link = InviteCodec.FindLink(_shell.Copied)!;
+        Assert.Equal($"Paulo sends you a file.\n{link}\nOpen it in ComParta.", _shell.Copied);
+        Assert.True(InviteCodec.TryRead(link, out var invite));
+        Assert.Equal(FakeEngine.InvitePrefix + id, invite.EngineText);
+        Assert.Equal("birthday.mp4", invite.Hints.Name);
+        Assert.Equal(5_000, invite.Hints.SizeBytes);
+    }
+
+    [Fact]
+    public async Task Without_a_message_only_the_link_is_copied()
+    {
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
+
+        await InvokeAsync(Commands.SharesCopyInvite, new { id });
+
+        Assert.Equal(InviteCodec.FindLink(_shell.Copied), _shell.Copied);
+    }
+
+    [Fact]
+    public async Task An_invite_is_previewed_with_what_it_says_about_the_file()
+    {
+        var link = InviteCodec.Write("invite:abc", new InviteHints("Paulo", "Natal 2024.mp4", 4_200, 1));
+
+        var preview = (await InvokeAsync(Commands.TransfersPreview, new { invite = $"Oi! {link} 🎄" })).GetProperty("value");
+
+        Assert.Equal("Paulo", preview.GetProperty("senderName").GetString());
+        Assert.Equal("Natal 2024.mp4", preview.GetProperty("name").GetString());
+        Assert.Equal(4_200, preview.GetProperty("sizeBytes").GetInt64());
+        Assert.True(preview.GetProperty("isInvite").GetBoolean());
+        Assert.Empty(_engine.Receiving);
+        Assert.Equal(ErrorCodes.InviteInvalid, ErrorCode(await InvokeAsync(Commands.TransfersPreview, new { invite = "hello" })));
+    }
+
+    [Fact]
+    public async Task An_invite_on_the_clipboard_is_found_and_other_text_is_not()
+    {
+        var link = InviteCodec.Write("invite:abc", InviteHints.None);
+        _shell.OnClipboard = "Here you go:\n" + link;
+
+        Assert.Equal(link, (await InvokeAsync(Commands.ClipboardFindInvite)).GetProperty("value").GetString());
+
+        _shell.OnClipboard = "shopping list";
+        var nothing = await InvokeAsync(Commands.ClipboardFindInvite);
+        Assert.True(nothing.GetProperty("ok").GetBoolean());
+        Assert.False(nothing.TryGetProperty("value", out _));
     }
 
     [Fact]
@@ -126,6 +175,45 @@ public sealed class BridgeRouterTests
     }
 
     [Fact]
+    public async Task A_transfer_can_be_paused_and_continued_and_shows_its_speed()
+    {
+        var started = await InvokeAsync(Commands.TransfersReceive, new { invite = "invite:abc" });
+        var id = started.GetProperty("value").GetProperty("id").GetString()!;
+        _engine.Report(new ReceiveProgress(new TransferId(Guid.Parse(id)), "a.mp4", 1_000, 250, false, BytesPerSecond: 50));
+
+        var receiving = (await InvokeAsync(Commands.TransfersList)).GetProperty("value")[0];
+        Assert.Equal(50, receiving.GetProperty("bytesPerSecond").GetInt64());
+        Assert.Equal(15, receiving.GetProperty("secondsLeft").GetInt64());
+
+        Assert.True((await InvokeAsync(Commands.TransfersPause, new { id })).GetProperty("ok").GetBoolean());
+        var paused = (await InvokeAsync(Commands.TransfersList)).GetProperty("value")[0];
+        Assert.Equal("paused", paused.GetProperty("state").GetString());
+        Assert.Equal(JsonValueKind.Null, paused.GetProperty("secondsLeft").ValueKind);
+
+        Assert.True((await InvokeAsync(Commands.TransfersResume, new { id })).GetProperty("ok").GetBoolean());
+        Assert.Equal("transfer.notFound", ErrorCode(await InvokeAsync(Commands.TransfersPause, new { id = "nope" })));
+    }
+
+    [Fact]
+    public async Task A_download_file_is_opened_through_the_file_dialog()
+    {
+        const string file = @"C:\Downloads\film.download";
+        _picker.NextPick = file;
+        _files.Contents[file] = "download-file:film"u8.ToArray();
+
+        var opened = await InvokeAsync(Commands.TransfersOpenFile);
+        Assert.Equal("connecting", opened.GetProperty("value").GetProperty("state").GetString());
+
+        _files.Contents[file] = "not one"u8.ToArray();
+        Assert.Equal("download.invalidFile", ErrorCode(await InvokeAsync(Commands.TransfersOpenFile)));
+
+        _picker.NextPick = null;
+        var cancelled = await InvokeAsync(Commands.TransfersOpenFile);
+        Assert.True(cancelled.GetProperty("ok").GetBoolean());
+        Assert.False(cancelled.TryGetProperty("value", out _));
+    }
+
+    [Fact]
     public async Task Share_changes_are_sent_as_events_and_the_folder_can_be_opened()
     {
         await InvokeAsync(Commands.SharesAdd);
@@ -142,5 +230,20 @@ public sealed class BridgeRouterTests
     {
         Assert.All(Contract.CommandSpecs, spec => Assert.Matches(@"^[a-z]+\.[a-z][A-Za-z]+$", spec.Name));
         Assert.All(Contract.EventSpecs, spec => Assert.Matches(@"^[a-z]+\.changed$", spec.Name));
+    }
+
+    [Fact]
+    public async Task The_language_follows_the_system_until_the_person_chooses_one()
+    {
+        var first = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.Equal(JsonValueKind.Null, first.GetProperty("language").ValueKind);
+        Assert.Equal("pt-BR", first.GetProperty("systemLanguage").GetString());
+
+        Assert.True((await InvokeAsync(Commands.SettingsSet, new { language = "en" })).GetProperty("ok").GetBoolean());
+
+        Assert.Equal("en", (await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("language").GetString());
+        var changed = Assert.Single(_events, e => e.GetProperty("event").GetString() == Events.SettingsChanged);
+        Assert.Equal("en", changed.GetProperty("payload").GetProperty("language").GetString());
+        Assert.Equal(ErrorCodes.SettingsInvalid, ErrorCode(await InvokeAsync(Commands.SettingsSet, new { language = "../evil" })));
     }
 }

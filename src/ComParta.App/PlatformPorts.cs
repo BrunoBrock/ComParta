@@ -39,12 +39,43 @@ public sealed class NativeFilePicker : Ports.IFilePicker
 		var picked = await MainThread.InvokeOnMainThreadAsync(() => FilePicker.Default.PickAsync());
 		return picked?.FullPath;
 	}
+
+	public async Task<string?> PickDownloadFileAsync(CancellationToken ct = default)
+	{
+		// The engine adapter names the extensions; the shell only shows them (AD-2, AD-21).
+		var types = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
+		{
+			[DevicePlatform.WinUI] = Engine.MonoTorrent.MonoTorrentTransferEngine.DownloadFileExtensions,
+		});
+		var picked = await MainThread.InvokeOnMainThreadAsync(() => FilePicker.Default.PickAsync(new PickOptions { FileTypes = types }));
+		return picked?.FullPath;
+	}
 }
 
 public sealed class NativeClipboard : Ports.IClipboard
 {
 	public Task SetTextAsync(string text, CancellationToken ct = default) =>
 		MainThread.InvokeOnMainThreadAsync(() => Clipboard.Default.SetTextAsync(text));
+
+	public Task<string?> GetTextAsync(CancellationToken ct = default) =>
+		MainThread.InvokeOnMainThreadAsync(() => Clipboard.Default.HasText ? Clipboard.Default.GetTextAsync() : Task.FromResult<string?>(null));
+}
+
+public sealed class LocalStorageInfo(Ports.IAppPaths paths) : Ports.IStorageInfo
+{
+	public long? GetReceivedFreeBytes()
+	{
+		try
+		{
+			Directory.CreateDirectory(paths.ReceivedRoot);
+			var root = Path.GetPathRoot(Path.GetFullPath(paths.ReceivedRoot));
+			return root is null ? null : new DriveInfo(root).AvailableFreeSpace;
+		}
+		catch (Exception)
+		{
+			return null;
+		}
+	}
 }
 
 public sealed class ReceivedFolderOpener(Ports.IAppPaths paths) : Ports.IContentOpener
@@ -67,4 +98,19 @@ public sealed class LocalFileSystem : Ports.IFileSystem
 		using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 		return stream.Length;
 	}
+
+	public byte[] ReadSmallFile(string path, int maxBytes)
+	{
+		using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+		if (stream.Length > maxBytes)
+			throw new IOException("The file is larger than allowed.");
+		var content = new byte[stream.Length];
+		stream.ReadExactly(content);
+		return content;
+	}
+}
+
+public sealed class SystemInfo : Ports.ISystemInfo
+{
+	public string UiLanguage => System.Globalization.CultureInfo.CurrentUICulture.Name is { Length: > 0 } name ? name : "en";
 }

@@ -1,0 +1,46 @@
+# Stories of epic-keep-sharing-in-background, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Stay in the notification area while there is work"
+description = "Adds `IBackgroundPresence` and `HasActiveWork` in core (AD-14) and the Windows implementation: a notification-area icon with 'Open ComParta' and 'Quit'; closing the window hides it when there is active work and quits otherwise; the first hide shows a notification explaining it (catalog key). Restoring from the icon, from a second launch or from a link shows the window."
+verify = "Core tests for `HasActiveWork` with fakes; manual on Windows: with a share ready, closing hides the window and the icon reopens it; with nothing shared, closing quits."
+covers = ["CAP-17"]
+after = ["2.6"]
+hitl = false
+risk = "medium"
+references = ["architecture-comparta/architecture-comparta.md#ad-14"]
+
+[[entry]]
+id = 2
+type = "story"
+title = "Ask before quitting would cut someone off"
+description = "Adds `app.quit { force }`: without force it returns `app.busy` with what is moving when a receiver is mid-transfer or this device is receiving; the UI confirms with the file name and then quits with force. The icon's Quit goes through the same path."
+verify = "Core tests for both answers; UI test for the dialog; manual: quitting from the icon during a transfer asks."
+covers = ["CAP-17"]
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Start with Windows"
+description = "Adds the `startWithWindows` setting; the Windows shell registers or removes a per-user start-up entry (the MSIX build uses its startup task extension) that starts ComParta hidden in the notification area."
+verify = "Manual on Windows: turning the setting on and signing out and in starts ComParta hidden; turning it off removes the entry; storage test for the setting."
+covers = ["CAP-17"]
+after = [1, "6.2"]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 4
+type = "story"
+title = "No sleep in the middle of a transfer"
+description = "While bytes are moving in either direction, the shell asks Windows to stay awake (not the display), and releases the request within a minute of the last bytes moving."
+verify = "Core test: the presence port is told 'busy' and 'idle' at the right moments with fakes; manual: `powercfg /requests` lists ComParta during a transfer and not after."
+covers = ["CAP-17"]
+after = [1]
+hitl = false
+risk = "low"

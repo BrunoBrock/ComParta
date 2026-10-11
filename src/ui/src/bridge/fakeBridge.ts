@@ -3,8 +3,12 @@ import type {
   CommandResult,
   ErrorCode,
   EventEnvelope,
+  CopyInviteArgs,
   IdArgs,
+  InvitePreviewDto,
   ReceiveArgs,
+  SetSettingsArgs,
+  SettingsDto,
   ShareDto,
   TransferDto,
 } from './contract.generated.ts'
@@ -19,6 +23,12 @@ export interface FakeBridgeOptions {
   transfers?: TransferDto[]
   /** Milliseconds a new share stays "preparing" and between steps of a transfer. 0 means never advance on its own. */
   stepMs?: number
+  /** Room left for received files; null when it cannot be told. */
+  freeBytes?: number | null
+  /** The operating system's language; English when left out. */
+  systemLanguage?: string
+  /** A language the person chose earlier. */
+  language?: string | null
 }
 
 export interface FakeBridge extends Bridge {
@@ -26,15 +36,23 @@ export interface FakeBridge extends Bridge {
   nextPick: PickedFile | null
   /** Make the next command fail with this code. */
   failNextWith: ErrorCode | null
-  /** Text of the last invite "copied". */
+  /** What the next "open a download file" dialog returns; null means cancelled, 'invalid' a wrong file. */
+  nextDownloadFile: PickedFile | 'invalid' | null
+  /** Text of the last invite message "copied". */
   copiedInvite: string | null
+  /** What the system clipboard holds, for the "found an invite you copied" path. */
+  clipboardText: string | null
   openedFolder: number
   /** Change state from outside, as the app does when something happens on its own. */
   setShares(shares: ShareDto[]): void
   setTransfers(transfers: TransferDto[]): void
 }
 
-const invitePrefix = 'comparta-invite:'
+// The fake's invites look like the app's ComParta links (AD-16) but carry the share id in the clear.
+const invitePrefix = 'comparta://receive/v1/'
+const invitePattern = /comparta:\/\/receive\/v1\/([A-Za-z0-9_-]+)/i
+const downloadLinkPrefix = 'https://example.org/download/'
+const demoInvite = { senderName: 'Paulo', name: 'Birthday party.mp4', sizeBytes: 250_000_000 }
 const ok = <T>(value: T): CommandResult<T> => ({ ok: true, value })
 const fail = (code: ErrorCode): CommandResult<never> => ({ ok: false, error: { code } })
 
@@ -66,26 +84,84 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     emitTransfers()
   }
 
-  const simulateTransfer = (id: string) => {
+  const simulateTransfer = (id: string, name: string, total: number) => {
     if (stepMs === 0) return
-    const total = 250_000_000
+    const step = total / 12
+    // Pretend each step takes four seconds, so the speed and time left read like real ones.
+    const bytesPerSecond = Math.round(step / 4)
     let received = 0
     setTimeout(() => {
-      updateTransfer(id, { name: 'Birthday party.mp4', sizeBytes: total })
+      updateTransfer(id, { name, sizeBytes: total })
       const timer = setInterval(() => {
-        if (!transfers.some((t) => t.id === id)) {
+        const current = transfers.find((t) => t.id === id)
+        if (!current) {
           clearInterval(timer)
           return
         }
-        received = Math.min(total, received + total / 12)
+        if (current.state === 'paused') return
+        received = Math.min(total, received + step)
         if (received >= total) {
           clearInterval(timer)
-          updateTransfer(id, { receivedBytes: total, state: 'done' })
+          updateTransfer(id, { receivedBytes: total, state: 'done', bytesPerSecond: 0, secondsLeft: null })
         } else {
-          updateTransfer(id, { receivedBytes: Math.round(received), state: 'receiving' })
+          updateTransfer(id, {
+            receivedBytes: Math.round(received),
+            state: 'receiving',
+            bytesPerSecond,
+            secondsLeft: Math.ceil((total - received) / bytesPerSecond),
+          })
         }
       }, stepMs)
     }, stepMs * 2)
+  }
+
+  const startTransfer = (id: string, name: string, total: number, known: Partial<TransferDto> = {}) => {
+    if (transfers.some((t) => t.id === id && t.state !== 'done')) return fail('transfer.duplicate')
+    const transfer: TransferDto = {
+      id,
+      name: null,
+      sizeBytes: null,
+      receivedBytes: 0,
+      state: 'connecting',
+      bytesPerSecond: 0,
+      secondsLeft: null,
+      ...known,
+    }
+    transfers = [...transfers.filter((t) => t.id !== id), transfer]
+    emitTransfers()
+    simulateTransfer(id, name, total)
+    return ok(transfer)
+  }
+
+  const setPaused = (id: string, paused: boolean) => {
+    const transfer = transfers.find((t) => t.id === id)
+    if (!transfer) return fail('transfer.notFound')
+    if (transfer.state === 'done' || transfer.state === 'failed') return fail('transfer.finished')
+    if (paused) updateTransfer(id, { state: 'paused', bytesPerSecond: 0, secondsLeft: null })
+    else if (transfer.state === 'paused') updateTransfer(id, { state: transfer.sizeBytes ? 'receiving' : 'connecting' })
+    return ok(null)
+  }
+
+  let settings: SettingsDto = { language: options.language ?? null, systemLanguage: options.systemLanguage ?? 'en' }
+  const freeBytes = options.freeBytes === undefined ? 120 * 1024 ** 3 : options.freeBytes
+
+  /** Reads text the way the app's invite codec and engine do, or null when it is neither. */
+  const read = (text: string): { key: string; preview: InvitePreviewDto } | null => {
+    const found = invitePattern.exec(text)
+    if (found) {
+      const share = shares.find((s) => s.id === found[1])
+      const hints = share ? { senderName: null, name: share.name, sizeBytes: share.sizeBytes } : demoInvite
+      return { key: `from-${found[1]}`, preview: { ...hints, itemCount: 1, isInvite: true, freeBytes } }
+    }
+    const trimmed = text.trim()
+    if (trimmed.startsWith(downloadLinkPrefix)) {
+      const name = decodeURIComponent(trimmed.slice(downloadLinkPrefix.length)) || 'Download'
+      return {
+        key: `link-${name}`,
+        preview: { senderName: null, name, sizeBytes: 1_800_000_000, itemCount: null, isInvite: false, freeBytes },
+      }
+    }
+    return null
   }
 
   const handlers: Record<string, (args: unknown) => CommandResult<unknown>> = {
@@ -119,33 +195,60 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     },
 
     'shares.copyInvite': (args) => {
-      const share = shares.find((s) => s.id === (args as IdArgs).id)
+      const { id, message } = args as CopyInviteArgs
+      const share = shares.find((s) => s.id === id)
       if (!share) return fail('share.notFound')
       if (share.status !== 'ready') return fail('share.notReady')
-      fake.copiedInvite = invitePrefix + share.id
+      const link = invitePrefix + share.id
+      fake.copiedInvite = message ? (message.includes('{link}') ? message.replace('{link}', link) : `${message}\n${link}`) : link
       return ok(null)
     },
 
     'transfers.list': () => ok([...transfers]),
 
-    'transfers.receive': (args) => {
-      const invite = (args as ReceiveArgs).invite.trim()
-      if (!invite.startsWith(invitePrefix)) return fail('invite.invalid')
-      const id = `from-${invite.slice(invitePrefix.length)}`
-      if (transfers.some((t) => t.id === id && t.state !== 'done')) return fail('transfer.duplicate')
-
-      const transfer: TransferDto = { id, name: null, sizeBytes: null, receivedBytes: 0, state: 'connecting' }
-      transfers = [...transfers.filter((t) => t.id !== id), transfer]
-      emitTransfers()
-      simulateTransfer(id)
-      return ok(transfer)
+    'transfers.preview': (args) => {
+      const found = read((args as ReceiveArgs).invite ?? '')
+      return found ? ok(found.preview) : fail('invite.invalid')
     },
+
+    'transfers.receive': (args) => {
+      const found = read((args as ReceiveArgs).invite ?? '')
+      if (!found) return fail('invite.invalid')
+      const { name, sizeBytes, isInvite } = found.preview
+      if (sizeBytes !== null && freeBytes !== null && sizeBytes > freeBytes) return fail('disk.full')
+      // Names from an invite are hints only; the name appears once the file's details arrive.
+      return startTransfer(found.key, name ?? 'File', sizeBytes ?? 250_000_000, isInvite ? {} : { name })
+    },
+
+    'clipboard.findInvite': () => {
+      const found = invitePattern.exec(fake.clipboardText ?? '')
+      return ok(found ? found[0] : null)
+    },
+
+    'transfers.openFile': () => {
+      const file = fake.nextDownloadFile
+      if (file === null) return ok(null)
+      if (file === 'invalid') return fail('download.invalidFile')
+      return startTransfer(`file-${file.name}`, file.name, file.sizeBytes, { name: file.name, sizeBytes: file.sizeBytes })
+    },
+
+    'transfers.pause': (args) => setPaused((args as IdArgs).id, true),
+
+    'transfers.resume': (args) => setPaused((args as IdArgs).id, false),
 
     'transfers.remove': (args) => {
       const { id } = args as IdArgs
       if (!transfers.some((t) => t.id === id)) return fail('transfer.notFound')
       transfers = transfers.filter((t) => t.id !== id)
       emitTransfers()
+      return ok(null)
+    },
+
+    'settings.get': () => ok({ ...settings }),
+
+    'settings.set': (args) => {
+      settings = { ...settings, language: (args as SetSettingsArgs).language }
+      emit({ event: 'settings.changed', payload: { ...settings } })
       return ok(null)
     },
 
@@ -157,8 +260,10 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
 
   const fake = {
     nextPick: samplePicks[0] as PickedFile | null,
+    nextDownloadFile: { name: 'Free documentary.mkv', sizeBytes: 2_147_483_648 } as PickedFile | 'invalid' | null,
     failNextWith: null as ErrorCode | null,
     copiedInvite: null as string | null,
+    clipboardText: null as string | null,
     openedFolder: 0,
 
     async invoke(command: string, args?: unknown) {
@@ -191,3 +296,6 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
 
 /** An invite the fake accepts, for trying the receive flow in a browser. */
 export const sampleFakeInvite = `${invitePrefix}demo`
+
+/** A download link the fake accepts. */
+export const sampleFakeDownloadLink = `${downloadLinkPrefix}Open%20film.mkv`

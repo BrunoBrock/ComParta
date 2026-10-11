@@ -1,0 +1,83 @@
+# Stories of epic-install-and-update, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "License and third-party notices"
+description = "Adds the chosen LICENSE file, a header policy in CONTRIBUTING, a generated THIRD-PARTY-NOTICES file listing every NuGet and npm package shipped with its license (a build step fails on an unknown or incompatible license), and shows them in Settings, About."
+verify = "The build step lists MonoTorrent, React, Lucide and the rest with their licenses; adding a package with no license fails it; About shows the notices."
+covers = ["CAP-11"]
+after = ["1.14"]
+hitl = true                 # Bruno chooses the license
+risk = "low"
+unknown = "Decision D-1: which license (recommendation Apache-2.0)."
+
+[[entry]]
+id = 2
+type = "story"
+title = "An MSIX package from CI"
+description = "Makes the Windows build produce a self-contained MSIX (Windows App SDK and WebView2 dependencies handled by the package) with version from the git tag, the `comparta:` protocol, the firewall rule and the start-up task declared in the manifest; CI builds it on every push to main and a test install runs on the runner."
+verify = "CI uploads an MSIX artifact; installing it on a clean Windows VM with a test certificate starts ComParta; the manifest lists the protocol, firewall rule and start-up task."
+covers = ["CAP-11"]
+after = ["1.14"]
+hitl = false
+risk = "medium"
+references = ["architecture-comparta/architecture-comparta.md#ad-17"]
+
+[[entry]]
+id = 3
+type = "story"
+title = "Microsoft Store listing"
+description = "Reserves the name ComParta in Partner Center, writes the listing in pt-BR and en (description in the product's words, screenshots from the release build, privacy statement link), declares the age rating and the full-trust capability justification, and submits the first package for certification."
+verify = "The app is live in the Store (private audience or public); installing it from the Store link on a clean PC shows no unknown-publisher warning."
+covers = ["CAP-11"]
+after = [2]
+hitl = true                 # needs Bruno's Partner Center account
+risk = "medium"
+unknown = "Decision D-2: Microsoft Store as the main channel."
+
+[[entry]]
+id = 4
+type = "story"
+title = "Release workflow from a tag"
+description = "Adds a GitHub Actions workflow that, on a version tag, builds and tests, produces the MSIX and the zip, writes release notes from the commits, attaches both to a GitHub Release, and submits the MSIX to the Store with the Store's submission tool using secrets Bruno adds."
+verify = "Pushing a test tag creates a draft GitHub Release with both files; a Store submission appears in Partner Center."
+covers = ["CAP-11"]
+after = [2, 3]
+hitl = true                 # Bruno adds the Store secrets
+risk = "medium"
+unknown = "Decision D-2."
+
+[[entry]]
+id = 5
+type = "story"
+title = "Updating keeps everything"
+description = "Adds a schema version to the product database with forward migrations at start-up; on the first packaged run, imports the database and engine data from the unpackaged pilot location if present, then leaves the old folder alone and records that it was imported; tests upgrade from each released schema."
+verify = "Storage tests upgrade fixtures of every earlier schema; manual: a pilot install's shares appear after installing the Store build; installing a newer MSIX over an older one keeps shares and transfers."
+covers = ["CAP-11"]
+after = [2]
+hitl = false
+risk = "high"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Signed zip for people without the Store"
+description = "Signs the zip's executable through a free open-source signing service (for example SignPath Foundation) once the repository is public and accepted, or documents in the README why the zip is unsigned and how SmartScreen will look."
+verify = "The zip's ComParta.exe shows a publisher in its properties, or the README section exists."
+covers = ["CAP-11"]
+after = [1, 4]
+hitl = true
+risk = "low"
+unknown = "Decision D-2, and whether the signing service accepts the project."
+
+[[entry]]
+id = 7
+type = "story"
+title = "Install check on a clean PC"
+description = "Before each release, installs from the Store link on a clean Windows 10 and a clean Windows 11 PC (or VM), runs the epic's Done when list and the family pilot's send and receive, and records the result."
+verify = "A dated checklist in this epic's Notes for both Windows versions."
+covers = ["CAP-11"]
+after = [3, 5]
+hitl = true
+risk = "low"

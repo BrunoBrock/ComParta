@@ -17,7 +17,8 @@ namespace ComParta.Engine.MonoTorrent;
 /// <summary>
 /// <see cref="ITransferEngine"/> on MonoTorrent. Everything torrent-shaped stays in this project (AD-2):
 /// a share is a single-file torrent seeded in place, an invite is its magnet link, and a transfer
-/// is a download of that magnet link.
+/// is a download of that magnet link. A "download link" is any other magnet link and a "download
+/// file" is a .torrent file (AD-21); for those the trackers they name are kept (AD-8, amended).
 /// </summary>
 public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposable
 {
@@ -27,6 +28,9 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
     // The magnet-link parameter for "a peer address to try directly" (BEP 9).
     private const string AddressHint = "x.pe";
     private const int MaxAddressHints = 6;
+
+    /// <summary>What the shell's file dialog shows for "open a download file".</summary>
+    public static IReadOnlyList<string> DownloadFileExtensions { get; } = [".torrent"];
 
     private readonly string _sharesFolder;
     private readonly string _transfersFolder;
@@ -119,10 +123,11 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
         }
     }
 
-    private TorrentSettings ToTorrentSettings() => new TorrentSettingsBuilder
+    /// <param name="publicDownload">True for a download link or file the person brought from elsewhere.</param>
+    private TorrentSettings ToTorrentSettings(bool publicDownload = false) => new TorrentSettingsBuilder
     {
         AllowDht = _policy.AllowPublicLookup,
-        AllowPeerExchange = _policy.AllowPeerExchange,
+        AllowPeerExchange = _policy.AllowPeerExchange || (publicDownload && _policy.AllowServersInDownloadLinks),
     }.ToSettings();
 
     public async Task StopAsync()
@@ -267,6 +272,9 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
     public string? ReadInviteKey(string inviteText) =>
         TryReadInvite(inviteText, out var link, out _) ? KeyOf(link.InfoHashes) : null;
 
+    public InviteSummary? DescribeInvite(string inviteText) =>
+        TryReadInvite(inviteText, out var link, out _) ? new InviteSummary(link.Name, link.Size) : null;
+
     public string? GetReceiveKey(TransferId id) =>
         _incoming.TryGetValue(id, out var incoming) ? KeyOf(incoming.Manager.InfoHashes) : null;
 
@@ -284,16 +292,87 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
         return false;
     }
 
+    public string? ReadDownloadFileKey(byte[] content) =>
+        TryLoadDownloadFile(content, out var torrent) ? KeyOf(torrent.InfoHashes) : null;
+
+    public async Task<bool> ReceiveFromFileAsync(TransferId id, byte[] content, CancellationToken ct = default)
+    {
+        if (_engine is null || !TryLoadDownloadFile(content, out var torrent))
+            return false;
+
+        var filePath = DownloadFilePath(id);
+        await File.WriteAllBytesAsync(filePath, content, ct);
+        if (await StartIncomingAsync(id, torrent))
+            return true;
+        DeleteQuietly(filePath);
+        return false;
+    }
+
+    /// <summary>
+    /// A .torrent file is accepted only when the policy allows the trackers it names, because the
+    /// engine would contact them (AD-8, amended).
+    /// </summary>
+    private bool TryLoadDownloadFile(byte[] content, out Torrent torrent)
+    {
+        torrent = null!;
+        if (!_policy.AllowServersInDownloadLinks)
+            return false;
+        try
+        {
+            return Torrent.TryLoad(content, out torrent!) && torrent is not null;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    public async Task PauseReceivingAsync(TransferId id, CancellationToken ct = default)
+    {
+        if (_incoming.TryGetValue(id, out var incoming))
+        {
+            incoming.Paused = true;
+            try { await incoming.Manager.PauseAsync(); }
+            catch (Exception) { /* a transfer that cannot pause stays stopped by the flag */ }
+        }
+    }
+
+    public async Task ContinueReceivingAsync(TransferId id, CancellationToken ct = default)
+    {
+        if (_incoming.TryGetValue(id, out var incoming))
+        {
+            incoming.Paused = false;
+            await incoming.Manager.StartAsync();
+            await TryHintsAsync(incoming);
+        }
+    }
+
     public async Task<bool> ResumeReceivingAsync(TransferId id, CancellationToken ct = default)
     {
+        if (_engine is null)
+            return false;
+        var filePath = DownloadFilePath(id);
+        if (File.Exists(filePath))
+        {
+            return TryLoadDownloadFile(await File.ReadAllBytesAsync(filePath, ct), out var torrent)
+                && await StartIncomingAsync(id, torrent);
+        }
         var invitePath = InvitePath(id);
-        if (_engine is null || !File.Exists(invitePath))
+        if (!File.Exists(invitePath))
             return false;
         return TryReadInvite(await File.ReadAllTextAsync(invitePath, ct), out var link, out var hints)
             && await StartIncomingAsync(id, link, hints);
     }
 
-    private async Task<bool> StartIncomingAsync(TransferId id, MagnetLink link, IReadOnlyList<IPEndPoint> hints)
+    private Task<bool> StartIncomingAsync(TransferId id, MagnetLink link, IReadOnlyList<IPEndPoint> hints) =>
+        StartIncomingAsync(id, hints, (engine, folder) =>
+            engine.AddAsync(link, folder, ToTorrentSettings(publicDownload: link.AnnounceUrls.Count > 0)));
+
+    private Task<bool> StartIncomingAsync(TransferId id, Torrent torrent) =>
+        StartIncomingAsync(id, [], (engine, folder) => engine.AddAsync(torrent, folder, ToTorrentSettings(publicDownload: true)));
+
+    private async Task<bool> StartIncomingAsync(
+        TransferId id, IReadOnlyList<IPEndPoint> hints, Func<ClientEngine, string, Task<TorrentManager>> add)
     {
         var folder = Path.Combine(_inProgressRoot, id.ToString());
         try
@@ -301,7 +380,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
             Directory.CreateDirectory(folder);
             File.SetAttributes(_inProgressRoot, File.GetAttributes(_inProgressRoot) | FileAttributes.Hidden);
 
-            var manager = await _engine!.AddAsync(link, folder, ToTorrentSettings());
+            var manager = await add(_engine!, folder);
             var incoming = new Incoming(id, manager, folder, hints);
             _incoming[id] = incoming;
             manager.TorrentStateChanged += (_, _) => CheckContained(incoming);
@@ -325,6 +404,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
             DeleteFolderQuietly(incoming.Folder);
         }
         DeleteQuietly(InvitePath(id));
+        DeleteQuietly(DownloadFilePath(id));
     }
 
     /// <summary>For tests: connect a transfer straight to another engine instead of discovering it.</summary>
@@ -350,7 +430,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
         {
             foreach (var incoming in _incoming.Values)
             {
-                if (incoming.Finishing)
+                if (incoming.Finishing || incoming.Paused)
                     continue;
                 var manager = incoming.Manager;
                 if (!CheckContained(incoming) || manager.State == TorrentState.Error)
@@ -378,7 +458,8 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
                     continue;
                 }
                 var received = (long)(torrent.Size * (manager.Progress / 100.0));
-                ReceiveProgressed?.Invoke(new ReceiveProgress(incoming.Id, incoming.Name, incoming.Size, received, false));
+                ReceiveProgressed?.Invoke(new ReceiveProgress(
+                    incoming.Id, incoming.Name, incoming.Size, received, false, BytesPerSecond: manager.Monitor.DownloadRate));
             }
         }
         catch (Exception)
@@ -429,6 +510,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
             }
             DeleteFolderQuietly(incoming.Folder);
             DeleteQuietly(InvitePath(incoming.Id));
+            DeleteQuietly(DownloadFilePath(incoming.Id));
             _incoming.TryRemove(incoming.Id, out _);
 
             ReceiveProgressed?.Invoke(new ReceiveProgress(incoming.Id, finalName ?? incoming.Name, incoming.Size, incoming.Size ?? 0, true));
@@ -454,7 +536,9 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
 
     /// <summary>
     /// Reads an invite and drops everything except the content identity, name and size, so an invite
-    /// can never make the app contact a server the policy did not allow.
+    /// can never make the app contact a server the policy did not allow. A link that names trackers
+    /// is a public download link, not a ComParta invite (ComParta never puts trackers in its
+    /// invites); it keeps them when the policy allows servers in download links (AD-8, amended).
     /// </summary>
     private bool TryReadInvite(string? inviteText, out MagnetLink link, out IReadOnlyList<IPEndPoint> hints)
     {
@@ -481,10 +565,12 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
                 return false;
             if (_policy.AllowAddressInInvite)
                 hints = found;
+            var keepServers = _policy.AllowAnnounceServers
+                || (_policy.AllowServersInDownloadLinks && parsed.AnnounceUrls.Count > 0);
             link = new MagnetLink(
                 parsed.InfoHashes,
                 parsed.Name,
-                _policy.AllowAnnounceServers ? parsed.AnnounceUrls : null,
+                keepServers ? parsed.AnnounceUrls : null,
                 null,
                 parsed.Size);
             return true;
@@ -498,6 +584,8 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
     private static string KeyOf(InfoHashes hashes) => hashes.V1OrV2.ToHex();
 
     private string InvitePath(TransferId id) => Path.Combine(_transfersFolder, id + ".invite");
+
+    private string DownloadFilePath(TransferId id) => Path.Combine(_transfersFolder, id + ".torrent");
 
     private static void DeleteQuietly(string path)
     {
@@ -536,5 +624,6 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
         public long? Size { get; set; }
         public volatile bool Finishing;
         public volatile bool Rejected;
+        public volatile bool Paused;
     }
 }

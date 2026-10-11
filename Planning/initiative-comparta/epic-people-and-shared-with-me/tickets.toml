@@ -1,0 +1,73 @@
+# Stories of epic-people-and-shared-with-me, in build order.
+# Stories after 1 are refined once the spike's design is accepted.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Spike: private sharing between known people"
+description = "Designs pairing, device keys, private delivery and blinded lookup within AD-2 and AD-9, tests the riskiest part (blinded announce with MonoTorrent) in a throwaway branch, sketches the My people and Shared with me screens in the UX design, and proposes the architecture changes."
+verify = "A design note in this folder, a working prototype of the riskiest part, and a draft architecture update Bruno accepts or rejects."
+covers = ["CAP-24"]
+after = ["7.1"]
+hitl = true                 # Bruno accepts the design
+risk = "high"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Device identity and pairing"
+description = "A key pair per device, kept on the device; accepting an invite offers 'Add {name} to My people', which pairs the two devices."
+verify = "Set when refined."
+covers = ["CAP-24"]
+after = [1]
+hitl = false
+risk = "high"
+refine = true
+
+[[entry]]
+id = 3
+type = "story"
+title = "My people"
+description = "A section listing paired people with their name and devices, rename and remove."
+verify = "Set when refined."
+covers = ["CAP-24"]
+after = [2]
+hitl = false
+risk = "low"
+refine = true
+
+[[entry]]
+id = 4
+type = "story"
+title = "Send to a person from inside ComParta"
+description = "'Send to…' on a share picks people from My people; the share is delivered privately to their devices when both are on."
+verify = "Set when refined."
+covers = ["CAP-24"]
+after = [2]
+hitl = false
+risk = "high"
+refine = true
+
+[[entry]]
+id = 5
+type = "story"
+title = "Shared with me"
+description = "A section listing shares sent to this person, with Get and Not now, and a notification when a new one arrives."
+verify = "Set when refined."
+covers = ["CAP-24", "CAP-20"]
+after = [4]
+hitl = false
+risk = "medium"
+refine = true
+
+[[entry]]
+id = 6
+type = "story"
+title = "Blinded lookup"
+description = "Shares sent this way are found on the lookup network without announcing their real fingerprint; AD-8's trade-off is closed for them."
+verify = "Set when refined."
+covers = ["CAP-24"]
+after = [1]
+hitl = false
+risk = "high"
+refine = true

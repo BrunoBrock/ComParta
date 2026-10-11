@@ -14,17 +14,21 @@ public sealed class BridgeRouter
 {
     private readonly ShareUseCases _shares;
     private readonly TransferUseCases _transfers;
+    private readonly SettingsUseCases _settings;
     private readonly IClipboard _clipboard;
     private readonly IContentOpener _opener;
 
-    public BridgeRouter(ShareUseCases shares, TransferUseCases transfers, IClipboard clipboard, IContentOpener opener)
+    public BridgeRouter(
+        ShareUseCases shares, TransferUseCases transfers, SettingsUseCases settings, IClipboard clipboard, IContentOpener opener)
     {
         _shares = shares;
         _transfers = transfers;
+        _settings = settings;
         _clipboard = clipboard;
         _opener = opener;
         _shares.Changed += () => Raise(Events.SharesChanged, _shares.Current().Select(ToDto).ToArray());
         _transfers.Changed += () => Raise(Events.TransfersChanged, _transfers.List().Select(ToDto).ToArray());
+        _settings.Changed += () => _ = RaiseSettingsAsync();
     }
 
     /// <summary>An event envelope as JSON, ready to be sent to the UI.</summary>
@@ -65,12 +69,24 @@ public sealed class BridgeRouter
 
             case Commands.SharesCopyInvite:
             {
-                var invite = await GetInviteAsync(argsJson);
+                var args = Args<CopyInviteArgs>(argsJson);
+                var invite = ShareId.TryParse(args?.Id, out var shareId)
+                    ? await _shares.GetInviteAsync(shareId)
+                    : Result<string>.Fail(ErrorKind.ShareNotFound);
                 if (!invite.Ok)
                     return Failure(invite.Error);
-                await _clipboard.SetTextAsync(invite.Value!);
+                await _clipboard.SetTextAsync(ComposeMessage(args!.Message, invite.Value!));
                 return CommandResult.Success(null);
             }
+
+            case Commands.TransfersPreview:
+            {
+                var preview = _transfers.Preview(Args<ReceiveArgs>(argsJson)?.Invite);
+                return preview.Ok ? CommandResult.Success(ToDto(preview.Value!)) : Failure(preview.Error);
+            }
+
+            case Commands.ClipboardFindInvite:
+                return CommandResult.Success(TransferUseCases.FindInvite(await _clipboard.GetTextAsync()));
 
             case Commands.TransfersList:
                 return CommandResult.Success(_transfers.List().Select(ToDto).ToArray());
@@ -86,19 +102,53 @@ public sealed class BridgeRouter
                     ? ToResult(await _transfers.RemoveAsync(transferId))
                     : CommandResult.Failure(ErrorCodes.TransferNotFound);
 
+            case Commands.TransfersOpenFile:
+            {
+                var opened = await _transfers.OpenFileAsync();
+                return opened.Ok ? CommandResult.Success(opened.Value is null ? null : ToDto(opened.Value)) : Failure(opened.Error);
+            }
+
+            case Commands.TransfersPause:
+                return TransferId.TryParse(Args<IdArgs>(argsJson)?.Id, out var pauseId)
+                    ? ToResult(await _transfers.PauseAsync(pauseId))
+                    : CommandResult.Failure(ErrorCodes.TransferNotFound);
+
+            case Commands.TransfersResume:
+                return TransferId.TryParse(Args<IdArgs>(argsJson)?.Id, out var resumeId)
+                    ? ToResult(await _transfers.ContinueAsync(resumeId))
+                    : CommandResult.Failure(ErrorCodes.TransferNotFound);
+
             case Commands.ReceivedOpenFolder:
                 await _opener.OpenReceivedFolderAsync();
                 return CommandResult.Success(null);
+
+            case Commands.SettingsGet:
+                return CommandResult.Success(ToDto(await _settings.GetAsync()));
+
+            case Commands.SettingsSet:
+                return ToResult(await _settings.SetLanguageAsync(Args<SetSettingsArgs>(argsJson)?.Language));
 
             default:
                 return CommandResult.Failure(ErrorCodes.Unexpected);
         }
     }
 
-    private async Task<Result<string>> GetInviteAsync(string? argsJson) =>
-        ShareId.TryParse(Args<IdArgs>(argsJson)?.Id, out var id)
-            ? await _shares.GetInviteAsync(id)
-            : Result<string>.Fail(ErrorKind.ShareNotFound);
+    /// <summary>The UI's message with the link put in, or the link alone.</summary>
+    private static string ComposeMessage(string? message, string link)
+    {
+        const string placeholder = "{link}";
+        if (string.IsNullOrWhiteSpace(message))
+            return link;
+        return message.Contains(placeholder, StringComparison.Ordinal)
+            ? message.Replace(placeholder, link, StringComparison.Ordinal)
+            : message.TrimEnd() + Environment.NewLine + link;
+    }
+
+    private async Task RaiseSettingsAsync()
+    {
+        try { Raise(Events.SettingsChanged, ToDto(await _settings.GetAsync())); }
+        catch (Exception) { /* the UI reads settings again on its next start */ }
+    }
 
     private void Raise(string name, object payload) =>
         EventRaised?.Invoke(JsonSerializer.Serialize(new EventEnvelope(name, payload), Contract.Json));
@@ -130,10 +180,23 @@ public sealed class BridgeRouter
         view.State switch
         {
             TransferState.Receiving => TransferStateDto.Receiving,
+            TransferState.Paused => TransferStateDto.Paused,
             TransferState.Done => TransferStateDto.Done,
             TransferState.Failed => TransferStateDto.Failed,
             _ => TransferStateDto.Connecting,
-        });
+        },
+        view.BytesPerSecond,
+        view.SecondsLeft);
+
+    public static SettingsDto ToDto(Settings settings) => new(settings.Language, settings.SystemLanguage);
+
+    public static InvitePreviewDto ToDto(InvitePreview preview) => new(
+        preview.Hints.SenderName,
+        preview.Hints.Name,
+        preview.Hints.SizeBytes,
+        preview.Hints.ItemCount,
+        preview.IsInvite,
+        preview.FreeBytes);
 
     public static string ToCode(ErrorKind error) => error switch
     {
@@ -144,6 +207,10 @@ public sealed class BridgeRouter
         ErrorKind.InviteInvalid => ErrorCodes.InviteInvalid,
         ErrorKind.TransferDuplicate => ErrorCodes.TransferDuplicate,
         ErrorKind.TransferNotFound => ErrorCodes.TransferNotFound,
+        ErrorKind.TransferFinished => ErrorCodes.TransferFinished,
+        ErrorKind.DownloadFileInvalid => ErrorCodes.DownloadInvalidFile,
+        ErrorKind.DiskFull => ErrorCodes.DiskFull,
+        ErrorKind.SettingsInvalid => ErrorCodes.SettingsInvalid,
         _ => ErrorCodes.Unexpected,
     };
 }

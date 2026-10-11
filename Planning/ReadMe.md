@@ -44,7 +44,9 @@ want to exchange files with people they know and trust.
 
 ## Status
 
-Planning phase. Documentation lives in this `Planning` folder.
+First build done (share a file and send it with an invite, Windows). The rest of the product is
+planned in [the roadmap](initiative-comparta/roadmap-comparta/roadmap-comparta.md): R1 family
+pilot on Windows, R2 albums and Android, R3 people I share with.
 
 ## License
 

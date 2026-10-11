@@ -8,9 +8,9 @@ namespace ComParta.Storage.Sqlite;
 /// <summary>
 /// The product database (AD-10). Created and upgraded when opened; the only writer of this file.
 /// </summary>
-public sealed class SqliteStore : IShareRepository, ITransferRepository
+public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettingsRepository
 {
-    private const int SchemaVersion = 1;
+    private const int SchemaVersion = 3;
     private readonly string _connectionString;
 
     private SqliteStore(string databasePath)
@@ -52,6 +52,14 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository
                     added_at TEXT NOT NULL
                 );
                 """, transaction).ExecuteNonQueryAsync(ct);
+        }
+        if (version < 2)
+        {
+            await Command(connection, "ALTER TABLE transfers ADD COLUMN paused INTEGER NOT NULL DEFAULT 0", transaction).ExecuteNonQueryAsync(ct);
+        }
+        if (version < 3)
+        {
+            await Command(connection, "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)", transaction).ExecuteNonQueryAsync(ct);
         }
         await Command(connection, $"PRAGMA user_version = {SchemaVersion}", transaction).ExecuteNonQueryAsync(ct);
         await transaction.CommitAsync(ct);
@@ -97,7 +105,7 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository
     async Task<IReadOnlyList<Transfer>> ITransferRepository.GetAllAsync(CancellationToken ct)
     {
         await using var connection = await ConnectAsync(ct);
-        await using var reader = await Command(connection, "SELECT id, name, size_bytes, done, added_at FROM transfers ORDER BY added_at").ExecuteReaderAsync(ct);
+        await using var reader = await Command(connection, "SELECT id, name, size_bytes, done, added_at, paused FROM transfers ORDER BY added_at").ExecuteReaderAsync(ct);
         var transfers = new List<Transfer>();
         while (await reader.ReadAsync(ct))
         {
@@ -106,7 +114,8 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository
                 reader.IsDBNull(1) ? null : reader.GetString(1),
                 reader.IsDBNull(2) ? null : reader.GetInt64(2),
                 reader.GetInt64(3) != 0,
-                ParseTime(reader.GetString(4))));
+                ParseTime(reader.GetString(4)),
+                reader.GetInt64(5) != 0));
         }
         return transfers;
     }
@@ -114,7 +123,7 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository
     public async Task AddAsync(Transfer transfer, CancellationToken ct = default)
     {
         await using var connection = await ConnectAsync(ct);
-        var command = Command(connection, "INSERT INTO transfers (id, name, size_bytes, done, added_at) VALUES ($id, $name, $size, $done, $added)");
+        var command = Command(connection, "INSERT INTO transfers (id, name, size_bytes, done, added_at, paused) VALUES ($id, $name, $size, $done, $added, $paused)");
         Bind(command, transfer);
         await command.ExecuteNonQueryAsync(ct);
     }
@@ -122,7 +131,7 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository
     public async Task UpdateAsync(Transfer transfer, CancellationToken ct = default)
     {
         await using var connection = await ConnectAsync(ct);
-        var command = Command(connection, "UPDATE transfers SET name = $name, size_bytes = $size, done = $done, added_at = $added WHERE id = $id");
+        var command = Command(connection, "UPDATE transfers SET name = $name, size_bytes = $size, done = $done, added_at = $added, paused = $paused WHERE id = $id");
         Bind(command, transfer);
         await command.ExecuteNonQueryAsync(ct);
     }
@@ -135,12 +144,33 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository
         await command.ExecuteNonQueryAsync(ct);
     }
 
+    public async Task<string?> GetAsync(string key, CancellationToken ct = default)
+    {
+        await using var connection = await ConnectAsync(ct);
+        var command = Command(connection, "SELECT value FROM settings WHERE key = $key");
+        command.Parameters.AddWithValue("$key", key);
+        return await command.ExecuteScalarAsync(ct) as string;
+    }
+
+    public async Task SetAsync(string key, string? value, CancellationToken ct = default)
+    {
+        await using var connection = await ConnectAsync(ct);
+        var command = value is null
+            ? Command(connection, "DELETE FROM settings WHERE key = $key")
+            : Command(connection, "INSERT INTO settings (key, value) VALUES ($key, $value) ON CONFLICT(key) DO UPDATE SET value = $value");
+        command.Parameters.AddWithValue("$key", key);
+        if (value is not null)
+            command.Parameters.AddWithValue("$value", value);
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
     private static void Bind(SqliteCommand command, Transfer transfer)
     {
         command.Parameters.AddWithValue("$id", transfer.Id.ToString());
         command.Parameters.AddWithValue("$name", (object?)transfer.Name ?? DBNull.Value);
         command.Parameters.AddWithValue("$size", (object?)transfer.SizeBytes ?? DBNull.Value);
         command.Parameters.AddWithValue("$done", transfer.Done ? 1 : 0);
+        command.Parameters.AddWithValue("$paused", transfer.Paused ? 1 : 0);
         command.Parameters.AddWithValue("$added", FormatTime(transfer.AddedAt));
     }
 

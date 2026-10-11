@@ -1,5 +1,6 @@
 using ComParta.Core;
 using ComParta.Core.Ports;
+using Microsoft.Data.Sqlite;
 
 namespace ComParta.Storage.Sqlite.Tests;
 
@@ -56,5 +57,81 @@ public sealed class SqliteStoreTests : IDisposable
 
         await reopened.RemoveAsync(transfer.Id);
         Assert.Empty(await reopened.GetAllAsync());
+    }
+
+    [Fact]
+    public async Task A_paused_transfer_is_read_back_paused()
+    {
+        var transfer = new Transfer(TransferId.New(), "film.mkv", 10, false, DateTimeOffset.UtcNow, Paused: true);
+        ITransferRepository store = await SqliteStore.OpenAsync(DatabasePath);
+        await store.AddAsync(transfer);
+
+        ITransferRepository reopened = await SqliteStore.OpenAsync(DatabasePath);
+        Assert.Equal([transfer], await reopened.GetAllAsync());
+        await reopened.UpdateAsync(transfer with { Paused = false });
+        Assert.False((await reopened.GetAllAsync()).Single().Paused);
+    }
+
+    [Fact]
+    public async Task A_database_from_the_first_version_keeps_its_transfers()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(DatabasePath)!);
+        var id = TransferId.New();
+        await using (var connection = new SqliteConnection($"Data Source={DatabasePath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            var command = connection.CreateCommand();
+            command.CommandText = $"""
+                CREATE TABLE shares (id TEXT PRIMARY KEY, file_path TEXT NOT NULL, name TEXT NOT NULL,
+                    size_bytes INTEGER NOT NULL, added_at TEXT NOT NULL);
+                CREATE TABLE transfers (id TEXT PRIMARY KEY, name TEXT NULL, size_bytes INTEGER NULL,
+                    done INTEGER NOT NULL, added_at TEXT NOT NULL);
+                INSERT INTO transfers VALUES ('{id}', 'album.zip', 42, 0, '2026-10-01T10:00:00.0000000+00:00');
+                PRAGMA user_version = 1;
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        ITransferRepository store = await SqliteStore.OpenAsync(DatabasePath);
+
+        var transfer = Assert.Single(await store.GetAllAsync());
+        Assert.Equal(id, transfer.Id);
+        Assert.Equal("album.zip", transfer.Name);
+        Assert.False(transfer.Paused);
+    }
+
+    [Fact]
+    public async Task A_setting_survives_a_new_instance_and_can_be_removed()
+    {
+        ISettingsRepository store = await SqliteStore.OpenAsync(DatabasePath);
+        Assert.Null(await store.GetAsync("language"));
+        await store.SetAsync("language", "pt-BR");
+        await store.SetAsync("language", "en");
+
+        ISettingsRepository reopened = await SqliteStore.OpenAsync(DatabasePath);
+        Assert.Equal("en", await reopened.GetAsync("language"));
+        await reopened.SetAsync("language", null);
+        Assert.Null(await reopened.GetAsync("language"));
+    }
+
+    [Fact]
+    public async Task A_database_from_the_second_version_gains_settings_and_keeps_its_transfers()
+    {
+        var transfer = new Transfer(TransferId.New(), "film.mkv", 10, false, DateTimeOffset.UtcNow, Paused: true);
+        ITransferRepository first = await SqliteStore.OpenAsync(DatabasePath);
+        await first.AddAsync(transfer);
+        await using (var connection = new SqliteConnection($"Data Source={DatabasePath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            var command = connection.CreateCommand();
+            command.CommandText = "DROP TABLE settings; PRAGMA user_version = 2;";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        var store = await SqliteStore.OpenAsync(DatabasePath);
+
+        Assert.Equal([transfer], await ((ITransferRepository)store).GetAllAsync());
+        await ((ISettingsRepository)store).SetAsync("language", "pt-BR");
+        Assert.Equal("pt-BR", await ((ISettingsRepository)store).GetAsync("language"));
     }
 }

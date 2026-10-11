@@ -6,6 +6,7 @@ covers: [CAP-1, CAP-2, CAP-3, CAP-4, CAP-5]
 after: []
 assignee: ""
 risk: high
+status: in-progress
 ---
 
 # A person adds and removes shared files on Windows (MVP)
@@ -61,4 +62,5 @@ The Windows desktop app and everything inside it: core, contracts, storage adapt
 - Assumption: adding the same file twice is refused; remove asks for confirmation (spec Assumptions).
 - Unknown: whether MonoTorrent 3.0.2 runs cleanly on .NET 10 with public discovery off; story 6 finds out. If it does not, the fallback is another engine behind the same port (AD-2).
 - Unknown: whether MAUI `HybridWebView` on Windows is adequate; story 1 finds out. Fallback is a WPF + WebView2 shell (AD-1).
-- Parked: sharing a whole folder (OQ-5).
+- Parked: sharing a whole folder (OQ-5). Answered 2026-10-10: it is epic 11 in R2.
+- Plan 2026-10-10: CI now runs green on the `mvp-share-and-send` branch, so story 2 is built. What is left is story 13 (refactor sweep, run it before epic 8 changes the UI) and story 14 (second PC). The epic is done when both are.

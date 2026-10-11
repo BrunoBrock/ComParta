@@ -35,13 +35,29 @@ public sealed class TwoDevicesTests : IAsyncLifetime
         public string LogsRoot => Path.Combine(Root, "logs");
     }
 
-    private async Task<(MonoTorrentTransferEngine Engine, Paths Paths)> StartDeviceAsync(string name)
+    private async Task<(MonoTorrentTransferEngine Engine, Paths Paths)> StartDeviceAsync(
+        string name, bool allowDownloadLinks = false)
     {
         var paths = new Paths(Path.Combine(_folder, name));
         var engine = new MonoTorrentTransferEngine(paths);
         _engines.Add(engine);
-        await engine.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        await engine.StartAsync(SharingPolicy.Closed with
+        {
+            ListenPort = FreePort(),
+            AllowServersInDownloadLinks = allowDownloadLinks,
+        });
         return (engine, paths);
+    }
+
+    private static TaskCompletionSource<ReceiveProgress> WhenFinished(MonoTorrentTransferEngine receiver)
+    {
+        var done = new TaskCompletionSource<ReceiveProgress>(TaskCreationOptions.RunContinuationsAsynchronously);
+        receiver.ReceiveProgressed += progress =>
+        {
+            if (progress.Done || progress.Failed)
+                done.TrySetResult(progress);
+        };
+        return done;
     }
 
     private static int FreePort()
@@ -99,6 +115,7 @@ public sealed class TwoDevicesTests : IAsyncLifetime
                 done.TrySetResult(progress);
         };
         var transferId = TransferId.New();
+        Assert.Equal("family video.mp4", receiver.DescribeInvite(invite)!.Name);
         Assert.True(await receiver.ReceiveAsync(transferId, invite));
         Assert.Equal(receiver.ReadInviteKey(invite), receiver.GetReceiveKey(transferId));
         await receiver.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
@@ -252,6 +269,101 @@ public sealed class TwoDevicesTests : IAsyncLifetime
         var (engine, _) = await StartDeviceAsync("receiver");
 
         Assert.Null(engine.ReadInviteKey(text));
+        Assert.Null(engine.DescribeInvite(text));
         Assert.False(await engine.ReceiveAsync(TransferId.New(), text));
+    }
+
+    [Fact]
+    public async Task A_download_file_is_received_on_another_device()
+    {
+        var original = CreateFile("holiday.mov", 1024 * 1024 + 7);
+        var (sender, senderPaths) = await StartDeviceAsync("sender");
+        var (receiver, receiverPaths) = await StartDeviceAsync("receiver", allowDownloadLinks: true);
+        var shareId = ShareId.New();
+        Assert.Equal(OfferState.Ready, await OfferAndWaitAsync(sender, shareId, original));
+        var downloadFile = File.ReadAllBytes(Path.Combine(senderPaths.EngineRoot, "shares", shareId + ".torrent"));
+
+        var done = WhenFinished(receiver);
+        var transferId = TransferId.New();
+        Assert.Equal(receiver.ReadInviteKey((await sender.GetInviteAsync(shareId))!), receiver.ReadDownloadFileKey(downloadFile));
+        Assert.True(await receiver.ReceiveFromFileAsync(transferId, downloadFile));
+        await receiver.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+
+        var result = await done.Task.WaitAsync(Timeout);
+
+        Assert.True(result.Done);
+        Assert.Equal(Checksum(original), Checksum(Path.Combine(receiverPaths.ReceivedRoot, "holiday.mov")));
+        // The saved copy of the download file is gone once the transfer is finished.
+        Assert.Empty(Directory.GetFiles(Path.Combine(receiverPaths.EngineRoot, "transfers"), "*.torrent"));
+    }
+
+    [Fact]
+    public async Task Without_the_policy_a_download_file_is_refused()
+    {
+        var original = CreateFile("notes.txt", 20_000);
+        var (sender, senderPaths) = await StartDeviceAsync("sender");
+        var (receiver, _) = await StartDeviceAsync("receiver");
+        var shareId = ShareId.New();
+        await OfferAndWaitAsync(sender, shareId, original);
+        var downloadFile = File.ReadAllBytes(Path.Combine(senderPaths.EngineRoot, "shares", shareId + ".torrent"));
+
+        Assert.Null(receiver.ReadDownloadFileKey(downloadFile));
+        Assert.False(await receiver.ReceiveFromFileAsync(TransferId.New(), downloadFile));
+    }
+
+    [Fact]
+    public async Task A_file_that_is_not_a_download_file_is_refused()
+    {
+        var (receiver, _) = await StartDeviceAsync("receiver", allowDownloadLinks: true);
+        var notADownloadFile = "hello grandma"u8.ToArray();
+
+        Assert.Null(receiver.ReadDownloadFileKey(notADownloadFile));
+        Assert.False(await receiver.ReceiveFromFileAsync(TransferId.New(), notADownloadFile));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_public_link_keeps_its_servers_only_when_the_policy_allows(bool allow)
+    {
+        var (receiver, paths) = await StartDeviceAsync("receiver", allowDownloadLinks: allow);
+        var transferId = TransferId.New();
+        const string link = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=film"
+            + "&tr=http%3A%2F%2F127.0.0.1%3A1%2Fannounce";
+
+        Assert.True(await receiver.ReceiveAsync(transferId, link));
+
+        var saved = File.ReadAllText(Path.Combine(paths.EngineRoot, "transfers", transferId + ".invite"));
+        Assert.Equal(allow, saved.Contains("tr=", StringComparison.Ordinal));
+        await receiver.StopReceivingAsync(transferId);
+    }
+
+    [Fact]
+    public async Task A_paused_transfer_waits_and_finishes_after_continuing()
+    {
+        var original = CreateFile("wedding.mp4", 2 * 1024 * 1024);
+        var (sender, _) = await StartDeviceAsync("sender");
+        var (receiver, receiverPaths) = await StartDeviceAsync("receiver");
+        var shareId = ShareId.New();
+        Assert.Equal(OfferState.Ready, await OfferAndWaitAsync(sender, shareId, original));
+        var invite = (await sender.GetInviteAsync(shareId))!;
+
+        var done = WhenFinished(receiver);
+        var transferId = TransferId.New();
+        Assert.True(await receiver.ReceiveAsync(transferId, invite));
+        await receiver.PauseReceivingAsync(transferId);
+        var senderAddress = new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port);
+        await receiver.ConnectAsync(transferId, senderAddress);
+
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        Assert.False(done.Task.IsCompleted);
+        Assert.False(File.Exists(Path.Combine(receiverPaths.ReceivedRoot, "wedding.mp4")));
+
+        await receiver.ContinueReceivingAsync(transferId);
+        await receiver.ConnectAsync(transferId, senderAddress);
+        var result = await done.Task.WaitAsync(Timeout);
+
+        Assert.True(result.Done);
+        Assert.Equal(Checksum(original), Checksum(Path.Combine(receiverPaths.ReceivedRoot, "wedding.mp4")));
     }
 }

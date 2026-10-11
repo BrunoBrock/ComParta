@@ -148,3 +148,14 @@ covers = []
 after = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
 hitl = false
 risk = "low"
+
+[[entry]]
+id = 14
+type = "story"
+title = "Check the release build on a second PC"
+description = "Copies `publish\\ComParta` from `build.ps1 -Publish` to a Windows PC that never had the SDKs, runs it, and walks the epic's Done when list by hand; anything that fails becomes a bug ticket. Records the result, the Windows version and any SmartScreen or WebView2 prompt in the epic's Notes."
+verify = "The epic's Done when 1 to 4 and 6 pass on the second PC, or each failure has a ticket."
+covers = ["CAP-1", "CAP-2", "CAP-3", "CAP-5"]
+after = [10]
+hitl = true                 # a person runs it on another PC
+risk = "low"
