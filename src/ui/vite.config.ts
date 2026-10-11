@@ -13,5 +13,14 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
     restoreMocks: true,
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.{ts,tsx}'],
+      // The entry point and the app's own bridge run only inside the app window.
+      exclude: ['src/**/*.test.{ts,tsx}', 'src/test-setup.ts', 'src/main.tsx', 'src/bridge/hostBridge.ts'],
+      reporter: ['text-summary', 'json-summary', 'html'],
+      // Raise these as tests are added; a pull request that lowers coverage below them fails.
+      thresholds: { statements: 80, branches: 75, functions: 80, lines: 80 },
+    },
   },
 })

@@ -1,0 +1,100 @@
+name: Security
+
+# Code scanning, vulnerable dependencies and leaked secrets, on every pull request and for main.
+# Runs weekly too, because new advisories appear for code that has not changed.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [csharp, javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          # No build needed, so the Windows-only app project is scanned on Linux too.
+          build-mode: none
+          queries: security-extended
+
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fails when a pull request adds a package with a known high or critical vulnerability.
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  vulnerable-packages:
+    name: Vulnerable packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: NuGet packages
+        shell: pwsh
+        run: |
+          # Every project except the app shell, which needs the Windows MAUI workload to restore.
+          $found = $false
+          foreach ($project in Get-ChildItem src, tests, tools -Filter *.csproj -Recurse | Where-Object Name -ne 'ComParta.App.csproj') {
+            dotnet restore $project.FullName --nologo -v quiet
+            $report = dotnet list $project.FullName package --vulnerable --include-transitive 2>&1 | Out-String
+            Write-Host $report
+            if ($report -match 'has the following vulnerable packages') { $found = $true }
+          }
+          if ($found) { throw 'A NuGet package has a known vulnerability; see the list above.' }
+
+      - name: npm packages
+        working-directory: src/ui
+        run: npm audit --audit-level=high
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
