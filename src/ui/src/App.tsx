@@ -20,6 +20,7 @@ import type { ViewMode } from './components/ItemView.tsx'
 import Notice from './components/Notice.tsx'
 import Rail, { type Section } from './components/Rail.tsx'
 import ReceiveDialog from './components/ReceiveDialog.tsx'
+import SendSteps from './components/SendSteps.tsx'
 import SettingsDialog from './components/SettingsDialog.tsx'
 import SharesSection from './components/SharesSection.tsx'
 import SpeedBar from './components/SpeedBar.tsx'
@@ -34,6 +35,9 @@ interface AppProps {
 }
 
 /** How long a transfer waits for the other computer before the help is offered (UX design, "Stuck transfer"). */
+/** The guided send runs for the first three sends (UX design, "Send a file, first time"). */
+export const sendStepsShown = 3
+
 export const stuckAfterMs = 10 * 60 * 1000
 const stuckCheckMs = 30 * 1000
 
@@ -57,12 +61,14 @@ export default function App({ bridge }: AppProps) {
   const [sort, setSort] = useState<SortOrder>('added')
   // The person's choices, sent back whole when one of them changes (settings.set). A ref, so two
   // quick changes never send an older copy of the other.
-  const choices = useRef<SetSettingsArgs>({ language: null, view: null, sort: null })
+  const choices = useRef<SetSettingsArgs>({ language: null, view: null, sort: null, sendStepsSeen: 0 })
   const [query, setQuery] = useState('')
   const [receiving, setReceiving] = useState(false)
   // An invite pasted anywhere in the window, already read, for the confirmation.
   const [pasted, setPasted] = useState<{ text: string; preview: InvitePreviewDto } | undefined>()
   const [adding, setAdding] = useState(false)
+  // The guided send is open (UX design, "Send a file, first time").
+  const [guiding, setGuiding] = useState(false)
   // Mirrors the catalog's current language so the whole screen re-renders when it changes.
   const [language, setShownLanguage] = useState<Language>(getLanguage)
   const [connection, setConnection] = useState<ConnectionHealthDto | null>(null)
@@ -81,10 +87,30 @@ export default function App({ bridge }: AppProps) {
   const clearNotice = useCallback(() => setNotice(null), [])
   const clearSearch = useCallback(() => setQuery(''), [])
 
+  // Each guided send that shared a file counts; opting out ends them at once.
+  const endGuide = useCallback(
+    ({ shared, hide }: { shared: boolean; hide: boolean }) => {
+      setGuiding(false)
+      const seen = choices.current.sendStepsSeen ?? 0
+      const next = hide ? sendStepsShown : shared ? Math.min(seen + 1, sendStepsShown) : seen
+      if (next === seen) return
+      choices.current = { ...choices.current, sendStepsSeen: next }
+      void bridge.invoke('settings.set', choices.current).then((result) => {
+        if (!result.ok) showError(result.error.code)
+      })
+    },
+    [bridge, showError],
+  )
+
   useEffect(() => {
     let active = true
     const applySettings = (stored: SettingsDto) => {
-      choices.current = { language: stored.language, view: stored.view, sort: stored.sort }
+      choices.current = {
+        language: stored.language,
+        view: stored.view,
+        sort: stored.sort,
+        sendStepsSeen: stored.sendStepsSeen,
+      }
       setView(stored.view === 'list' ? 'list' : 'grid')
       setSort(stored.sort === 'name' || stored.sort === 'size' ? stored.sort : 'added')
       const chosen = pickLanguage(stored.language, stored.systemLanguage)
@@ -229,6 +255,10 @@ export default function App({ bridge }: AppProps) {
   async function add() {
     clearNotice()
     setSection('shared')
+    if ((choices.current.sendStepsSeen ?? 0) < sendStepsShown) {
+      setGuiding(true)
+      return
+    }
     setAdding(true)
     try {
       // The app opens the file dialog; a cancel comes back as ok with no value.
@@ -343,6 +373,9 @@ export default function App({ bridge }: AppProps) {
 
       {toast && <Toast key={toast.id} text={toast.text} closeLabel={t('notice.dismiss')} onClose={clearToast} />}
 
+      {guiding && (
+        <SendSteps bridge={bridge} shares={shares} onError={showError} onInfo={showInfo} onClose={endGuide} />
+      )}
       {details && (
         <DetailsWindow
           bridge={bridge}

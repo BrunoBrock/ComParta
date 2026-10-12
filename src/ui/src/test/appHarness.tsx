@@ -17,7 +17,8 @@ beforeEach(() => {
 })
 
 export function setup(options: FakeBridgeOptions = {}) {
-  const bridge = createFakeBridge(options)
+  // The guided send is tested on its own; elsewhere Share files goes straight to the file dialog.
+  const bridge = createFakeBridge({ sendStepsSeen: 3, ...options })
   render(<App bridge={bridge} />)
   return { bridge, user: userEvent.setup() }
 }
@@ -27,7 +28,9 @@ export type User = ReturnType<typeof userEvent.setup>
 export const sharesSection = () => screen.getByRole('region', { name: en['shares.heading'] })
 export const transfersSection = () => screen.getByRole('region', { name: en['transfers.heading'] })
 export const navButton = (label: string) =>
-  within(screen.getByRole('navigation', { name: en['nav.label'] })).getByRole('button', { name: new RegExp(`^${label}`) })
+  within(screen.getByRole('navigation', { name: en['nav.label'] })).getByRole('button', {
+    name: new RegExp(`^${label}`),
+  })
 /** One of the rail's two actions; empty sections offer the same buttons, so the rail is named. */
 export const railButton = async (label: string) =>
   within(await screen.findByRole('complementary')).getByRole('button', { name: label })
@@ -46,4 +49,3 @@ export async function pasteInvite(user: User, invite: string) {
   const confirm = await screen.findByRole('dialog', { name: en['confirm.title'] })
   await user.click(within(confirm).getByRole('button', { name: en['transfers.receive'] }))
 }
-

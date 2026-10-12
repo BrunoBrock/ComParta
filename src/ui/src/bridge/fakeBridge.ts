@@ -42,6 +42,8 @@ export interface FakeBridgeOptions {
   /** How files were shown and ordered last time, as the app stored it. */
   view?: string | null
   sort?: string | null
+  /** How many guided sends the person has been through; 3 means the steps no longer show. */
+  sendStepsSeen?: number
 }
 
 export interface FakeBridge extends Bridge {
@@ -214,6 +216,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     systemLanguage: options.systemLanguage ?? 'en',
     view: options.view ?? null,
     sort: options.sort ?? null,
+    sendStepsSeen: options.sendStepsSeen ?? 0,
   }
   const freeBytes = options.freeBytes === undefined ? 120 * 1024 ** 3 : options.freeBytes
 
@@ -334,12 +337,15 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
 
     'settings.set': (args) => {
       const { language, view, sort } = args as SetSettingsArgs
+      const sendStepsSeen = (args as SetSettingsArgs).sendStepsSeen ?? 0
       if (
         (view !== null && view !== 'grid' && view !== 'list') ||
-        (sort !== null && !['added', 'name', 'size'].includes(sort))
+        (sort !== null && !['added', 'name', 'size'].includes(sort)) ||
+        sendStepsSeen < 0 ||
+        sendStepsSeen > 3
       )
         return fail('settings.invalid')
-      settings = { ...settings, language, view, sort }
+      settings = { ...settings, language, view, sort, sendStepsSeen }
       emit({ event: 'settings.changed', payload: { ...settings } })
       return ok(null)
     },

@@ -1,6 +1,6 @@
 import { Check, Copy, Plus, Trash2, Upload } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { getComPartaUrl } from '../appLinks.ts'
+import { inviteMessage } from '../invite.ts'
 import type { Bridge, ErrorCode, ShareDto } from '../bridge/index.ts'
 import { formatSize, t } from '../i18n/index.ts'
 import { inOrder, type SortOrder } from '../order.ts'
@@ -38,8 +38,23 @@ interface SharesSectionProps {
 const tones: Record<ShareDto['status'], ChipTone> = { preparing: 'busy', ready: 'ok', unavailable: 'warn' }
 
 export default function SharesSection(props: SharesSectionProps) {
-  const { bridge, shares, query, view, onViewChange, sort, onSortChange, onError, onInfo, onStart, onClearSearch, stopped, onDetails, adding, onAdd } =
-    props
+  const {
+    bridge,
+    shares,
+    query,
+    view,
+    onViewChange,
+    sort,
+    onSortChange,
+    onError,
+    onInfo,
+    onStart,
+    onClearSearch,
+    stopped,
+    onDetails,
+    adding,
+    onAdd,
+  } = props
   // View state only: which share the confirmation is open for.
   const [removing, setRemoving] = useState<ShareDto | null>(null)
   // The share whose button says "Copied" for a moment.
@@ -53,14 +68,7 @@ export default function SharesSection(props: SharesSectionProps) {
 
   async function copyInvite(share: ShareDto) {
     onStart()
-    // The friendly message is written here, in the person's language; the app puts the link in (AD-16).
-    const message = t('invite.message', {
-      sender: t('invite.someone'),
-      name: share.name,
-      size: formatSize(share.sizeBytes),
-      store: getComPartaUrl,
-    })
-    const result = await bridge.invoke('shares.copyInvite', { id: share.id, message })
+    const result = await bridge.invoke('shares.copyInvite', { id: share.id, message: inviteMessage(share) })
     if (result.ok) {
       setCopied(share.id)
       onInfo(t('shares.inviteCopied', { name: share.name }))
@@ -76,11 +84,21 @@ export default function SharesSection(props: SharesSectionProps) {
   }
 
   const found = shares?.filter((share) => matches(share.name, query))
-  const shown = found ? inOrder(found, sort, (share) => share.name, (share) => share.sizeBytes) : null
+  const shown = found
+    ? inOrder(
+        found,
+        sort,
+        (share) => share.name,
+        (share) => share.sizeBytes,
+      )
+    : null
 
   return (
     <section aria-labelledby="shares-heading" className="content-section">
-      <SectionHead id="shares-heading" title={t('shares.heading')} view={view}
+      <SectionHead
+        id="shares-heading"
+        title={t('shares.heading')}
+        view={view}
         onViewChange={onViewChange}
         sort={sort}
         onSortChange={onSortChange}

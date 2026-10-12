@@ -59,6 +59,21 @@ export const ptBR: Catalog = {
   'shares.removeFor': 'Parar de compartilhar {name}',
   'shares.removed': 'Você parou de compartilhar “{name}”. O arquivo continua no seu computador.',
 
+  'steps.label': 'Enviar um arquivo',
+  'steps.count': 'Passo {step} de 3',
+  'steps.choose': 'Escolha um arquivo',
+  'steps.choosing': 'Escolha o arquivo na janela que abriu. Ele fica onde está; nada é copiado.',
+  'steps.ready': 'Preparando',
+  'steps.reading': 'Lendo “{name}”… O arquivo fica onde está.',
+  'steps.send': 'Envie o convite',
+  'steps.messageLabel': 'A mensagem para enviar',
+  'steps.copy': 'Copiar mensagem',
+  'steps.copied': 'Copiada',
+  'steps.after': 'Cole no WhatsApp ou num e-mail para a pessoa. Deixe o ComParta aberto até ela receber o arquivo.',
+  'steps.hide': 'Não mostrar estes passos de novo',
+  'steps.done': 'Pronto',
+  'steps.close': 'Fechar',
+
   'remove.title': 'Parar de compartilhar “{name}”?',
   'remove.body':
     'O arquivo continua no seu computador, exatamente onde está. Quem tem o convite não vai mais conseguir recebê-lo.',

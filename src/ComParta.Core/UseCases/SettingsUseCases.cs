@@ -7,7 +7,8 @@ namespace ComParta.Core.UseCases;
 /// <param name="SystemLanguage">The language the operating system shows.</param>
 /// <param name="View">How files are shown, "grid" or "list", or null for the default.</param>
 /// <param name="Sort">How files are ordered, "added", "name" or "size", or null for the default.</param>
-public sealed record Settings(string? Language, string SystemLanguage, string? View = null, string? Sort = null);
+/// <param name="SendStepsSeen">How many times the guided send has run; at <see cref="SettingsUseCases.SendStepsShown"/> it stops.</param>
+public sealed record Settings(string? Language, string SystemLanguage, string? View = null, string? Sort = null, int SendStepsSeen = 0);
 
 /// <summary>The person's choices. Later stories add fields (your name, start with Windows, theme).</summary>
 public sealed partial class SettingsUseCases(ISettingsRepository repository, ISystemInfo system)
@@ -15,6 +16,10 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
     private const string LanguageKey = "language";
     private const string ViewKey = "view";
     private const string SortKey = "sort";
+    private const string SendStepsKey = "sendStepsSeen";
+
+    /// <summary>The guided send runs this many times, or until the person opts out (UX design).</summary>
+    public const int SendStepsShown = 3;
     private static readonly string[] Views = ["grid", "list"];
     private static readonly string[] Sorts = ["added", "name", "size"];
 
@@ -28,22 +33,26 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
         await repository.GetAsync(LanguageKey, ct),
         system.UiLanguage,
         await repository.GetAsync(ViewKey, ct),
-        await repository.GetAsync(SortKey, ct));
+        await repository.GetAsync(SortKey, ct),
+        int.TryParse(await repository.GetAsync(SendStepsKey, ct), out var seen) ? Math.Clamp(seen, 0, SendStepsShown) : 0);
 
     /// <summary>
     /// Stores every choice at once, as the UI sends them all; null means the default. The UI
     /// decides which languages it has words for; anything that is not a choice it offers is refused
     /// and nothing changes.
     /// </summary>
-    public async Task<Result> SetAsync(string? language, string? view, string? sort, CancellationToken ct = default)
+    public async Task<Result> SetAsync(string? language, string? view, string? sort, int sendStepsSeen = 0, CancellationToken ct = default)
     {
         if (language is not null && (language.Length > 35 || !LanguageTag().IsMatch(language)))
             return Result.Fail(ErrorKind.SettingsInvalid);
         if ((view is not null && !Views.Contains(view)) || (sort is not null && !Sorts.Contains(sort)))
             return Result.Fail(ErrorKind.SettingsInvalid);
+        if (sendStepsSeen is < 0 or > SendStepsShown)
+            return Result.Fail(ErrorKind.SettingsInvalid);
         await repository.SetAsync(LanguageKey, language, ct);
         await repository.SetAsync(ViewKey, view, ct);
         await repository.SetAsync(SortKey, sort, ct);
+        await repository.SetAsync(SendStepsKey, sendStepsSeen == 0 ? null : sendStepsSeen.ToString(System.Globalization.CultureInfo.InvariantCulture), ct);
         Changed?.Invoke();
         return Result.Success;
     }

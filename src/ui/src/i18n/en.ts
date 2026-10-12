@@ -55,6 +55,21 @@ export const en = {
   'shares.removeFor': 'Stop sharing {name}',
   'shares.removed': 'Stopped sharing “{name}”. The file is still on your computer.',
 
+  'steps.label': 'Send a file',
+  'steps.count': 'Step {step} of 3',
+  'steps.choose': 'Choose a file',
+  'steps.choosing': 'Choose the file in the window that opened. It stays where it is; nothing is copied.',
+  'steps.ready': 'Getting it ready',
+  'steps.reading': 'Reading “{name}”… The file stays where it is.',
+  'steps.send': 'Send the invite',
+  'steps.messageLabel': 'The message to send',
+  'steps.copy': 'Copy message',
+  'steps.copied': 'Copied',
+  'steps.after': 'Paste it into WhatsApp or an email to the person. Keep ComParta open until they have the file.',
+  'steps.hide': 'Don’t show these steps again',
+  'steps.done': 'Done',
+  'steps.close': 'Close',
+
   'remove.title': 'Stop sharing “{name}”?',
   'remove.body':
     'The file stays on your computer, exactly where it is. People who have its invite will no longer be able to get it.',

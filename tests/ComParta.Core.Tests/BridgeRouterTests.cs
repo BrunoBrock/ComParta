@@ -272,6 +272,19 @@ public sealed class BridgeRouterTests
     }
 
     [Fact]
+    public async Task The_guided_send_count_is_stored_and_kept_within_its_three_runs()
+    {
+        Assert.Equal(0, (await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("sendStepsSeen").GetInt32());
+
+        Assert.True((await InvokeAsync(Commands.SettingsSet, new { sendStepsSeen = 2 })).GetProperty("ok").GetBoolean());
+        Assert.Equal(2, (await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("sendStepsSeen").GetInt32());
+
+        Assert.Equal(ErrorCodes.SettingsInvalid, ErrorCode(await InvokeAsync(Commands.SettingsSet, new { sendStepsSeen = 4 })));
+        Assert.Equal(ErrorCodes.SettingsInvalid, ErrorCode(await InvokeAsync(Commands.SettingsSet, new { sendStepsSeen = -1 })));
+        Assert.Equal(2, (await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("sendStepsSeen").GetInt32());
+    }
+
+    [Fact]
     public async Task Connection_health_is_read_and_reported_when_it_changes()
     {
         _engine.Reachability = ReachabilityFacts.Unknown with { Listening = true };
