@@ -489,3 +489,7 @@ publish/
 # Coverage reports
 src/ui/coverage/
 TestResults/
+
+# An empty lockfile that appears when npm runs in src/, which has no package.json.
+# The real one is src/ui/package-lock.json and must stay tracked (npm ci uses it).
+/src/package-lock.json
