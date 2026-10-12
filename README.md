@@ -46,6 +46,7 @@ Windows workload (`dotnet workload install maui-windows`), and [Node.js](https:/
 ```powershell
 .\build.ps1           # shows a menu of what you can do
 .\build.ps1 Publish   # build, test, then create publish\ComParta, a folder to run here or copy to another PC
+.\build.ps1 Publish -Run   # same, then start the published ComParta.exe
 .\build.ps1 Build     # build the screen and the app, without tests
 .\build.ps1 Test      # run every test
 .\build.ps1 Check     # build and run every test; what CI does, and what runs when there is no menu to show

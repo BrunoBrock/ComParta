@@ -4,11 +4,13 @@
 #                                 or copy to another PC
 #   .\build.ps1 Build|Test|Check  see $actions below
 #   -SkipTests                    leaves the tests out of Publish and Check
+#   -Run                          starts the published ComParta.exe once Publish succeeds
 # Without a person at the keyboard (CI, piped input) it does Check instead of asking.
 param(
     [ValidateSet('Publish', 'Build', 'Test', 'Check')]
     [string]$Action,
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    [switch]$Run
 )
 
 $ErrorActionPreference = 'Stop'
@@ -84,6 +86,10 @@ function Publish-App {
             --self-contained true -p:WindowsAppSDKSelfContained=true -o $publishDir --nologo -v minimal
     }
     Write-Host "Ready: $publishDir\ComParta.exe" -ForegroundColor Green
+    if ($Run) {
+        Write-Host '== Run' -ForegroundColor Cyan
+        Start-Process -FilePath (Join-Path $publishDir 'ComParta.exe') -WorkingDirectory $publishDir
+    }
 }
 
 function Select-Action {
@@ -107,6 +113,7 @@ if (-not $Action) {
     $Action = if ($canAsk) { Select-Action } else { 'Check' }
 }
 if ($Action -eq 'Test' -and $SkipTests) { throw 'Nothing to do: Test with -SkipTests.' }
+if ($Run -and $Action -ne 'Publish') { throw '-Run only works with Publish.' }
 Assert-Prerequisites
 
 switch ($Action) {
