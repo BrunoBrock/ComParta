@@ -40,8 +40,10 @@ public sealed class AppServices
 			var executable = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "ComParta.exe");
 			var connection = new ConnectionUseCases(_engine, new WindowsFirewall(executable));
 			var activity = new ActivityUseCases(_engine, store);
+			var opener = new ReceivedFolderOpener(_paths);
+			var received = new ReceivedUseCases(transfers, _paths, opener, new LocalFileSystem());
 			var router = new BridgeRouter(
-				shares, transfers, settings, connection, Opened, activity, new NativeClipboard(), new ReceivedFolderOpener(_paths));
+				shares, transfers, settings, connection, Opened, activity, received, new NativeClipboard(), opener);
 
 			// Written at every start so a clicked link finds the app even after its folder moved.
 			LinkScheme.Register(executable);

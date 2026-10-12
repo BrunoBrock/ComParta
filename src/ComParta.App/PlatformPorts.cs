@@ -89,6 +89,26 @@ public sealed class ReceivedFolderOpener(Ports.IAppPaths paths) : Ports.IContent
 		Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { paths.ReceivedRoot } })?.Dispose();
 		return Task.CompletedTask;
 	}
+
+	public Task<bool> OpenAsync(string path, CancellationToken ct = default)
+	{
+		// Core has already refused programs; this opens a document with its usual app.
+		try
+		{
+			Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
+			return Task.FromResult(true);
+		}
+		catch (Exception)
+		{
+			return Task.FromResult(false);
+		}
+	}
+
+	public Task RevealAsync(string path, CancellationToken ct = default)
+	{
+		Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = false })?.Dispose();
+		return Task.CompletedTask;
+	}
 }
 
 public sealed class LocalFileSystem : Ports.IFileSystem
@@ -100,6 +120,8 @@ public sealed class LocalFileSystem : Ports.IFileSystem
 		using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 		return stream.Length;
 	}
+
+	public void DeleteFile(string path) => File.Delete(path);
 
 	public byte[] ReadSmallFile(string path, int maxBytes)
 	{

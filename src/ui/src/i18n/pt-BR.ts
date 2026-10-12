@@ -115,6 +115,20 @@ export const ptBR: Catalog = {
   'transfers.clear': 'Tirar da lista',
   'transfers.clearFor': 'Tirar {name} da lista',
   'transfers.openFolder': 'Abrir meus arquivos recebidos',
+  'transfers.onTheWay': 'A caminho',
+  'transfers.arrived': 'Chegaram',
+  'received.open': 'Abrir',
+  'received.openFor': 'Abrir {name}',
+  'received.reveal': 'Mostrar na pasta',
+  'received.revealFor': 'Mostrar {name} na pasta',
+  'received.delete': 'Apagar arquivo',
+  'received.deleteFor': 'Apagar {name} deste computador',
+  'received.deleted': '“{name}” foi apagado deste computador.',
+  'deleteReceived.title': 'Apagar “{name}”?',
+  'deleteReceived.body':
+    'O arquivo sai da sua pasta do ComParta neste computador. Se quiser de novo depois, peça um novo convite a quem enviou.',
+  'deleteReceived.confirm': 'Apagar arquivo',
+  'deleteReceived.cancel': 'Manter o arquivo',
 
   'connection.good': 'Outros conseguem chegar a este computador',
   'connection.limited': 'Conexão limitada',
@@ -188,6 +202,8 @@ export const ptBR: Catalog = {
   'error.download.invalidFile':
     'O ComParta não consegue baixar a partir desse arquivo. Escolha o arquivo de download que você salvou do site, ou cole o link de download.',
   'error.transfer.notFound': 'Esse arquivo não está mais na sua lista.',
+  'error.received.notFound': 'Este arquivo não está mais na sua pasta do ComParta. Ele pode ter sido movido ou apagado.',
+  'error.received.openFailed': 'O ComParta não conseguiu abrir este arquivo. Escolha Mostrar na pasta para vê-lo.',
   'error.settings.invalid': 'Não foi possível guardar essa escolha. Tente de novo.',
   'error.unexpected': 'Algo deu errado. Feche o ComParta, abra de novo e tente mais uma vez.',
 

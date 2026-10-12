@@ -21,6 +21,9 @@ public static class Commands
     public const string TransfersPause = "transfers.pause";
     public const string TransfersResume = "transfers.resume";
     public const string ReceivedOpenFolder = "received.openFolder";
+    public const string ReceivedOpen = "received.open";
+    public const string ReceivedReveal = "received.reveal";
+    public const string ReceivedDelete = "received.delete";
     public const string SettingsGet = "settings.get";
     public const string SettingsSet = "settings.set";
     public const string ConnectionGet = "connection.get";
@@ -57,12 +60,15 @@ public static class ErrorCodes
     public const string DownloadInvalidFile = "download.invalidFile";
     public const string DiskFull = "disk.full";
     public const string SettingsInvalid = "settings.invalid";
+    public const string ReceivedNotFound = "received.notFound";
+    public const string ReceivedOpenFailed = "received.openFailed";
     public const string Unexpected = "unexpected";
 
     public static IReadOnlyList<string> All { get; } =
     [
         ShareDuplicate, ShareNotFound, ShareNotReady, FileUnreadable,
-        InviteInvalid, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, DiskFull, SettingsInvalid, Unexpected,
+        InviteInvalid, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, DiskFull, SettingsInvalid,
+        ReceivedNotFound, ReceivedOpenFailed, Unexpected,
     ];
 }
 
@@ -171,6 +177,9 @@ public static class Contract
         new(Commands.TransfersPause, typeof(IdArgs), null),
         new(Commands.TransfersResume, typeof(IdArgs), null),
         new(Commands.ReceivedOpenFolder, null, null),
+        new(Commands.ReceivedOpen, typeof(IdArgs), null),
+        new(Commands.ReceivedReveal, typeof(IdArgs), null),
+        new(Commands.ReceivedDelete, typeof(IdArgs), null),
         new(Commands.SettingsGet, null, typeof(SettingsDto)),
         new(Commands.SettingsSet, typeof(SetSettingsArgs), null),
         new(Commands.ConnectionGet, null, typeof(ConnectionDto)),

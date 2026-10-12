@@ -115,6 +115,8 @@ export const errorCodes = [
   "download.invalidFile",
   "disk.full",
   "settings.invalid",
+  "received.notFound",
+  "received.openFailed",
   "unexpected",
 ] as const;
 
@@ -134,6 +136,9 @@ export interface Commands {
   "transfers.pause": { args: IdArgs; result: null };
   "transfers.resume": { args: IdArgs; result: null };
   "received.openFolder": { args: undefined; result: null };
+  "received.open": { args: IdArgs; result: null };
+  "received.reveal": { args: IdArgs; result: null };
+  "received.delete": { args: IdArgs; result: null };
   "settings.get": { args: undefined; result: SettingsDto };
   "settings.set": { args: SetSettingsArgs; result: null };
   "connection.get": { args: undefined; result: ConnectionDto };

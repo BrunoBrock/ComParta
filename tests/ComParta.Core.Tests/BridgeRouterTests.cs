@@ -28,7 +28,8 @@ public sealed class BridgeRouterTests
         var settings = new SettingsUseCases(_settings, new FakeSystem("pt-BR"));
         var connection = new ConnectionUseCases(_engine, _firewall);
         var activity = new ActivityUseCases(_engine, _settings);
-        _router = new BridgeRouter(shares, transfers, settings, connection, _opened, activity, _shell, _shell);
+        var received = new ReceivedUseCases(transfers, new FakePaths(Path.GetTempPath()), _shell, _files);
+        _router = new BridgeRouter(shares, transfers, settings, connection, _opened, activity, received, _shell, _shell);
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
         _picker.NextPick = Video;
@@ -42,6 +43,8 @@ public sealed class BridgeRouterTests
         public int Opened { get; private set; }
         public Task SetTextAsync(string text, CancellationToken ct = default) { Copied = text; return Task.CompletedTask; }
         public Task OpenReceivedFolderAsync(CancellationToken ct = default) { Opened++; return Task.CompletedTask; }
+        public Task<bool> OpenAsync(string path, CancellationToken ct = default) => Task.FromResult(true);
+        public Task RevealAsync(string path, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     private async Task<JsonElement> InvokeAsync(string command, object? args = null) =>

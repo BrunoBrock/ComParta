@@ -165,6 +165,10 @@ public interface IFirewall
 public interface IContentOpener
 {
     Task OpenReceivedFolderAsync(CancellationToken ct = default);
+    /// <summary>Opens one received file with the program Windows uses for it; false when that failed.</summary>
+    Task<bool> OpenAsync(string path, CancellationToken ct = default);
+    /// <summary>Shows the folder with this one file selected.</summary>
+    Task RevealAsync(string path, CancellationToken ct = default);
 }
 
 public interface IFileSystem
@@ -174,6 +178,8 @@ public interface IFileSystem
     long GetReadableFileSize(string path);
     /// <summary>The whole content of a small file; throws when it cannot be read or is larger than <paramref name="maxBytes"/>.</summary>
     byte[] ReadSmallFile(string path, int maxBytes);
+    /// <summary>Deletes one file; nothing happens when it is already gone.</summary>
+    void DeleteFile(string path);
 }
 
 public interface IAppPaths

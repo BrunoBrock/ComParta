@@ -150,6 +150,8 @@ public enum ErrorKind
     TransferFinished,
     DiskFull,
     SettingsInvalid,
+    ReceivedNotFound,
+    ReceivedOpenFailed,
     Unexpected,
 }
 

@@ -279,6 +279,7 @@ export default function App({ bridge }: AppProps) {
       sort={sort}
       onSortChange={changeSort}
       onError={showError}
+      onInfo={showInfo}
       onStart={clearNotice}
       onClearSearch={clearSearch}
       stuck={stuck}

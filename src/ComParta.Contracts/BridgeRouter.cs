@@ -18,6 +18,7 @@ public sealed class BridgeRouter
     private readonly ConnectionUseCases _connection;
     private readonly OpenedInvites _opened;
     private readonly ActivityUseCases _activity;
+    private readonly ReceivedUseCases _received;
     private readonly IClipboard _clipboard;
     private readonly IContentOpener _opener;
 
@@ -28,6 +29,7 @@ public sealed class BridgeRouter
         ConnectionUseCases connection,
         OpenedInvites opened,
         ActivityUseCases activity,
+        ReceivedUseCases received,
         IClipboard clipboard,
         IContentOpener opener)
     {
@@ -37,6 +39,7 @@ public sealed class BridgeRouter
         _connection = connection;
         _opened = opened;
         _activity = activity;
+        _received = received;
         _clipboard = clipboard;
         _opener = opener;
         _shares.Changed += () => Raise(Events.SharesChanged, _shares.Current().Select(ToDto).ToArray());
@@ -137,6 +140,21 @@ public sealed class BridgeRouter
             case Commands.ReceivedOpenFolder:
                 await _opener.OpenReceivedFolderAsync();
                 return CommandResult.Success(null);
+
+            case Commands.ReceivedOpen:
+                return TransferId.TryParse(Args<IdArgs>(argsJson)?.Id, out var openId)
+                    ? ToResult(await _received.OpenAsync(openId))
+                    : CommandResult.Failure(ErrorCodes.TransferNotFound);
+
+            case Commands.ReceivedReveal:
+                return TransferId.TryParse(Args<IdArgs>(argsJson)?.Id, out var revealId)
+                    ? ToResult(await _received.RevealAsync(revealId))
+                    : CommandResult.Failure(ErrorCodes.TransferNotFound);
+
+            case Commands.ReceivedDelete:
+                return TransferId.TryParse(Args<IdArgs>(argsJson)?.Id, out var deleteId)
+                    ? ToResult(await _received.DeleteAsync(deleteId))
+                    : CommandResult.Failure(ErrorCodes.TransferNotFound);
 
             case Commands.SettingsGet:
                 return CommandResult.Success(ToDto(await _settings.GetAsync()));
@@ -306,6 +324,8 @@ public sealed class BridgeRouter
         ErrorKind.DownloadFileInvalid => ErrorCodes.DownloadInvalidFile,
         ErrorKind.DiskFull => ErrorCodes.DiskFull,
         ErrorKind.SettingsInvalid => ErrorCodes.SettingsInvalid,
+        ErrorKind.ReceivedNotFound => ErrorCodes.ReceivedNotFound,
+        ErrorKind.ReceivedOpenFailed => ErrorCodes.ReceivedOpenFailed,
         _ => ErrorCodes.Unexpected,
     };
 }

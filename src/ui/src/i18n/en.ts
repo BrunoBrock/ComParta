@@ -109,6 +109,20 @@ export const en = {
   'transfers.clear': 'Clear from list',
   'transfers.clearFor': 'Clear {name} from list',
   'transfers.openFolder': 'Open my received files',
+  'transfers.onTheWay': 'On the way',
+  'transfers.arrived': 'Arrived',
+  'received.open': 'Open',
+  'received.openFor': 'Open {name}',
+  'received.reveal': 'Show in folder',
+  'received.revealFor': 'Show {name} in its folder',
+  'received.delete': 'Delete file',
+  'received.deleteFor': 'Delete {name} from this computer',
+  'received.deleted': 'Deleted “{name}” from this computer.',
+  'deleteReceived.title': 'Delete “{name}”?',
+  'deleteReceived.body':
+    'The file is removed from your ComParta folder on this computer. If you still want it later, ask the person who sent it for a new invite.',
+  'deleteReceived.confirm': 'Delete file',
+  'deleteReceived.cancel': 'Keep the file',
 
   'connection.good': 'Others can reach this computer',
   'connection.limited': 'Limited connection',
@@ -182,6 +196,8 @@ export const en = {
   'error.download.invalidFile':
     'ComParta cannot download from that file. Choose the download file you saved from the website, or paste its download link instead.',
   'error.transfer.notFound': 'That file is no longer in your list.',
+  'error.received.notFound': 'This file is no longer in your ComParta folder. It may have been moved or deleted.',
+  'error.received.openFailed': 'ComParta could not open this file. Choose Show in folder to see it.',
   'error.settings.invalid': 'That choice could not be saved. Try again.',
   'error.unexpected': 'Something went wrong. Close ComParta, open it again and try once more.',
 

@@ -56,6 +56,9 @@ export interface FakeBridge extends Bridge {
   /** What the system clipboard holds, for the "found an invite you copied" path. */
   clipboardText: string | null
   openedFolder: number
+  /** Ids of received files "opened" and "shown in their folder", in order. */
+  openedReceived: string[]
+  revealedReceived: string[]
   /** How many times the firewall settings were opened. */
   openedConnectionSettings: number
   /** Change the connection health, as the app does when the network changes. */
@@ -195,6 +198,15 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     return ok(null)
   }
 
+  // Only a file that has arrived can be opened, shown or deleted, as in the app.
+  const withArrived = (id: string, act: (id: string) => void) => {
+    const transfer = transfers.find((t) => t.id === id)
+    if (!transfer) return fail('transfer.notFound')
+    if (transfer.state !== 'done') return fail('received.notFound')
+    act(id)
+    return ok(null)
+  }
+
   let connection: ConnectionHealthDto = options.connection ?? 'good'
   let openedInvite: string | null = null
   let settings: SettingsDto = {
@@ -261,7 +273,11 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       if (!share) return fail('share.notFound')
       if (share.status !== 'ready') return fail('share.notReady')
       const link = invitePrefix + share.id
-      fake.copiedInvite = message ? (message.includes('{link}') ? message.replace('{link}', link) : `${message}\n${link}`) : link
+      fake.copiedInvite = message
+        ? message.includes('{link}')
+          ? message.replace('{link}', link)
+          : `${message}\n${link}`
+        : link
       return ok(null)
     },
 
@@ -318,7 +334,10 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
 
     'settings.set': (args) => {
       const { language, view, sort } = args as SetSettingsArgs
-      if ((view !== null && view !== 'grid' && view !== 'list') || (sort !== null && !['added', 'name', 'size'].includes(sort)))
+      if (
+        (view !== null && view !== 'grid' && view !== 'list') ||
+        (sort !== null && !['added', 'name', 'size'].includes(sort))
+      )
         return fail('settings.invalid')
       settings = { ...settings, language, view, sort }
       emit({ event: 'settings.changed', payload: { ...settings } })
@@ -387,9 +406,21 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       fake.openedFolder++
       return ok(null)
     },
+
+    'received.open': (args) => withArrived((args as IdArgs).id, (id) => fake.openedReceived.push(id)),
+
+    'received.reveal': (args) => withArrived((args as IdArgs).id, (id) => fake.revealedReceived.push(id)),
+
+    'received.delete': (args) =>
+      withArrived((args as IdArgs).id, (id) => {
+        transfers = transfers.filter((t) => t.id !== id)
+        emitTransfers()
+      }),
   }
 
   const fake = {
+    openedReceived: [] as string[],
+    revealedReceived: [] as string[],
     nextPick: samplePicks[0] as PickedFile | null,
     nextDownloadFile: { name: 'Free documentary.mkv', sizeBytes: 2_147_483_648 } as PickedFile | 'invalid' | null,
     failNextWith: null as ErrorCode | null,
