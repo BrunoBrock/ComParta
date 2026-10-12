@@ -17,6 +17,7 @@ import { inOrder, type SortOrder } from '../order.ts'
 import { matches } from '../search.ts'
 import DeleteReceivedDialog from './DeleteReceivedDialog.tsx'
 import type { DetailsOf } from './DetailsWindow.tsx'
+import { moveBetweenItems } from './itemKeys.ts'
 import ItemView, { type ViewMode } from './ItemView.tsx'
 import SectionHead from './SectionHead.tsx'
 import Button from './ui/Button.tsx'
@@ -190,7 +191,7 @@ export default function TransfersSection(props: TransfersSectionProps) {
           <h3 id={`transfers-${group.key}`} className="group-heading">
             {t(`transfers.${group.key}`)}
           </h3>
-          <ul className={`items items-${view}`} aria-labelledby={`transfers-${group.key}`}>
+          <ul className={`items items-${view}`} aria-labelledby={`transfers-${group.key}`} onKeyDown={moveBetweenItems}>
             {group.items.map((transfer) => {
               const name = transfer.name ?? t('transfers.unnamed')
               const state = shownState(transfer)
@@ -217,6 +218,12 @@ export default function TransfersSection(props: TransfersSectionProps) {
                   note={stoppedHere ? t('stopped.note') : describe(transfer)}
                   progress={shownProgress}
                   onDetails={() => onDetails({ kind: 'transfer', id: transfer.id, name })}
+                  onMain={finished ? () => runOnReceived('received.open', transfer) : undefined}
+                  // A running file is only cancelled with its own button; Delete never stops it by accident.
+                  onRemove={() => {
+                    if (finished) setDeleting({ id: transfer.id, name })
+                    else if (transfer.state === 'failed') void remove(transfer)
+                  }}
                   actions={
                     <>
                       {finished && (

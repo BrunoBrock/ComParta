@@ -382,6 +382,8 @@ export default function App({ bridge }: AppProps) {
           item={details}
           stopped={(details.kind === 'share' ? activity?.sendingStopped : activity?.receivingStopped) ?? false}
           onClose={() => setDetails(null)}
+          onError={showError}
+          onInfo={showInfo}
         />
       )}
 

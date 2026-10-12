@@ -19,17 +19,50 @@ interface ItemViewProps {
   actions: ReactNode
   /** Opens the details window for this file (CAP-26). */
   onDetails: () => void
+  /** The file's main action, on double-click: copy the invite, or open what arrived. */
+  onMain?: () => void
+  /** Asks to stop sharing or remove it, on the Delete key. */
+  onRemove: () => void
 }
 
 /**
  * One shared or received file, as a card in grid view or a row in list view. Both views are
  * built from the same parts; CSS decides the shape.
  */
-export default function ItemView({ name, size, tone, chip, note, progress, actions, onDetails }: ItemViewProps) {
+export default function ItemView({
+  name,
+  size,
+  tone,
+  chip,
+  note,
+  progress,
+  actions,
+  onDetails,
+  onMain,
+  onRemove,
+}: ItemViewProps) {
   // The ellipsis goes in the middle so the end of the name, with its extension, stays visible.
   const [start, end] = splitName(name)
   return (
-    <li className={tone === 'warn' ? 'item item-problem' : 'item'}>
+    // The file itself takes focus: Enter opens its details, Delete asks to remove it, and a
+    // double-click does its main action (UX design, Items). Its buttons keep their own keys.
+    <li
+      className={tone === 'warn' ? 'item item-problem' : 'item'}
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          onDetails()
+        } else if (event.key === 'Delete') {
+          event.preventDefault()
+          onRemove()
+        }
+      }}
+      onDoubleClick={(event) => {
+        if (!(event.target as HTMLElement).closest('button')) onMain?.()
+      }}
+    >
       <div className="item-picture">
         <FileIcon name={name} />
       </div>

@@ -6,6 +6,7 @@ import { formatSize, t } from '../i18n/index.ts'
 import { inOrder, type SortOrder } from '../order.ts'
 import { matches } from '../search.ts'
 import type { DetailsOf } from './DetailsWindow.tsx'
+import { moveBetweenItems } from './itemKeys.ts'
 import ItemView, { type ViewMode } from './ItemView.tsx'
 import type { ChipTone } from './ui/StatusChip.tsx'
 import RemoveShareDialog from './RemoveShareDialog.tsx'
@@ -125,7 +126,7 @@ export default function SharesSection(props: SharesSectionProps) {
       )}
 
       {shown !== null && shown.length > 0 && (
-        <ul className={`items items-${view}`}>
+        <ul className={`items items-${view}`} onKeyDown={moveBetweenItems}>
           {shown.map((share) => {
             const stoppedHere = stopped && share.status === 'ready'
             return (
@@ -144,6 +145,8 @@ export default function SharesSection(props: SharesSectionProps) {
                 }
                 progress={share.status === 'preparing' ? 'unknown' : undefined}
                 onDetails={() => onDetails({ kind: 'share', id: share.id, name: share.name })}
+                onMain={share.status === 'ready' ? () => copyInvite(share) : undefined}
+                onRemove={() => setRemoving(share)}
                 actions={
                   <>
                     {share.status === 'ready' && (

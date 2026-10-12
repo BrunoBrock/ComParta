@@ -1298,3 +1298,42 @@ dialog.sheet {
   gap: 8px;
   margin-top: 16px;
 }
+
+/* Wide windows: the details open as a panel on the right, so the list stays in view (story 8.8). */
+@media (min-width: 901px) {
+  dialog.details {
+    width: 380px;
+    max-width: 380px;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0 0 0 auto;
+    border-radius: 0;
+    overflow-y: auto;
+  }
+
+  dialog.details::backdrop {
+    background: rgb(15 23 42 / 20%);
+  }
+
+  dialog.details .details-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  dialog.details .dialog-actions {
+    flex-wrap: wrap;
+  }
+}
+
+@media (min-width: 901px) and (prefers-reduced-motion: no-preference) {
+  dialog.details[open] {
+    animation: details-in 200ms ease-out;
+  }
+
+  @keyframes details-in {
+    from {
+      transform: translateX(32px);
+      opacity: 0;
+    }
+  }
+}
