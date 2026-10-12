@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { extensionOf } from '../fileNames.ts'
+import { extensionOf } from '../../fileNames.ts'
 import {
   AppWindow,
   File,

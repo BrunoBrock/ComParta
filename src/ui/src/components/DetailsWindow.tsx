@@ -9,7 +9,7 @@ import {
   percentOf,
   t,
 } from '../i18n/index.ts'
-import Modal from './Modal.tsx'
+import Dialog from './ui/Dialog.tsx'
 
 export type DetailsOf = { kind: 'share' | 'transfer'; id: string; name: string }
 
@@ -103,7 +103,7 @@ export default function DetailsWindow({ bridge, item, stopped, onClose }: Detail
         : transferRows(details.value, stopped)
 
   return (
-    <Modal labelledBy="details-title" className="details" onClose={onClose}>
+    <Dialog labelledBy="details-title" className="details" onClose={onClose}>
       <h2 id="details-title">{t('details.title', { name: item.name })}</h2>
       {gone ? (
         <p>{t('details.gone')}</p>
@@ -122,6 +122,6 @@ export default function DetailsWindow({ bridge, item, stopped, onClose }: Detail
           {t('details.close')}
         </button>
       </div>
-    </Modal>
+    </Dialog>
   )
 }

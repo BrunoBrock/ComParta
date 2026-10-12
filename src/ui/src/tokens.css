@@ -1,0 +1,79 @@
+/*
+ * Tokens from the UX design (Planning/initiative-comparta/ux-comparta, "Visual design").
+ * Dark values follow the system unless a page sets data-theme="light" or "dark" on <html>
+ * (the Settings choice of epic 12). src/tokens.test.ts checks the contrast of every pair in use.
+ */
+:root {
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-text: #0f172a;
+  --color-text-muted: #475569;
+  --color-primary: #0b6e4f;
+  --color-on-primary: #ffffff;
+  --color-primary-soft: #e3f2ec;
+  --color-ok: #15803d;
+  --color-busy: #1d4ed8;
+  --color-warn: #b45309;
+  --color-warn-soft: #fff7ed;
+  --color-danger: #b91c1c;
+  --color-on-danger: #ffffff;
+  --color-border: #cbd5e1;
+  --color-info-soft: #e8f0fe;
+  --radius: 12px;
+  --space: 8px;
+  --target: 44px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 20px;
+  --text-xl: 28px;
+  --shadow: 0 1px 2px rgb(15 23 42 / 6%), 0 2px 8px rgb(15 23 42 / 6%);
+  --font: 'Segoe UI Variable Text', 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
+  --focus-ring: 3px solid var(--color-primary);
+
+  color-scheme: light dark;
+  font-family: var(--font);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-bg: #0f1418;
+    --color-surface: #182027;
+    --color-text: #e8edf2;
+    --color-text-muted: #a6b3c0;
+    --color-primary: #4fc79b;
+    --color-on-primary: #06281c;
+    --color-primary-soft: #173a2e;
+    --color-ok: #5fd38a;
+    --color-busy: #8ab4ff;
+    --color-warn: #f5b25c;
+    --color-warn-soft: #33261a;
+    --color-danger: #ff8f85;
+    --color-on-danger: #2b0a07;
+    --color-border: #34404b;
+    --color-info-soft: #1b2a3d;
+    --shadow: none;
+  }
+}
+
+:root[data-theme='dark'] {
+  --color-bg: #0f1418;
+  --color-surface: #182027;
+  --color-text: #e8edf2;
+  --color-text-muted: #a6b3c0;
+  --color-primary: #4fc79b;
+  --color-on-primary: #06281c;
+  --color-primary-soft: #173a2e;
+  --color-ok: #5fd38a;
+  --color-busy: #8ab4ff;
+  --color-warn: #f5b25c;
+  --color-warn-soft: #33261a;
+  --color-danger: #ff8f85;
+  --color-on-danger: #2b0a07;
+  --color-border: #34404b;
+  --color-info-soft: #1b2a3d;
+  --shadow: none;
+}

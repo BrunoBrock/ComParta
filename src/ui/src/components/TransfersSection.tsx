@@ -5,7 +5,7 @@ import { matches } from '../search.ts'
 import type { DetailsOf } from './DetailsWindow.tsx'
 import ItemView, { type ViewMode } from './ItemView.tsx'
 import SectionHead from './SectionHead.tsx'
-import type { ChipTone } from './StatusChip.tsx'
+import type { ChipTone } from './ui/StatusChip.tsx'
 
 interface TransfersSectionProps {
   bridge: Bridge

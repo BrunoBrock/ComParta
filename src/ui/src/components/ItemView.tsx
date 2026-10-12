@@ -2,8 +2,8 @@ import { Info } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { splitName } from '../fileNames.ts'
 import { t } from '../i18n/index.ts'
-import FileIcon from './FileIcon.tsx'
-import StatusChip, { type ChipTone } from './StatusChip.tsx'
+import FileIcon from './ui/FileIcon.tsx'
+import StatusChip, { type ChipTone } from './ui/StatusChip.tsx'
 
 export type ViewMode = 'grid' | 'list'
 

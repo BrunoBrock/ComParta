@@ -2,8 +2,8 @@ import { FileDown } from 'lucide-react'
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react'
 import type { Bridge, InvitePreviewDto } from '../bridge/index.ts'
 import { errorMessage, formatSize, t } from '../i18n/index.ts'
-import FileIcon from './FileIcon.tsx'
-import Modal from './Modal.tsx'
+import FileIcon from './ui/FileIcon.tsx'
+import Dialog from './ui/Dialog.tsx'
 
 interface ReceiveDialogProps {
   bridge: Bridge
@@ -85,7 +85,7 @@ export default function ReceiveDialog({ bridge, pasted, onStarted, onCancel }: R
   )
 
   return (
-    <Modal labelledBy="receive-title" onClose={onCancel}>
+    <Dialog labelledBy="receive-title" onClose={onCancel}>
       {preview ? (
         <Confirmation preview={preview} busy={busy} alert={alert} onReceive={receive} onCancel={onCancel} />
       ) : (
@@ -127,7 +127,7 @@ export default function ReceiveDialog({ bridge, pasted, onStarted, onCancel }: R
           </div>
         </form>
       )}
-    </Modal>
+    </Dialog>
   )
 }
 

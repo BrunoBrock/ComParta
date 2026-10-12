@@ -6,7 +6,7 @@ import { formatSize, t } from '../i18n/index.ts'
 import { matches } from '../search.ts'
 import type { DetailsOf } from './DetailsWindow.tsx'
 import ItemView, { type ViewMode } from './ItemView.tsx'
-import type { ChipTone } from './StatusChip.tsx'
+import type { ChipTone } from './ui/StatusChip.tsx'
 import RemoveShareDialog from './RemoveShareDialog.tsx'
 import SectionHead from './SectionHead.tsx'
 
