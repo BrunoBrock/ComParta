@@ -94,4 +94,13 @@ describe('the sender follows who is getting a file', () => {
     expect(within(item).getByText(en['stopped.chip'])).toBeInTheDocument()
     expect(within(item).queryByRole('progressbar')).not.toBeInTheDocument()
   })
+
+  it('opens the details of the item a clicked notification is about', async () => {
+    const { bridge } = setup({ shares: [video] })
+    await itemOf(video.name)
+
+    act(() => bridge.clickNotification({ kind: 'share', id: video.id, name: video.name }))
+
+    expect(await screen.findByRole('dialog', { name: `Details of “${video.name}”` })).toBeInTheDocument()
+  })
 })

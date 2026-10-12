@@ -254,3 +254,14 @@ internal sealed class ManualClock(DateTimeOffset start) : TimeProvider
     public DateTimeOffset Now { get; set; } = start;
     public override DateTimeOffset GetUtcNow() => Now;
 }
+
+internal sealed class FakeNotifier : INotifier
+{
+    public List<Notification> Shown { get; } = [];
+    public void Show(Notification notification) => Shown.Add(notification);
+}
+
+internal sealed class FakeWindow : IWindowState
+{
+    public bool IsInFront { get; set; }
+}

@@ -183,6 +183,26 @@ public interface IContentOpener
     Task RevealAsync(string path, CancellationToken ct = default);
 }
 
+/// <summary>Which item a system notification opens when the person clicks it.</summary>
+public enum NotifiedItem { Share, Transfer }
+
+/// <summary>A system notification (CAP-20), already in the person's language.</summary>
+/// <param name="Name">The item's name, so the screen can title its details at once.</param>
+public sealed record Notification(string Title, string Body, NotifiedItem Kind, string Id, string Name);
+
+/// <summary>Shows notifications the operating system's way (AD-11).</summary>
+public interface INotifier
+{
+    void Show(Notification notification);
+}
+
+/// <summary>Whether the person is looking at the app's window.</summary>
+public interface IWindowState
+{
+    /// <summary>True while the window is open, not minimised, and the one in front.</summary>
+    bool IsInFront { get; }
+}
+
 /// <summary>A small picture of a file, as the operating system draws it.</summary>
 public sealed record Thumbnail(string ContentType, byte[] Bytes);
 

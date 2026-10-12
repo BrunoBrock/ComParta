@@ -19,6 +19,8 @@ public partial class App : Application
 			MinimumHeight = 520,
 		};
 		window.Destroying += (_, _) => services.Stop();
+		services.Focus.Watch(window);
+		services.NotificationClicked += () => MainThread.BeginInvokeOnMainThread(() => BringToFront(window));
 
 		// What this launch was started with, then whatever later launches hand over (AD-14).
 		services.Opened.Open(LaunchArguments.Current());

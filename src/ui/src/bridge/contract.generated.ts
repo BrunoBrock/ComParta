@@ -12,6 +12,8 @@ export type TransferSourceDto = "invite" | "downloadLink" | "downloadFile";
 
 export type ThumbnailKindDto = "share" | "transfer";
 
+export type ItemKindDto = "share" | "transfer";
+
 export interface ShareDto {
   id: string;
   name: string;
@@ -130,6 +132,12 @@ export interface ThumbnailArgs {
   size: number;
 }
 
+export interface DetailsTargetDto {
+  kind: ItemKindDto;
+  id: string;
+  name: string;
+}
+
 export const errorCodes = [
   "share.duplicate",
   "share.notFound",
@@ -187,6 +195,7 @@ export interface Events {
   "connection.changed": ConnectionDto;
   "invites.changed": boolean;
   "activity.changed": ActivityDto;
+  "details.changed": DetailsTargetDto;
 }
 
 export type CommandResult<T> = { ok: true; value: T } | { ok: false; error: { code: ErrorCode } };

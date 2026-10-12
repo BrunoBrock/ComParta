@@ -46,6 +46,8 @@ public static class Events
     /// <summary>True when an invite opened from outside the app waits; the UI takes it with <c>invites.takeOpened</c>.</summary>
     public const string InvitesChanged = "invites.changed";
     public const string ActivityChanged = "activity.changed";
+    /// <summary>The item whose details should show, after the person clicked a system notification (CAP-20).</summary>
+    public const string DetailsChanged = "details.changed";
 }
 
 /// <summary>Stable codes; the words for them live in the UI's translation catalog (AD-11).</summary>
@@ -80,6 +82,10 @@ public enum ShareStatusDto { Preparing, Ready, Unavailable }
 public enum TransferStateDto { Connecting, Receiving, Paused, Done, Failed, Waiting, NoSpace, Blocked }
 
 public enum ThumbnailKindDto { Share, Transfer }
+
+public enum ItemKindDto { Share, Transfer }
+
+public sealed record DetailsTargetDto(ItemKindDto Kind, string Id, string Name);
 
 /// <param name="Size">The picture's longest side in pixels; the app keeps it between 32 and 512.</param>
 public sealed record ThumbnailArgs(ThumbnailKindDto Kind, string Id, int Size);
@@ -226,6 +232,7 @@ public static class Contract
         new(Events.ConnectionChanged, typeof(ConnectionDto)),
         new(Events.InvitesChanged, typeof(bool)),
         new(Events.ActivityChanged, typeof(ActivityDto)),
+        new(Events.DetailsChanged, typeof(DetailsTargetDto)),
     ];
 
     /// <summary>camelCase JSON with enums as camelCase strings, as the conventions require.</summary>

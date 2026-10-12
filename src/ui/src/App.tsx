@@ -128,6 +128,8 @@ export default function App({ bridge }: AppProps) {
       else if (event.event === 'settings.changed') applySettings(event.payload)
       else if (event.event === 'connection.changed') setConnection(event.payload.health)
       else if (event.event === 'activity.changed') setActivity(event.payload)
+      // The person clicked a system notification about this item (CAP-20).
+      else if (event.event === 'details.changed') setDetails(event.payload)
     })
 
     void bridge.invoke('activity.get').then((result) => {

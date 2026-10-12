@@ -3,6 +3,7 @@ import type {
   ActivityDto,
   CommandResult,
   ConnectionHealthDto,
+  DetailsTargetDto,
   ErrorCode,
   EventEnvelope,
   CopyInviteArgs,
@@ -72,6 +73,8 @@ export interface FakeBridge extends Bridge {
   openInvite(text: string): void
   /** Change state from outside, as the app does when something happens on its own. */
   setShares(shares: ShareDto[]): void
+  /** The person clicked a system notification about this item. */
+  clickNotification(target: DetailsTargetDto): void
   /** Another device gets a share, a quarter at a time each step, then it reads as sent. */
   sendTo(shareId: string): void
   setTransfers(transfers: TransferDto[]): void
@@ -533,6 +536,10 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     subscribe(listener: (event: EventEnvelope) => void) {
       listeners.add(listener)
       return () => listeners.delete(listener)
+    },
+
+    clickNotification(target: DetailsTargetDto) {
+      emit({ event: 'details.changed', payload: target })
     },
 
     sendTo(shareId: string) {

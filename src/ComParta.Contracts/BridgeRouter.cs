@@ -37,8 +37,12 @@ public sealed class BridgeRouter
         IContentOpener opener,
         ThumbnailUseCases thumbnails,
         DroppedFiles dropped,
-        SendingUseCases sending)
+        SendingUseCases sending,
+        NotificationUseCases notifications)
     {
+        notifications.OpenRequested += (kind, id, name) => Raise(
+            Events.DetailsChanged,
+            new DetailsTargetDto(kind == NotifiedItem.Share ? ItemKindDto.Share : ItemKindDto.Transfer, id, name));
         _sending = sending;
         _thumbnails = thumbnails;
         _dropped = dropped;

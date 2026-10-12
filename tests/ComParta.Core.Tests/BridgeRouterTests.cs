@@ -23,6 +23,7 @@ public sealed class BridgeRouterTests
     private readonly ManualClock _clock = new(new DateTimeOffset(2026, 10, 12, 10, 0, 0, TimeSpan.Zero));
     private readonly List<JsonElement> _events = [];
     private readonly BridgeRouter _router;
+    private readonly NotificationUseCases _notifications;
 
     public BridgeRouterTests()
     {
@@ -33,8 +34,10 @@ public sealed class BridgeRouterTests
         var activity = new ActivityUseCases(_engine, _settings);
         var received = new ReceivedUseCases(transfers, new FakePaths(Path.GetTempPath()), _shell, _files);
         var thumbnails = new ThumbnailUseCases(shares, received, _thumbnails);
+        var sending = new SendingUseCases(_engine, shares, _clock);
+        _notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, new FakeNotifier(), new FakeWindow());
         _router = new BridgeRouter(shares, transfers, settings, connection, _opened, activity, received, _shell, _shell, thumbnails, _dropped,
-            new SendingUseCases(_engine, shares, _clock));
+            sending, _notifications);
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
         _picker.NextPick = Video;
@@ -381,6 +384,17 @@ public sealed class BridgeRouterTests
         Assert.Equal("sent", sent.GetProperty("activity").GetString());
         Assert.Equal(1, sent.GetProperty("finishedCount").GetInt32());
         Assert.Equal(0, sent.GetProperty("receiverCount").GetInt32());
+    }
+
+    [Fact]
+    public void A_clicked_notification_asks_the_screen_to_open_the_items_details()
+    {
+        _notifications.Open(NotifiedItem.Transfer, "t1", "film.mp4");
+
+        var open = _events.Last(e => e.GetProperty("event").GetString() == Events.DetailsChanged).GetProperty("payload");
+        Assert.Equal("transfer", open.GetProperty("kind").GetString());
+        Assert.Equal("t1", open.GetProperty("id").GetString());
+        Assert.Equal("film.mp4", open.GetProperty("name").GetString());
     }
 
     [Fact]
