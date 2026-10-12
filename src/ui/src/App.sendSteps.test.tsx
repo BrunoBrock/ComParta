@@ -8,12 +8,13 @@ const steps = () => screen.getByRole('dialog', { name: /./ })
 
 describe('the guided first send', () => {
   it('goes from getting ready to the invite, and copies the message', async () => {
-    const { bridge, user } = setup({ sendStepsSeen: 0, stepMs: 30 })
+    const { bridge, user } = setup({ sendStepsSeen: 0, stepMs: 200 })
 
     await user.click(await railButton(en['shares.add']))
 
-    expect(await screen.findByText('Step 2 of 3')).toBeInTheDocument()
-    expect(within(steps()).getByRole('heading', { name: en['steps.ready'] })).toBeInTheDocument()
+    // The fake takes 400 ms to get the file ready, so step 2 is seen before step 3.
+    expect(await within(steps()).findByRole('heading', { name: en['steps.ready'] })).toBeInTheDocument()
+    expect(screen.getByText('Step 2 of 3')).toBeInTheDocument()
     expect(within(steps()).getByRole('progressbar', { name: en['steps.ready'] })).toBeInTheDocument()
 
     expect(await screen.findByText('Step 3 of 3')).toBeInTheDocument()
