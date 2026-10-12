@@ -2,6 +2,8 @@
 
 export type ShareStatusDto = "preparing" | "ready" | "unavailable";
 
+export type ShareActivityDto = "idle" | "sending" | "sent";
+
 export type TransferStateDto = "connecting" | "receiving" | "paused" | "done" | "failed";
 
 export type ConnectionHealthDto = "good" | "limited" | "blocked";
@@ -15,6 +17,11 @@ export interface ShareDto {
   name: string;
   sizeBytes: number;
   status: ShareStatusDto;
+  activity: ShareActivityDto;
+  receiverCount: number;
+  percent: number;
+  finishedCount: number;
+  secondsLeft: number | null;
 }
 
 export interface IdArgs {

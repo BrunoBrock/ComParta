@@ -88,7 +88,16 @@ public enum ConnectionHealthDto { Good, Limited, Blocked }
 
 public enum TransferSourceDto { Invite, DownloadLink, DownloadFile }
 
-public sealed record ShareDto(string Id, string Name, long SizeBytes, ShareStatusDto Status);
+/// <param name="Activity">Whether devices are getting the file now, or someone finished since the app started.</param>
+/// <param name="ReceiverCount">How many devices are getting it now.</param>
+/// <param name="Percent">How much of it they have, on average, 0 to 100.</param>
+/// <param name="FinishedCount">How many devices got all of it since the app started.</param>
+/// <param name="SecondsLeft">Roughly how long until they have all of it, or null when it cannot be told.</param>
+public sealed record ShareDto(
+    string Id, string Name, long SizeBytes, ShareStatusDto Status,
+    ShareActivityDto Activity, int ReceiverCount, int Percent, int FinishedCount, long? SecondsLeft);
+
+public enum ShareActivityDto { Idle, Sending, Sent }
 
 /// <param name="BytesPerSecond">Current speed while receiving, else 0.</param>
 /// <param name="SecondsLeft">Roughly how long is left, or null when it cannot be told.</param>

@@ -18,6 +18,7 @@ public sealed class TransferUseCases
     private readonly TimeProvider _clock;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Dictionary<TransferId, TransferView> _transfers = [];
+    private readonly Dictionary<TransferId, TimeLeft> _timeLeft = [];
 
     public TransferUseCases(
         ITransferRepository repository,
@@ -234,6 +235,7 @@ public sealed class TransferUseCases
             {
                 if (!_transfers.Remove(id, out view))
                     return Result.Fail(ErrorKind.TransferNotFound);
+                _timeLeft.Remove(id);
             }
             if (view.State != TransferState.Done)
                 await _engine.StopReceivingAsync(id, ct);
@@ -271,7 +273,17 @@ public sealed class TransferUseCases
             var received = progress.Done ? transfer.SizeBytes ?? progress.ReceivedBytes
                 : progress.Failed ? view.ReceivedBytes
                 : progress.ReceivedBytes;
-            updated = new TransferView(transfer, state, received, state == TransferState.Receiving ? progress.BytesPerSecond : 0);
+            long? secondsLeft = null;
+            if (state == TransferState.Receiving)
+            {
+                if (!_timeLeft.TryGetValue(progress.Id, out var timeLeft))
+                    _timeLeft[progress.Id] = timeLeft = new TimeLeft(_clock);
+                secondsLeft = timeLeft.Update(received, (transfer.SizeBytes ?? received) - received);
+            }
+            else
+                _timeLeft.Remove(progress.Id);
+            updated = new TransferView(
+                transfer, state, received, state == TransferState.Receiving ? progress.BytesPerSecond : 0, secondsLeft);
             if (updated == view)
                 return;
             persist = transfer != view.Transfer;
@@ -292,7 +304,11 @@ public sealed class TransferUseCases
     private TransferView Set(TransferView view)
     {
         lock (_transfers)
+        {
             _transfers[view.Transfer.Id] = view;
+            // Time left starts again from a new speed after a pause.
+            _timeLeft.Remove(view.Transfer.Id);
+        }
         return view;
     }
 }

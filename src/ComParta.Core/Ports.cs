@@ -53,8 +53,18 @@ public sealed record ReachabilityFacts(
 /// <param name="Connections">How many other computers are connected for it.</param>
 /// <param name="BytesReceived">Bytes received for it since the app started.</param>
 /// <param name="BytesSent">Bytes sent for it since the app started.</param>
+/// <param name="Receivers">For a share: how many connected devices are getting it now. Counts only, no addresses.</param>
+/// <param name="ReceiversPercent">For a share: how much of it those devices have, on average, 0 to 100.</param>
+/// <param name="Finished">For a share: how many devices got all of it from this one since the app started.</param>
 public sealed record ItemActivity(
-    long ReceivingBytesPerSecond, long SendingBytesPerSecond, int Connections, long BytesReceived, long BytesSent)
+    long ReceivingBytesPerSecond,
+    long SendingBytesPerSecond,
+    int Connections,
+    long BytesReceived,
+    long BytesSent,
+    int Receivers = 0,
+    int ReceiversPercent = 0,
+    int Finished = 0)
 {
     public static ItemActivity None { get; } = new(0, 0, 0, 0, 0);
 }

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import App from './App.tsx'
 import type { ShareDto, TransferDto } from './bridge/contract.generated.ts'
-import { createFakeBridge } from './bridge/fakeBridge.ts'
+import { createFakeBridge, notSending } from './bridge/fakeBridge.ts'
 import { en } from './i18n/en.ts'
 import { setLanguage } from './i18n/index.ts'
 import { ptBR } from './i18n/pt-BR.ts'
@@ -18,7 +18,7 @@ import {
 } from './test/appHarness.tsx'
 
 describe('finding my files', () => {
-  const recipe: ShareDto = { id: 's3', name: 'Receita de aniversário.pdf', sizeBytes: 482_113, status: 'ready' }
+  const recipe: ShareDto = { id: 's3', name: 'Receita de aniversário.pdf', sizeBytes: 482_113, status: 'ready', ...notSending }
 
   it('counts the files in each place', async () => {
     setup({ shares: [video, album], transfers: [] })
@@ -71,9 +71,9 @@ describe('finding my files', () => {
   })
 
   it('orders files by name, by size, or newest first, and stores the choice', async () => {
-    const small: ShareDto = { id: 's3', name: 'photo 10.jpg', sizeBytes: 5, status: 'ready' }
-    const big: ShareDto = { id: 's4', name: 'Photo 2.jpg', sizeBytes: 500, status: 'ready' }
-    const middle: ShareDto = { id: 's5', name: 'Árvore.png', sizeBytes: 50, status: 'ready' }
+    const small: ShareDto = { id: 's3', name: 'photo 10.jpg', sizeBytes: 5, status: 'ready', ...notSending }
+    const big: ShareDto = { id: 's4', name: 'Photo 2.jpg', sizeBytes: 500, status: 'ready', ...notSending }
+    const middle: ShareDto = { id: 's5', name: 'Árvore.png', sizeBytes: 50, status: 'ready', ...notSending }
     const { bridge, user } = setup({ shares: [small, big, middle] })
     await screen.findByText(small.name)
     const names = () => within(sharesSection()).getAllByRole('listitem').map((item) => item.querySelector('.item-name')?.getAttribute('title'))

@@ -72,8 +72,19 @@ export interface FakeBridge extends Bridge {
   openInvite(text: string): void
   /** Change state from outside, as the app does when something happens on its own. */
   setShares(shares: ShareDto[]): void
+  /** Another device gets a share, a quarter at a time each step, then it reads as sent. */
+  sendTo(shareId: string): void
   setTransfers(transfers: TransferDto[]): void
 }
+
+/** What a share reports while nobody is getting it. */
+export const notSending = {
+  activity: 'idle',
+  receiverCount: 0,
+  percent: 0,
+  finishedCount: 0,
+  secondsLeft: null,
+} as const
 
 /** Roughly what one ready share sends while someone is getting it, in the moving fake. */
 export const fakeSendingPerShare = 180_000
@@ -259,7 +270,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     if (shares.some((s) => s.name === pick.name)) return fail('share.duplicate')
     if (pick.sizeBytes === 0) return fail('file.unreadable')
 
-    const share: ShareDto = { id: newId(), ...pick, status: stepMs === 0 ? 'ready' : 'preparing' }
+    const share: ShareDto = { id: newId(), ...pick, status: stepMs === 0 ? 'ready' : 'preparing', ...notSending }
     shares = [...shares, share]
     addedAt.set(share.id, new Date().toISOString())
     emitShares()
@@ -513,6 +524,30 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     subscribe(listener: (event: EventEnvelope) => void) {
       listeners.add(listener)
       return () => listeners.delete(listener)
+    },
+
+    sendTo(shareId: string) {
+      const update = (change: Partial<ShareDto>) => {
+        shares = shares.map((s) => (s.id === shareId ? { ...s, ...change } : s))
+        emitShares()
+      }
+      const step = (percent: number) => {
+        const share = shares.find((s) => s.id === shareId)
+        if (!share) return
+        if (percent >= 100) {
+          update({ ...notSending, activity: 'sent', finishedCount: share.finishedCount + 1 })
+          return
+        }
+        const left = (share.sizeBytes * (100 - percent)) / 100
+        update({
+          activity: 'sending',
+          receiverCount: 1,
+          percent,
+          secondsLeft: percent === 0 ? null : Math.ceil(left / fakeSendingPerShare),
+        })
+        setTimeout(() => step(percent + 25), Math.max(stepMs, 1))
+      }
+      step(0)
     },
 
     setShares(next: ShareDto[]) {

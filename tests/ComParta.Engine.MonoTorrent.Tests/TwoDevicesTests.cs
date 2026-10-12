@@ -36,10 +36,10 @@ public sealed class TwoDevicesTests : IAsyncLifetime
     }
 
     private async Task<(MonoTorrentTransferEngine Engine, Paths Paths)> StartDeviceAsync(
-        string name, bool allowDownloadLinks = false, bool acceptIncoming = true)
+        string name, bool allowDownloadLinks = false, bool acceptIncoming = true, int sendRateLimit = 0)
     {
         var paths = new Paths(Path.Combine(_folder, name));
-        var engine = new MonoTorrentTransferEngine(paths) { AcceptIncoming = acceptIncoming };
+        var engine = new MonoTorrentTransferEngine(paths) { AcceptIncoming = acceptIncoming, SendRateLimit = sendRateLimit };
         _engines.Add(engine);
         await engine.StartAsync(SharingPolicy.Closed with
         {
@@ -474,6 +474,43 @@ public sealed class TwoDevicesTests : IAsyncLifetime
         Assert.True(activityRaised > 0);
         if (received is not null)
             Assert.True(received.BytesReceived > 0);
+    }
+
+    [Fact]
+    public async Task The_sender_counts_a_device_getting_the_file_and_then_one_that_finished()
+    {
+        var original = CreateFile("holiday.mp4", 3 * 1024 * 1024);
+        var (sender, _) = await StartDeviceAsync("sender", sendRateLimit: 1024 * 1024);
+        var (receiver, _) = await StartDeviceAsync("receiver");
+        var shareId = ShareId.New();
+        await OfferAndWaitAsync(sender, shareId, original);
+        var seen = new List<ItemActivity>();
+        sender.ActivityChanged += () =>
+        {
+            if (sender.GetActivity().Shares.GetValueOrDefault(shareId) is { } activity)
+                lock (seen)
+                    seen.Add(activity);
+        };
+
+        var transferId = TransferId.New();
+        await receiver.ReceiveAsync(transferId, (await sender.GetInviteAsync(shareId))!);
+        var done = WhenFinished(receiver);
+        await receiver.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        Assert.True((await done.Task.WaitAsync(Timeout)).Done);
+        var until = DateTime.UtcNow + Timeout;
+        while (sender.GetActivity().Shares[shareId] is { Finished: 0 } or { Receivers: > 0 } && DateTime.UtcNow < until)
+            await Task.Delay(100);
+
+        var after = sender.GetActivity().Shares[shareId];
+        Assert.Equal(1, after.Finished);
+        Assert.Equal(0, after.Receivers);
+        List<ItemActivity> during;
+        lock (seen)
+            during = seen.Where(a => a.Receivers > 0).ToList();
+        Assert.NotEmpty(during);
+        Assert.All(during, a => Assert.Equal(1, a.Receivers));
+        Assert.Contains(during, a => a.ReceiversPercent is > 0 and < 100);
+        Assert.True(during.Select(a => a.ReceiversPercent).SequenceEqual(during.Select(a => a.ReceiversPercent).Order()), "progress only rises");
     }
 
     [Fact]

@@ -82,6 +82,9 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
     /// <summary>For tests: false makes this device refuse every incoming connection.</summary>
     internal bool AcceptIncoming { get; init; } = true;
 
+    /// <summary>For tests: bytes per second each item may send, so a transfer can be watched half way. 0 is no limit.</summary>
+    internal int SendRateLimit { get; init; }
+
     /// <summary>For tests: the router port mapping this engine uses.</summary>
     internal PortMapper? PortMapper => _portMapper;
 
@@ -108,7 +111,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         _engine = new ClientEngine(ToEngineSettings(_policy, _cacheFolder, AcceptIncoming), factories);
         _progressTimer = new Timer(_ => ReportProgress(), null, ProgressInterval, ProgressInterval);
         _reachabilityTimer = new Timer(_ => RaiseReachabilityChanged(), null, ReachabilityInterval, ReachabilityInterval);
-        _activityTimer = new Timer(_ => RaiseActivityChanged(), null, ActivityInterval, ActivityInterval);
+        _activityTimer = new Timer(_ => _ = TickActivityAsync(), null, ActivityInterval, ActivityInterval);
         NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
         return Task.CompletedTask;
     }
@@ -177,6 +180,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
     {
         AllowDht = _policy.AllowPublicLookup,
         AllowPeerExchange = _policy.AllowPeerExchange || (publicDownload && _policy.AllowServersInDownloadLinks),
+        MaximumUploadRate = SendRateLimit,
     }.ToSettings();
 
     public async Task StopAsync()
@@ -309,6 +313,15 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         public Task Work { get; set; } = Task.CompletedTask;
         public volatile TorrentManager? Manager;
         public volatile string? Invite;
+        /// <summary>Devices getting the file now, and their average percentage; refreshed each activity tick.</summary>
+        public volatile ReceiverCount Receivers = ReceiverCount.None;
+        /// <summary>Devices that got all of the file from this one, by their session id.</summary>
+        public readonly HashSet<string> Finished = [];
+    }
+
+    private sealed record ReceiverCount(int Count, int Percent)
+    {
+        public static ReceiverCount None { get; } = new(0, 0);
     }
 
     private sealed class Incoming(TransferId id, TorrentManager manager, string folder, IReadOnlyList<IPEndPoint> hints)

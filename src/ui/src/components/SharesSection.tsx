@@ -2,7 +2,7 @@ import { Check, Copy, Plus, Trash2, Upload } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { inviteMessage } from '../invite.ts'
 import type { Bridge, ErrorCode, ShareDto } from '../bridge/index.ts'
-import { formatSize, t } from '../i18n/index.ts'
+import { formatSize, formatTimeLeft, t } from '../i18n/index.ts'
 import { inOrder, type SortOrder } from '../order.ts'
 import { matches } from '../search.ts'
 import type { DetailsOf } from './DetailsWindow.tsx'
@@ -38,6 +38,33 @@ interface SharesSectionProps {
 }
 
 const tones: Record<ShareDto['status'], ChipTone> = { preparing: 'busy', ready: 'ok', unavailable: 'warn' }
+
+/** A ready share's chip and sentence say whether someone is getting it or has it (CAP-8). */
+function chipOf(share: ShareDto): string {
+  if (share.status === 'ready' && share.activity === 'sending')
+    return t('shares.chip.sending', { count: share.receiverCount })
+  if (share.status === 'ready' && share.activity === 'sent')
+    return share.finishedCount === 1 ? t('shares.chip.sentOnce') : t('shares.chip.sent', { count: share.finishedCount })
+  return t(`shares.chip.${share.status}`)
+}
+
+function noteOf(share: ShareDto): string | undefined {
+  if (share.status === 'ready' && share.activity === 'sending') {
+    const count = share.receiverCount
+    const parts = [
+      count === 1
+        ? t('shares.status.sendingOne', { percent: share.percent })
+        : t('shares.status.sending', { count, percent: share.percent }),
+    ]
+    if (share.secondsLeft !== null) parts.push(formatTimeLeft(share.secondsLeft))
+    return `${parts.join(' · ')}. ${t('shares.status.keepOpen')}`
+  }
+  if (share.status === 'ready' && share.activity === 'sent')
+    return share.finishedCount === 1
+      ? t('shares.status.sentOnce')
+      : t('shares.status.sent', { count: share.finishedCount })
+  return share.status === 'ready' ? undefined : t(`shares.status.${share.status}`)
+}
 
 export default function SharesSection(props: SharesSectionProps) {
   const {
@@ -130,21 +157,22 @@ export default function SharesSection(props: SharesSectionProps) {
         <ul className={`items items-${view}`} onKeyDown={moveBetweenItems}>
           {shown.map((share) => {
             const stoppedHere = stopped && share.status === 'ready'
+            const sending = share.status === 'ready' && share.activity === 'sending'
             return (
               <ItemView
                 key={share.id}
                 name={share.name}
                 size={formatSize(share.sizeBytes)}
-                tone={stoppedHere ? 'paused' : tones[share.status]}
-                chip={stoppedHere ? t('stopped.chip') : t(`shares.chip.${share.status}`)}
-                note={
-                  stoppedHere
-                    ? t('stopped.note')
-                    : share.status === 'ready'
-                      ? undefined
-                      : t(`shares.status.${share.status}`)
+                tone={stoppedHere ? 'paused' : sending ? 'busy' : tones[share.status]}
+                chip={stoppedHere ? t('stopped.chip') : chipOf(share)}
+                note={stoppedHere ? t('stopped.note') : noteOf(share)}
+                progress={
+                  share.status === 'preparing'
+                    ? 'unknown'
+                    : sending && !stoppedHere
+                      ? { value: share.percent, max: 100 }
+                      : undefined
                 }
-                progress={share.status === 'preparing' ? 'unknown' : undefined}
                 onDetails={() => onDetails({ kind: 'share', id: share.id, name: share.name })}
                 onMain={share.status === 'ready' ? () => copyInvite(share) : undefined}
                 onRemove={() => setRemoving(share)}

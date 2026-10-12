@@ -44,8 +44,10 @@ public sealed class AppServices
 			var opener = new ReceivedFolderOpener(_paths);
 			var received = new ReceivedUseCases(transfers, _paths, opener, new LocalFileSystem());
 			var thumbnails = new ThumbnailUseCases(shares, received, new WindowsThumbnails());
+			var sending = new SendingUseCases(_engine, shares);
 			var router = new BridgeRouter(
-				shares, transfers, settings, connection, Opened, activity, received, new NativeClipboard(), opener, thumbnails, Dropped);
+				shares, transfers, settings, connection, Opened, activity, received, new NativeClipboard(), opener, thumbnails, Dropped,
+				sending);
 
 			// Written at every start so a clicked link finds the app even after its folder moved.
 			LinkScheme.Register(executable);

@@ -80,14 +80,9 @@ public sealed record InvitePreview(InviteHints Hints, bool IsInvite, long? FreeB
     public bool NotEnoughSpace => Hints.SizeBytes is { } size && FreeBytes is { } free && size > free;
 }
 
-public sealed record TransferView(Transfer Transfer, TransferState State, long ReceivedBytes, long BytesPerSecond = 0)
-{
-    /// <summary>Roughly how long is left at the current speed, or null when it cannot be told.</summary>
-    public long? SecondsLeft =>
-        State == TransferState.Receiving && BytesPerSecond > 0 && Transfer.SizeBytes is { } size && size > ReceivedBytes
-            ? (long)Math.Ceiling((size - ReceivedBytes) / (double)BytesPerSecond)
-            : null;
-}
+/// <param name="SecondsLeft">Roughly how long is left, from a smoothed speed, or null when it cannot be told.</param>
+public sealed record TransferView(
+    Transfer Transfer, TransferState State, long ReceivedBytes, long BytesPerSecond = 0, long? SecondsLeft = null);
 
 /// <summary>
 /// The one place network behaviour is decided (AD-8). Only the engine adapter applies it.

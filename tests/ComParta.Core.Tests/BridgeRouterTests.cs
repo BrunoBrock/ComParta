@@ -20,19 +20,21 @@ public sealed class BridgeRouterTests
     private readonly OpenedInvites _opened = new();
     private readonly FakeThumbnails _thumbnails = new();
     private readonly DroppedFiles _dropped = new();
+    private readonly ManualClock _clock = new(new DateTimeOffset(2026, 10, 12, 10, 0, 0, TimeSpan.Zero));
     private readonly List<JsonElement> _events = [];
     private readonly BridgeRouter _router;
 
     public BridgeRouterTests()
     {
         var shares = new ShareUseCases(new FakeShareRepository(), _engine, _picker, _files);
-        var transfers = new TransferUseCases(new FakeTransferRepository(), _engine, picker: _picker, files: _files);
+        var transfers = new TransferUseCases(new FakeTransferRepository(), _engine, _clock, picker: _picker, files: _files);
         var settings = new SettingsUseCases(_settings, new FakeSystem("pt-BR"));
         var connection = new ConnectionUseCases(_engine, _firewall);
         var activity = new ActivityUseCases(_engine, _settings);
         var received = new ReceivedUseCases(transfers, new FakePaths(Path.GetTempPath()), _shell, _files);
         var thumbnails = new ThumbnailUseCases(shares, received, _thumbnails);
-        _router = new BridgeRouter(shares, transfers, settings, connection, _opened, activity, received, _shell, _shell, thumbnails, _dropped);
+        _router = new BridgeRouter(shares, transfers, settings, connection, _opened, activity, received, _shell, _shell, thumbnails, _dropped,
+            new SendingUseCases(_engine, shares, _clock));
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
         _picker.NextPick = Video;
@@ -190,10 +192,12 @@ public sealed class BridgeRouterTests
         var started = await InvokeAsync(Commands.TransfersReceive, new { invite = "invite:abc" });
         var id = started.GetProperty("value").GetProperty("id").GetString()!;
         _engine.Report(new ReceiveProgress(new TransferId(Guid.Parse(id)), "a.mp4", 1_000, 250, false, BytesPerSecond: 50));
+        _clock.Now += TimeSpan.FromSeconds(1);
+        _engine.Report(new ReceiveProgress(new TransferId(Guid.Parse(id)), "a.mp4", 1_000, 300, false, BytesPerSecond: 50));
 
         var receiving = (await InvokeAsync(Commands.TransfersList)).GetProperty("value")[0];
         Assert.Equal(50, receiving.GetProperty("bytesPerSecond").GetInt64());
-        Assert.Equal(15, receiving.GetProperty("secondsLeft").GetInt64());
+        Assert.Equal(14, receiving.GetProperty("secondsLeft").GetInt64());
 
         Assert.True((await InvokeAsync(Commands.TransfersPause, new { id })).GetProperty("ok").GetBoolean());
         var paused = (await InvokeAsync(Commands.TransfersList)).GetProperty("value")[0];
@@ -349,6 +353,34 @@ public sealed class BridgeRouterTests
         Assert.Single(_events, e => e.GetProperty("event").GetString() == Events.InvitesChanged);
         Assert.Equal(link, (await InvokeAsync(Commands.InvitesTakeOpened)).GetProperty("value").GetString());
         Assert.False((await InvokeAsync(Commands.InvitesTakeOpened)).TryGetProperty("value", out _));
+    }
+
+    [Fact]
+    public async Task A_share_says_how_many_devices_are_getting_it_and_how_many_finished()
+    {
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString()!;
+        var idle = (await InvokeAsync(Commands.SharesList)).GetProperty("value")[0];
+        Assert.Equal("idle", idle.GetProperty("activity").GetString());
+        Assert.Equal(JsonValueKind.Null, idle.GetProperty("secondsLeft").ValueKind);
+        ShareId.TryParse(id, out var shareId);
+
+        _engine.Move(EngineActivity.None with
+        {
+            Shares = new Dictionary<ShareId, ItemActivity> { [shareId] = new(0, 100, 1, 0, 2_250, Receivers: 1, ReceiversPercent: 45) },
+        });
+        var sending = _events.Last(e => e.GetProperty("event").GetString() == Events.SharesChanged).GetProperty("payload")[0];
+        Assert.Equal("sending", sending.GetProperty("activity").GetString());
+        Assert.Equal(1, sending.GetProperty("receiverCount").GetInt32());
+        Assert.Equal(45, sending.GetProperty("percent").GetInt32());
+
+        _engine.Move(EngineActivity.None with
+        {
+            Shares = new Dictionary<ShareId, ItemActivity> { [shareId] = new(0, 0, 0, 0, 5_000, Finished: 1) },
+        });
+        var sent = (await InvokeAsync(Commands.SharesList)).GetProperty("value")[0];
+        Assert.Equal("sent", sent.GetProperty("activity").GetString());
+        Assert.Equal(1, sent.GetProperty("finishedCount").GetInt32());
+        Assert.Equal(0, sent.GetProperty("receiverCount").GetInt32());
     }
 
     [Fact]
