@@ -16,6 +16,20 @@ public sealed class ReceivedNamesTests
     [InlineData("", "Received file")]
     [InlineData(null, "Received file")]
     [InlineData("tab\there.txt", "tab_here.txt")]
+    [InlineData("photo\u202Egpj.exe", "photogpj.exe")]
+    [InlineData("\u2067report\u2069.pdf\u200F", "report.pdf")]
+    [InlineData("holiday.jpg                                   .exe", "holiday.jpg .exe")]
+    [InlineData("film.mp4:hidden.exe", "film.mp4_hidden.exe")]
+    [InlineData("film.mp4::$DATA", "film.mp4__$DATA")]
+    [InlineData("CON .txt", "_CON .txt")]
+    [InlineData("com1.tar.gz", "_com1.tar.gz")]
+    [InlineData("LPT9", "_LPT9")]
+    [InlineData("COM¹.txt", "_COM¹.txt")]
+    [InlineData("CONOUT$", "_CONOUT$")]
+    [InlineData("CONSOLE.txt", "CONSOLE.txt")]
+    [InlineData("name. . .", "name")]
+    [InlineData("bell\u0007.txt", "bell_.txt")]
+    [InlineData("\u202E", "Received file")]
     public void Sanitize_gives_one_safe_name(string? received, string expected)
     {
         Assert.Equal(expected, ReceivedNames.Sanitize(received));
@@ -28,6 +42,39 @@ public sealed class ReceivedNamesTests
 
         Assert.Equal(150, name.Length);
         Assert.EndsWith(".mp4", name);
+    }
+
+    [Fact]
+    public void A_very_long_name_hiding_a_program_still_ends_with_its_real_extension()
+    {
+        var name = ReceivedNames.Sanitize("photo" + new string(' ', 10) + new string('a', 400) + ".jpg\u202E.exe");
+
+        Assert.EndsWith("a.exe", name);
+        Assert.False(name.Contains('\u202E'));
+        Assert.True(name.Length <= 150);
+    }
+
+    [Theory]
+    [InlineData("setup.exe", true)]
+    [InlineData("SETUP.EXE", true)]
+    [InlineData("run.bat", true)]
+    [InlineData("script.ps1", true)]
+    [InlineData("shortcut.lnk", true)]
+    [InlineData("disk.iso", true)]
+    [InlineData("budget.xlsm", true)]
+    [InlineData("page.html", true)]
+    [InlineData("photo\u202Egpj.exe", true)]
+    [InlineData("holiday.exe.", true)]
+    [InlineData("film.mp4", false)]
+    [InlineData("photo.jpg", false)]
+    [InlineData("budget.xlsx", false)]
+    [InlineData("letter.pdf", false)]
+    [InlineData("archive.zip", false)]
+    [InlineData("README", false)]
+    [InlineData(null, false)]
+    public void Programs_scripts_and_macro_documents_are_risky(string? name, bool risky)
+    {
+        Assert.Equal(risky, ReceivedNames.IsRisky(name));
     }
 
     [Fact]

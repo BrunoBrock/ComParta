@@ -60,7 +60,7 @@ public sealed partial class MonoTorrentTransferEngine
             return false;
         try
         {
-            return Torrent.TryLoad(content, out torrent!) && torrent is not null;
+            return Torrent.TryLoad(content, out torrent!) && torrent is not null && torrent.Files.Count <= MaxFiles;
         }
         catch (Exception)
         {
@@ -260,8 +260,14 @@ public sealed partial class MonoTorrentTransferEngine
     }
 
     /// <summary>
-    /// Stops a transfer whose metadata names a path outside its own folder. MonoTorrent refuses such
-    /// paths itself; this is the second check AD-6 asks for.
+    /// More files than any family sends at once. Content announcing more is refused, so hostile
+    /// metadata cannot flood the disk with entries (CAP-9).
+    /// </summary>
+    internal const int MaxFiles = 10_000;
+
+    /// <summary>
+    /// Stops a transfer whose metadata names a path outside its own folder, or more files than
+    /// <see cref="MaxFiles"/>. MonoTorrent refuses such paths itself; this is the second check AD-6 asks for.
     /// </summary>
     private bool CheckContained(Incoming incoming)
     {
@@ -269,7 +275,8 @@ public sealed partial class MonoTorrentTransferEngine
             return false;
         if (!incoming.Manager.HasMetadata)
             return true;
-        if (incoming.Manager.Files.All(f => ReceivedNames.IsInside(incoming.Folder, f.FullPath)))
+        if (incoming.Manager.Files.Count <= MaxFiles
+            && incoming.Manager.Files.All(f => ReceivedNames.IsInside(incoming.Folder, f.FullPath)))
             return true;
 
         incoming.Rejected = true;
