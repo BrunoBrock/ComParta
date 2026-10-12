@@ -20,7 +20,11 @@ A Portuguese-speaking relative uses ComParta entirely in their own language.
 
 ## Requirements
 
-To be completed when this epic is planned. The spec is the source: CAP-12 (Brazilian Portuguese).
+The spec is the source; stories cite its ids.
+
+- CAP-12: every string, error and invite message in pt-BR; the system language by default; a choice that survives restart; Brazilian formats.
+- CAP-4: the plain-language rule holds in both languages; the UX design's "Words" table fixes the Portuguese terms.
+- Decision P-1 (roadmap): this epic ships in R1, before the family pilot.
 
 ## Done when
 
@@ -43,4 +47,6 @@ The pt-BR catalog and language selection. Not other languages.
 ## Notes
 
 - Assumption: the app starts in the Windows display language when it is supported, English otherwise.
+- Plan 2026-10-10: moved forward to R1 (decision P-1). Settings are stored in the product database (architecture conventions); story 3 adds the first setting and the commands later settings reuse.
+- Hand-off: Bruno, or another native speaker, reviews the catalog in story 5.
 - Waits on epic-share-a-file because: it provides the translation catalog and the check that every string goes through it.

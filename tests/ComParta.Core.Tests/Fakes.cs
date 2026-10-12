@@ -29,6 +29,7 @@ internal sealed class FakeTransferRepository : ITransferRepository
 internal sealed class FakeEngine : ITransferEngine
 {
     public const string InvitePrefix = "invite:";
+    public const string DownloadFilePrefix = "download-file:";
 
     public event Action<ShareId, OfferState>? OfferChanged;
     public event Action<ReceiveProgress>? ReceiveProgressed;
@@ -37,6 +38,7 @@ internal sealed class FakeEngine : ITransferEngine
     public Dictionary<ShareId, string> Offered { get; } = [];
     public Dictionary<TransferId, string> Receiving { get; } = [];
     public List<TransferId> Stopped { get; } = [];
+    public HashSet<TransferId> Paused { get; } = [];
     public OfferState OfferOutcome { get; set; } = OfferState.Ready;
 
     public Task StartAsync(SharingPolicy policy, CancellationToken ct = default) { Policy = policy; return Task.CompletedTask; }
@@ -77,6 +79,25 @@ internal sealed class FakeEngine : ITransferEngine
         return Task.CompletedTask;
     }
 
+    public string? ReadDownloadFileKey(byte[] content)
+    {
+        var text = System.Text.Encoding.UTF8.GetString(content);
+        return text.StartsWith(DownloadFilePrefix, StringComparison.Ordinal) ? text[DownloadFilePrefix.Length..] : null;
+    }
+
+    public Task<bool> ReceiveFromFileAsync(TransferId id, byte[] content, CancellationToken ct = default)
+    {
+        var key = ReadDownloadFileKey(content);
+        if (key is null)
+            return Task.FromResult(false);
+        Receiving[id] = key;
+        return Task.FromResult(true);
+    }
+
+    public Task PauseReceivingAsync(TransferId id, CancellationToken ct = default) { Paused.Add(id); return Task.CompletedTask; }
+
+    public Task ContinueReceivingAsync(TransferId id, CancellationToken ct = default) { Paused.Remove(id); return Task.CompletedTask; }
+
     public void Report(ReceiveProgress progress) => ReceiveProgressed?.Invoke(progress);
 }
 
@@ -84,6 +105,7 @@ internal sealed class FakeFilePicker : IFilePicker
 {
     public string? NextPick { get; set; }
     public Task<string?> PickFileAsync(CancellationToken ct = default) => Task.FromResult(NextPick);
+    public Task<string?> PickDownloadFileAsync(CancellationToken ct = default) => Task.FromResult(NextPick);
 }
 
 /// <summary>Holds sizes only; it has no way to change, move or delete a file.</summary>
@@ -94,6 +116,13 @@ internal sealed class FakeFileSystem : IFileSystem
 
     public bool FileExists(string path) => Files.ContainsKey(path);
 
+    public Dictionary<string, byte[]> Contents { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public long GetReadableFileSize(string path) =>
         Locked.Contains(path) ? throw new UnauthorizedAccessException() : Files[path];
+
+    public byte[] ReadSmallFile(string path, int maxBytes) =>
+        Locked.Contains(path) || !Contents.TryGetValue(path, out var content) ? throw new UnauthorizedAccessException()
+        : content.Length > maxBytes ? throw new IOException()
+        : content;
 }

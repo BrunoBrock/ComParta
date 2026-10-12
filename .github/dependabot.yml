@@ -1,0 +1,26 @@
+# Weekly pull requests that keep packages and actions up to date, grouped so there are few of them.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      nuget:
+        patterns: ['*']
+
+  - package-ecosystem: npm
+    directory: /src/ui
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        patterns: ['*']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']

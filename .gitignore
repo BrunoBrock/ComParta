@@ -485,3 +485,7 @@ $RECYCLE.BIN/
 src/ComParta.App/Resources/Raw/wwwroot/
 publish/
 
+
+# Coverage reports
+src/ui/coverage/
+TestResults/

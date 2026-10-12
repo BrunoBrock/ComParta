@@ -20,15 +20,16 @@ A non-technical person can accept a file without risk to the rest of their compu
 
 ## Requirements
 
-To be completed when this epic is planned. The spec is the source: CAP-9 (safe handling of received content).
+The spec is the source: CAP-9 (safe handling of received content). AD-13 answers OQ-2: no AppContainer; received files get the Windows internet mark and the installed antivirus's check through the attachment services API; programs and scripts are flagged and open only after a second confirmation; nothing opens by itself.
 
 ## Done when
 
 1. A received item with a hostile name or path (for example `..\..\Windows\x.exe`) is stored inside the Received root.
 2. Nothing received is run or opened automatically.
-3. The chosen Windows sandbox mechanism is in place and a test shows the app cannot write outside its allowed folders.
-4. Received files carry whatever marking or scanning OQ-2 decides.
-5. The protection is present in the release build people install.
+3. Every finished received file carries the Windows "came from the internet" mark, and a file the antivirus blocks is shown as blocked and cannot be opened from ComParta.
+4. A received program or script shows a warning, and opening it asks a second time.
+5. A test receives hostile metadata (path traversal, reserved device names, alternate data streams, right-to-left override characters, thousands of files) and nothing lands outside the Received root or under a disguised name.
+6. The protection is present in the release build people install.
 
 ## Boundaries
 
@@ -42,5 +43,7 @@ Containment of received content on Windows. Not the receive flow itself (epic Se
 
 ## Notes
 
-- Open question: OQ-2, which Windows sandbox mechanism (MSIX AppContainer or app-level containment only) and whether received files are scanned or marked. Every story here waits on it. The MSIX option also affects epic Install and update.
+- OQ-2 answered 2026-10-10 by AD-13. Why not AppContainer: sharing in place (AD-6) needs read access to files wherever the person keeps them, which an AppContainer denies without broad file-system access that removes most of its benefit.
+- Waits on epic-drive-like-home because: the Open action this epic guards is built there (story 5).
+- Waits on epic-follow-a-transfer because: the `blocked` state is added there (story 3).
 - Waits on epic-send-to-a-person because: it provides the receive path that writes into the Received root.

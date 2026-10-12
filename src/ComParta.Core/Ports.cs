@@ -17,7 +17,8 @@ public interface ITransferRepository
 
 public enum OfferState { Preparing, Ready, Failed }
 
-public sealed record ReceiveProgress(TransferId Id, string? Name, long? SizeBytes, long ReceivedBytes, bool Done, bool Failed = false);
+public sealed record ReceiveProgress(
+    TransferId Id, string? Name, long? SizeBytes, long ReceivedBytes, bool Done, bool Failed = false, long BytesPerSecond = 0);
 
 /// <summary>
 /// The only way core reaches the transfer engine (AD-2). Invites are opaque text to core.
@@ -47,12 +48,23 @@ public interface ITransferEngine
     Task<bool> ResumeReceivingAsync(TransferId id, CancellationToken ct = default);
     /// <summary>Stops a transfer and deletes its unfinished data. A finished file is kept.</summary>
     Task StopReceivingAsync(TransferId id, CancellationToken ct = default);
+
+    /// <summary>A stable content key for the bytes of a download file, or null when they are not one.</summary>
+    string? ReadDownloadFileKey(byte[] content);
+    /// <summary>Starts receiving what a download file describes into the Received root. False when it is not one.</summary>
+    Task<bool> ReceiveFromFileAsync(TransferId id, byte[] content, CancellationToken ct = default);
+    /// <summary>Stops moving bytes for a transfer but keeps everything needed to continue it.</summary>
+    Task PauseReceivingAsync(TransferId id, CancellationToken ct = default);
+    /// <summary>Continues a paused transfer.</summary>
+    Task ContinueReceivingAsync(TransferId id, CancellationToken ct = default);
 }
 
 /// <summary>Opens the native file dialog (AD-7). Returns null when the person cancels.</summary>
 public interface IFilePicker
 {
     Task<string?> PickFileAsync(CancellationToken ct = default);
+    /// <summary>Opens the native file dialog showing only download files (AD-21).</summary>
+    Task<string?> PickDownloadFileAsync(CancellationToken ct = default);
 }
 
 public interface IClipboard
@@ -71,6 +83,8 @@ public interface IFileSystem
     bool FileExists(string path);
     /// <summary>Size in bytes; throws when the file cannot be read.</summary>
     long GetReadableFileSize(string path);
+    /// <summary>The whole content of a small file; throws when it cannot be read or is larger than <paramref name="maxBytes"/>.</summary>
+    byte[] ReadSmallFile(string path, int maxBytes);
 }
 
 public interface IAppPaths

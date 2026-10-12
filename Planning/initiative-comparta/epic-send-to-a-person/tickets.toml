@@ -1,72 +1,81 @@
 # Stories of epic-send-to-a-person, in build order.
-# The first version of this epic (invite, receive, transfers on one PC) was built on 2026-10-08 with epic-share-a-file; these stories are what is left.
+# Story 1 was built on 2026-10-08 together with epic-share-a-file (branch mvp-share-and-send).
 
 [[entry]]
 id = 1
 type = "story"
-title = "Engine: put the sender's public address in the invite"
-description = "Reads the address the router reports for its internet side (through Mono.Nat, already shipped with the engine; the address the public lookup network reports is the fallback) and lists it first among the invite's address hints (a receiver reads at most six) when it is a public address, without calling any third-party service."
-verify = "Engine tests with a fake router: the invite lists the public address first when the router reports one; it lists only local addresses when the router reports a private or shared-range address or none; the engine code makes no web request."
-covers = ["CAP-6"]
-after = ["1.6"]                # the engine adapter from epic-share-a-file
+title = "First version: copy an invite and receive the file"
+description = "Already built: `shares.copyInvite` copies the engine's invite text, `transfers.receive` starts receiving into the Received root with sanitised names, transfers resume after restart and can be cancelled or cleared, and `received.openFolder` opens the folder."
+verify = "Two copies on one PC with separate `COMPARTA_HOME` folders: a file shared in A and received in B is byte-identical; the engine test with two engines passes in CI."
+covers = ["CAP-6", "CAP-7"]
+after = ["1.10"]
 hitl = false
-risk = "medium"
-references = ["architecture-comparta/architecture-comparta.md#ad-2", "architecture-comparta/architecture-comparta.md#ad-8", "architecture-comparta/architecture-comparta.md#ad-9"]
+risk = "high"
 
 [[entry]]
 id = 2
 type = "story"
-title = "Core and bridge: whether the share can be reached from outside"
-description = "Adds to the core a reachability state (checking, reachable, not reachable), a way to read it and be told of changes on the engine port with a fake, and a bridge query, change event, DTO, generated types and fake-bridge support for it; copying an invite stays possible in every state."
-verify = "Core tests against the fake engine: the state starts as checking, follows the fake's changes, and an invite is still produced when it is not reachable; changing the DTO in C# changes the generated TypeScript; UI tests can read the state from the fake bridge."
-covers = ["CAP-6"]
-after = ["1.3", "1.4"]      # the bridge contract and the core ports from epic-share-a-file; touches core and contracts only, entry 1 touches the engine adapter
+title = "Invites become ComParta links"
+description = "Adds `InviteCodec` to core (AD-16): writes `comparta://receive/v1/<payload>` carrying the engine's opaque text and display hints (item name, total size, item count, sender name when set), finds a link anywhere inside pasted text, still accepts the first build's raw engine text, and rejects anything else with `invite.invalid`. `shares.copyInvite` and `transfers.receive` use it. Adds `InviteHintsDto` to the contract and the fake bridge."
+verify = "Core tests: round trip of a link; a link inside a WhatsApp-style message with emoji and line breaks is found; an old raw invite still works; random text and a link with a broken payload give `invite.invalid`; a hint name with `..\\` never reaches a file name. UI tests against the fake bridge still pass."
+covers = ["CAP-6", "CAP-7", "CAP-16"]
+after = [1]
 hitl = false
-risk = "low"
-references = ["architecture-comparta/architecture-comparta.md#ad-3", "architecture-comparta/architecture-comparta.md#ad-4", "architecture-comparta/architecture-comparta.md#ad-5", "architecture-comparta/architecture-comparta.md#ad-11", "architecture-comparta/architecture-comparta.md#ad-12"]
+risk = "medium"
+references = ["architecture-comparta/architecture-comparta.md#ad-16", "architecture-comparta/architecture-comparta.md#ad-5"]
 
 [[entry]]
 id = 3
 type = "story"
-title = "Engine: report whether the way in is open"
-description = "Makes the engine adapter report the reachability state from entry 2: checking while the router is asked, reachable when the router opened the port and the address read in entry 1 is public, and not reachable when the router refused or did not answer or the address is private or shared-range (carrier-grade NAT)."
-verify = "Engine tests with a fake router, one per case: opened with a public address is reachable; refused, silent, or opened with a 100.64.x.x address is not reachable; each change is raised to the core."
-covers = ["CAP-6"]
-after = [1, 2]              # same engine code as 1; implements the state and port member from 2
+title = "Copy a friendly invite message"
+description = "Changes Copy invite so the clipboard gets the message from the UX design ('Send a file, first time', step 3): who is sending (or 'Someone' with no name), the file name and size, where to get ComParta, and the link; the words come from the catalog in the current language. Adds `invite.message` keys to the catalog and the store link as a build-time constant. The button shows 'Copied' and a toast says what to do next."
+verify = "UI tests against the fake bridge: the copied text contains the name, the formatted size and the link, with and without a sender name; the plain-language guard passes on the new keys."
+covers = ["CAP-16", "CAP-4"]
+after = [2]
 hitl = false
-risk = "medium"
-references = ["architecture-comparta/architecture-comparta.md#ad-2", "architecture-comparta/architecture-comparta.md#ad-8"]
+risk = "low"
 
 [[entry]]
 id = 4
 type = "story"
-title = "UI: say whether the share can be reached from outside"
-description = "Shows the reachability state from entry 2 in plain words next to the copy-invite action; when it is not reachable the message says people outside the home network cannot get the file yet, people on the same network still can, and the router settings may need checking; it also says that anyone who gets the invite can download the file, so it goes only to the chosen person; every string comes from the translation catalog."
-verify = "In a browser against the fake bridge: each state shows its own message, a change event updates it without reload, the invite warning is shown, and the guard tests for banned terms and missing messages pass."
-covers = ["CAP-6"]
-after = [2, "1.7"]          # the state from 2; the shares screen from epic-share-a-file
+title = "Confirm before receiving"
+description = "Adds `transfers.preview { invite }`, which returns the invite's hints and the free space under the Received root (new `IAppPaths`-based free-space query in the shell), and the 'Get this file?' dialog from the UX design. Receiving starts only from the dialog. Not enough space disables the button and says how much to free (`disk.full`)."
+verify = "UI tests: pasting an invite shows name, size and sender labelled as from the invite; 'Not now' starts nothing; a size larger than the free space disables 'Get the file' and shows the amount; core tests for `transfers.preview` with fakes."
+covers = ["CAP-7", "CAP-16"]
+after = [2]
 hitl = false
 risk = "low"
-references = ["architecture-comparta/architecture-comparta.md#ad-5", "architecture-comparta/architecture-comparta.md#ad-11"]
 
 [[entry]]
 id = 5
 type = "story"
-title = "Check a transfer between two homes"
-description = "A person runs a release build on a Windows PC in each of two homes, sends a large video with an invite from one to the other, and compares what the sender's reachability line said with what happened, keeping a network capture of the transfer."
-verify = "The received file's checksum equals the original's; the receiver connected using only the invite; the sender's line matched the outcome; the capture lists no host except the other PC, the router and the public lookup network's entry nodes."
-covers = ["CAP-6", "CAP-7"]
-after = [1, 2, 3, 4, "1.10"] # "1.10" is the running app from epic-share-a-file
-hitl = true                 # a person in each home runs the build and the capture
-risk = "medium"
+title = "Paste an invite anywhere"
+description = "Ctrl+V anywhere in the window with an invite on the clipboard opens the confirmation; opening the receive dialog fills in an invite found on the clipboard and says so. The shell reads the clipboard only when the window gains focus or the person pastes, and passes the text to `InviteCodec`; nothing is kept."
+verify = "UI tests: a paste event with a message containing a link opens the confirmation; a paste with ordinary text does nothing. Manual on Windows: copy an invite from WhatsApp Desktop, focus ComParta, press Ctrl+V."
+covers = ["CAP-16"]
+after = [4]
+hitl = false
+risk = "low"
 
 [[entry]]
 id = 6
 type = "story"
-title = "Refactor sweep"
-description = "Cleans up what the epic's plans and deferred review findings name; scope is set when it starts and takes cleanup only."
-verify = "All tests and the Done when checks of the epic still pass after the cleanup."
-covers = []
-after = [1, 2, 3, 4, 5]
-hitl = false
+title = "One running copy, and opening an invite by clicking its link"
+description = "Registers the `comparta:` scheme for the app on Windows (the unpackaged build writes it per user; the MSIX declares it in the manifest). Makes ComParta a single running copy (AD-14): a second launch forwards its arguments to the first over a local named pipe and exits. A click on a link starts ComParta, or forwards the link to the running copy, which comes to the front with the confirmation open."
+verify = "Shell test: a second instance started with a link delivers it to the first and exits. Manual on Windows: clicking a `comparta://` link in Outlook, Gmail in Edge and WhatsApp Desktop opens the confirmation in the running app, or starts the app first; notes in this epic record which programs do not make the link clickable."
+covers = ["CAP-16"]
+after = [4]
+hitl = true                 # needs a person clicking links in real mail and chat programs
+risk = "medium"
+unknown = "Whether WhatsApp makes custom-scheme links clickable; if not, pasting stays the main way in."
+
+[[entry]]
+id = 7
+type = "story"
+title = "Network capture during a real transfer"
+description = "Runs one transfer between two PCs while capturing traffic, lists every remote address the app talked to, and classifies each one (the other PC, lookup-network nodes, local discovery, the home router's port mapping). Records the method and result in this epic's Notes."
+verify = "The capture shows no connection to any hosted service operated by the project or a third-party API (AD-9); the epic's Done when 5 is checked."
+covers = ["CAP-6", "CAP-7"]
+after = [1]
+hitl = true                 # a person runs the capture
 risk = "low"

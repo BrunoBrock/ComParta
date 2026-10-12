@@ -1,0 +1,126 @@
+# Stories of epic-android, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Android shell walking skeleton"
+description = "Adds the Android target to ComParta.App with the same `HybridWebView`, `BridgeHost` and core wiring, Android `IAppPaths`, and an in-memory engine stub; then swaps in the MonoTorrent adapter and checks it starts, listens and joins the lookup network on a phone. CI builds an APK on a Linux runner."
+verify = "On an Android emulator and one real phone the app shows the shares list through the bridge; the engine reports listening; CI uploads an APK artifact."
+covers = ["CAP-10"]
+after = ["11.1"]
+hitl = true                 # needs a real phone
+risk = "high"
+references = ["architecture-comparta/architecture-comparta.md#ad-1"]
+
+[[entry]]
+id = 2
+type = "story"
+title = "Share from a phone without file paths"
+description = "Adds `IContentSource` (AD-20) with the Windows implementation over paths and the Android one over content URIs with persisted read grants; a MonoTorrent piece writer that reads offered content through it; the Android `IFilePicker` using the system picker for one or several files and a folder (document tree)."
+verify = "Engine integration test on Windows through the new port still passes; on a phone, a picked video and a picked folder are offered and received by a PC byte-identical; after a phone restart the shares are still offered."
+covers = ["CAP-10", "CAP-19"]
+after = [1]
+hitl = true
+risk = "high"
+references = ["architecture-comparta/architecture-comparta.md#ad-20"]
+
+[[entry]]
+id = 3
+type = "story"
+title = "Received files on a phone"
+description = "Receives into the app's own storage, then publishes finished items to Downloads/ComParta through the media store so the Gallery and Files apps see them; Android `IContentOpener` opens an item with the right app through a content provider; reveal opens the Files app at the folder."
+verify = "On a phone: a photo received from a PC appears in the Gallery, opens from ComParta, and a received folder keeps its structure in Downloads/ComParta."
+covers = ["CAP-10", "CAP-14"]
+after = [1]
+hitl = true
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Phone layout"
+description = "Completes the UX design's phone layout: bottom navigation, floating action button with Share and Receive, details as a sheet, two-column grid, touch targets and the system back button closing sheets and dialogs before leaving the app."
+verify = "UI tests at 360 px wide; axe passes; manual on a phone with TalkBack: receive and share tasks complete."
+covers = ["CAP-10", "CAP-23"]
+after = ["8.2"]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 5
+type = "story"
+title = "ComParta in the phone's share menu"
+description = "Registers for single and multiple items shared from other apps; the Android `IIncomingItems` hands them to core, which shares them (several items become one collection, named by the person) and opens step 3 of the guided send so the person copies the invite right away."
+verify = "On a phone: sharing one photo and five photos from the Gallery to ComParta each make one share and show the invite step."
+covers = ["CAP-15", "CAP-10"]
+after = [2]
+hitl = true
+risk = "medium"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Open an invite tapped in a chat"
+description = "Adds an intent filter for `comparta://` links and for shared text containing one (from WhatsApp's share menu), both opening the 'Get this file?' confirmation; pasting still works."
+verify = "On a phone: tapping a link in Gmail opens the confirmation; sharing a WhatsApp message to ComParta opens it too."
+covers = ["CAP-16", "CAP-10"]
+after = [1, "2.4"]
+hitl = true
+risk = "medium"
+
+[[entry]]
+id = 7
+type = "story"
+title = "Keep going with the screen off"
+description = "Implements `IBackgroundPresence` on Android as a data-sync foreground service started when bytes start moving and stopped a minute after they stop, with a progress notification ('Sending Natal.mp4: 45 %') and a Stop action; asks for the notification permission with an explanation first; handles the Android 15 time limit by pausing and notifying."
+verify = "On a phone: a 1 GB transfer completes with the screen off; the notification shows progress; the service is gone a minute after; the time-out path is tested with a shortened limit in a debug build."
+covers = ["CAP-17", "CAP-10"]
+after = [1, "10.1"]
+hitl = true
+risk = "high"
+references = ["architecture-comparta/architecture-comparta.md#ad-14"]
+
+[[entry]]
+id = 8
+type = "story"
+title = "Ask before using mobile data"
+description = "Adds the `mobileData` setting (ask, allow, never; default ask). On a metered network a transfer over 50 MB asks once per transfer; 'never' waits for Wi-Fi with a plain state 'Waiting for Wi-Fi'."
+verify = "Core tests with a fake network-type port; manual on a phone with Wi-Fi off."
+covers = ["CAP-10"]
+after = [7]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 9
+type = "story"
+title = "Pass an invite with a QR code"
+description = "Shows an invite as a QR code in the details panel ('Show invite as QR code', both platforms); on Android, Receive offers 'Scan a QR code' using the camera (with permission asked only then)."
+verify = "UI test renders the QR for a fake invite; manual: a phone scans a PC's QR and the confirmation opens."
+covers = ["CAP-16"]
+after = [6]
+hitl = true
+risk = "low"
+
+[[entry]]
+id = 10
+type = "story"
+title = "Phone and PC field test"
+description = "Runs epic 9's matrix with phones: phone and PC on the same Wi-Fi, phone on mobile data and PC at home, two phones on mobile data; both directions; records results in epic 9's field-test file."
+verify = "The field-test file has the phone rows; failures have tickets or a note on what only a relay would fix."
+covers = ["CAP-10", "CAP-18"]
+after = [2, 3, 7, "9.2"]
+hitl = true
+risk = "medium"
+
+[[entry]]
+id = 11
+type = "story"
+title = "Publish on Google Play and GitHub"
+description = "Signs release builds with an upload key kept as a CI secret, publishes an AAB to Google Play (internal testing, then production) with the pt-BR and en listing and the data-safety form ('no data collected'), and attaches a signed APK to the GitHub Release."
+verify = "The app installs from the Play internal-testing link and from the APK on a second phone."
+covers = ["CAP-10", "CAP-11"]
+after = [10]
+hitl = true                 # Bruno's Play developer account
+risk = "medium"
+unknown = "Decision D-4: publish on Google Play."

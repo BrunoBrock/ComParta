@@ -1,0 +1,58 @@
+# Stories of epic-safe-received-content, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Hostile names cannot escape or disguise"
+description = "Extends the sanitising function in `ReceivedNames` and its tests: Windows reserved device names (CON, NUL, COM1…), alternate data stream colons, trailing dots and spaces, names over the path limit, control characters, and Unicode bidirectional overrides that make 'gpj.exe' look like 'exe.jpg' are all neutralised; the final name always keeps its real extension at the end."
+verify = "Core tests for each case; the existing traversal tests still pass."
+covers = ["CAP-9"]
+after = ["2.1"]
+hitl = false
+risk = "low"
+references = ["architecture-comparta/architecture-comparta.md#ad-6"]
+
+[[entry]]
+id = 2
+type = "story"
+title = "Hostile metadata end to end"
+description = "Adds an engine integration test where a crafted sender offers content whose metadata contains path traversal, absolute paths, reserved names and a very large file count, and checks that the receiver writes only inside the Received root, refuses over-limit metadata with `invite.tooLarge`, and never leaves partial data outside the hidden unfinished folder."
+verify = "The engine test passes in CI; a deliberately broken sanitiser makes it fail."
+covers = ["CAP-9"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Windows marks and checks every received file"
+description = "Adds `IReceivedFileGuard` in core (AD-13) and the Windows implementation calling `IAttachmentExecute` (Save with the sender described as 'ComParta') when a received item completes, which writes the internet mark and triggers the installed antivirus. A file the antivirus removes or blocks moves the transfer to `blocked`. The guard runs before the item shows as received."
+verify = "Core tests with a fake guard for pass and block; manual on Windows: a received file's Properties shows 'This file came from another computer', and the EICAR test file is reported blocked by Microsoft Defender."
+covers = ["CAP-9"]
+after = ["4.3"]
+hitl = false
+risk = "medium"
+references = ["architecture-comparta/architecture-comparta.md#ad-13"]
+
+[[entry]]
+id = 4
+type = "story"
+title = "Warn before opening a program"
+description = "Core holds one list of risky extensions (executables, installers, scripts, shortcuts, disk images, macro-enabled Office formats) and marks received items with `risky = true`. The UI shows the warning from the UX design on the item and its details; `received.open` on a risky item returns `received.confirmRisky` unless called with `confirmed`, and the UI asks a second time naming the sender."
+verify = "Core tests for the list and the two-step open; UI tests for the warning and both answers; the architecture guard checks that only `received.open` reaches `IContentOpener` for an item."
+covers = ["CAP-9"]
+after = ["8.5"]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Nothing opens by itself"
+description = "Adds an architecture guard test: the only call sites of `IContentOpener` and of any process start in the shell are the explicit open and reveal commands; and a review of notification click handlers (epic 4) confirms they open ComParta's details, never the file."
+verify = "The guard test fails when a new call to `Process.Start` or the opener is added elsewhere."
+covers = ["CAP-9"]
+after = [4]
+hitl = false
+risk = "low"

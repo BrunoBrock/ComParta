@@ -1,0 +1,57 @@
+# Stories of epic-brazilian-portuguese, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "A catalog per language with a completeness check"
+description = "Turns the single English catalog into one catalog per language with the same keys (English is the source type), adds a `t()` that takes the active language, formats numbers, sizes, dates and percentages with `Intl` for that language, and adds a test that fails when any language misses a key or has a key English does not."
+verify = "Vitest: deleting a key from a non-English catalog fails the test; sizes format as '1.2 GB' in en and '1,2 GB' in pt-BR; existing UI tests pass unchanged."
+covers = ["CAP-12"]
+after = ["1.12"]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Settings in the product database"
+description = "Adds a `Setting` key-value table to the SQLite store with a schema version bump, `ISettingsRepository` in core, the commands `settings.get` and `settings.set` and event `settings.changed` with a typed `SettingsDto` (language now; later stories add fields), the fake bridge and tests. The shell supplies the system language through `IAppPaths`' sibling `ISystemInfo`."
+verify = "Storage test: a setting survives a new repository instance and an older database upgrades; core tests for get and set; contract types regenerate."
+covers = ["CAP-12", "CAP-21"]
+after = []
+hitl = false
+risk = "low"
+references = ["architecture-comparta/architecture-comparta.md#ad-10"]
+
+[[entry]]
+id = 3
+type = "story"
+title = "Choose the language"
+description = "On start the UI reads `settings.get`; with no language set it uses the system language when there is a catalog for it, else English. A language menu (in the header until epic 12's Settings screen exists) changes it at once and stores it."
+verify = "UI tests against the fake bridge: system pt-BR starts in Portuguese; system fr starts in English; choosing English after Portuguese survives a reload of the fake."
+covers = ["CAP-12"]
+after = [1, 2]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 4
+type = "story"
+title = "The Brazilian Portuguese catalog"
+description = "Writes `pt-BR.ts` for every key, using the UX design's Words table, and extends the plain-language guard with Portuguese forbidden terms (semente, semear, par, pares, rastreador, enxame, torrent, magnet, hash, DHT, seed, peer)."
+verify = "The completeness test and the plain-language guard pass for pt-BR; adding 'semente' to the pt-BR catalog fails the guard."
+covers = ["CAP-12", "CAP-4"]
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Native speaker review"
+description = "Bruno or another native speaker reads every pt-BR string in the running app (and the invite message) and marks anything stiff or unclear; fixes go into the catalog. New keys added by later epics get the same review before each release."
+verify = "A review note in this epic lists the changes; the catalog is updated."
+covers = ["CAP-12"]
+after = [3, 4]
+hitl = true                 # a native speaker reads it
+risk = "low"

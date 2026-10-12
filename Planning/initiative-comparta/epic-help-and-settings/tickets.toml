@@ -1,0 +1,58 @@
+# Stories of epic-help-and-settings, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Settings page"
+description = "Adds the Settings page from the rail and header: language (moves the menu from epic 6 here), your name, start with Windows, received folder, theme (system, light, dark), guided send on or off, and About (version, open source link, licenses from epic 5 story 1 when they exist). Each control writes through `settings.set`."
+verify = "UI tests against the fake bridge: each control changes its setting and the value survives a reload of the fake; axe passes."
+covers = ["CAP-21"]
+after = ["6.3", "8.2"]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Choose where received files go"
+description = "Adds `settings.chooseReceivedFolder`, which opens the native folder picker (AD-7) and stores the folder; new transfers use it, running and finished ones stay where they are, and the page says so. `IAppPaths.ReceivedRoot` reads the setting; the sanitising and containment rules apply to the new root."
+verify = "Core tests: new transfers go to the new root, existing records keep theirs; containment tests pass with a changed root; manual on Windows with a folder on another drive."
+covers = ["CAP-21"]
+after = [1]
+hitl = false
+risk = "medium"
+references = ["architecture-comparta/architecture-comparta.md#ad-6", "architecture-comparta/architecture-comparta.md#ad-7"]
+
+[[entry]]
+id = 3
+type = "story"
+title = "First-run welcome"
+description = "Shows the UX design's three welcome cards, then the name and start-with-Windows form, then the note about Windows' network question, once per install (setting `welcomeDone`). Skip goes straight to the app with defaults."
+verify = "UI tests: a fresh fake shows the welcome; finishing or skipping stores `welcomeDone` and it does not show again; the chosen name appears in the invite message."
+covers = ["CAP-21"]
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Help page"
+description = "An offline Help page in the catalog answering: what ComParta does; does the other person need ComParta; where my files go; is my file copied or moved; why 'Looking for the other person's computer'; how long it takes; is it safe; can strangers find my files (honest AD-8 answer); how to stop sharing; how to get help (the report). Links to the connection help page."
+verify = "UI tests render every answer in en and pt-BR; the plain-language guard passes."
+covers = ["CAP-22", "CAP-4"]
+after = ["8.2"]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Copy a report for whoever helps you"
+description = "Adds `support.report`, which returns a plain-text report built in core: app version, Windows version, language, connection health and its facts, counts of shares and transfers by state, and the last 20 error codes with times from the local log. No file names, paths, invites or addresses. The Help page copies it with one button and shows exactly what was copied."
+verify = "Core tests: the report contains the facts and contains no name, path or invite from seeded data; UI test copies it."
+covers = ["CAP-22"]
+after = [4, "9.2"]
+hitl = false
+risk = "low"
+references = ["architecture-comparta/architecture-comparta.md#ad-9"]

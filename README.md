@@ -6,7 +6,8 @@ ComParta is a Windows desktop app for people who are not technical. You pick a f
 invite, and send the invite by email or chat. The other person pastes it into their ComParta and
 the file travels directly from your computer to theirs.
 
-The vision, spec and architecture are in [`Planning`](Planning/ReadMe.md).
+The vision, spec and architecture are in [`Planning`](Planning/ReadMe.md). To run it from this
+repository, see [Running ComParta locally](RUNNING.md).
 
 ## Using it
 

@@ -1,0 +1,57 @@
+# Stories of epic-download-any-link, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Download from a pasted link"
+description = "The receive box also takes a public download link. The engine keeps the servers the link names and allows address exchange for that transfer when `SharingPolicy.AllowServersInDownloadLinks` is on (AD-8 amended); ComParta invites keep the closed rules. The transfer survives a restart with the same rules."
+verify = "Engine tests: a link with servers keeps them under the default policy and loses them under the closed policy; a ComParta invite never keeps them. Core and UI tests for the receive flow still pass."
+covers = ["CAP-25"]
+after = ["2.1"]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Open a download file"
+description = "Adds `transfers.openFile`: the native picker filtered to download files (AD-7), core reads the small file through `IFileSystem` and hands the bytes to the engine (AD-21), which keeps a copy in its own folder to continue after a restart. A file that is not a download file gives `download.invalidFile`."
+verify = "Engine test: a download file made on one device is received on another; core tests for cancel, unreadable, invalid and duplicate; UI test for the button."
+covers = ["CAP-25"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Pause, continue, speed and time left"
+description = "Adds the `paused` state, `transfers.pause` and `transfers.resume`, a stored paused flag (database schema 2), and `bytesPerSecond` and `secondsLeft` on `TransferDto`. The screen shows speed and time left in plain words and Pause or Continue on each running transfer."
+verify = "Core tests: pause and continue, paused survives a restart, progress is ignored while paused; storage test upgrades schema 1; engine test pauses and continues a real transfer; UI tests for both buttons and the wording."
+covers = ["CAP-25", "CAP-8"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "More options: choose files, limit speed, stop sharing when finished"
+description = "A More options panel on each download: tick which files of a multi-file download to get, a download and upload speed limit for ComParta as a whole, and whether to keep sharing a finished download (default: keep while ComParta is open)."
+verify = "Set when refined."
+covers = ["CAP-25"]
+after = [3]
+hitl = false
+risk = "medium"
+refine = true
+
+[[entry]]
+id = 5
+type = "story"
+title = "Open download files and links from Windows and the browser"
+description = "Registers ComParta for download files and download links on Windows (the MSIX declares both), reusing the single running copy from epic 2 story 6; the receive dialog opens with the item filled in."
+verify = "Manual on Windows: double-clicking a download file and clicking a download link in Edge open the dialog in the running app."
+covers = ["CAP-25"]
+after = [2, "2.6"]
+hitl = true
+risk = "medium"

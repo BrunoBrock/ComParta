@@ -86,6 +86,22 @@ public sealed class BridgeRouter
                     ? ToResult(await _transfers.RemoveAsync(transferId))
                     : CommandResult.Failure(ErrorCodes.TransferNotFound);
 
+            case Commands.TransfersOpenFile:
+            {
+                var opened = await _transfers.OpenFileAsync();
+                return opened.Ok ? CommandResult.Success(opened.Value is null ? null : ToDto(opened.Value)) : Failure(opened.Error);
+            }
+
+            case Commands.TransfersPause:
+                return TransferId.TryParse(Args<IdArgs>(argsJson)?.Id, out var pauseId)
+                    ? ToResult(await _transfers.PauseAsync(pauseId))
+                    : CommandResult.Failure(ErrorCodes.TransferNotFound);
+
+            case Commands.TransfersResume:
+                return TransferId.TryParse(Args<IdArgs>(argsJson)?.Id, out var resumeId)
+                    ? ToResult(await _transfers.ContinueAsync(resumeId))
+                    : CommandResult.Failure(ErrorCodes.TransferNotFound);
+
             case Commands.ReceivedOpenFolder:
                 await _opener.OpenReceivedFolderAsync();
                 return CommandResult.Success(null);
@@ -130,10 +146,13 @@ public sealed class BridgeRouter
         view.State switch
         {
             TransferState.Receiving => TransferStateDto.Receiving,
+            TransferState.Paused => TransferStateDto.Paused,
             TransferState.Done => TransferStateDto.Done,
             TransferState.Failed => TransferStateDto.Failed,
             _ => TransferStateDto.Connecting,
-        });
+        },
+        view.BytesPerSecond,
+        view.SecondsLeft);
 
     public static string ToCode(ErrorKind error) => error switch
     {
@@ -144,6 +163,8 @@ public sealed class BridgeRouter
         ErrorKind.InviteInvalid => ErrorCodes.InviteInvalid,
         ErrorKind.TransferDuplicate => ErrorCodes.TransferDuplicate,
         ErrorKind.TransferNotFound => ErrorCodes.TransferNotFound,
+        ErrorKind.TransferFinished => ErrorCodes.TransferFinished,
+        ErrorKind.DownloadFileInvalid => ErrorCodes.DownloadInvalidFile,
         _ => ErrorCodes.Unexpected,
     };
 }

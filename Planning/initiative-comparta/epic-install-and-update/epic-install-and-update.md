@@ -20,7 +20,7 @@ A grandparent installs ComParta from a link a relative sent, without help.
 
 ## Requirements
 
-To be completed when this epic is planned. The spec is the source: CAP-11 (install and stay current).
+The spec is the source: CAP-11 (install and stay current). AD-17 answers most of OQ-4: an MSIX package through the Microsoft Store, which signs and updates it; the same build as a zip on GitHub Releases; no update check in the app; releases built only by CI from a tag. Decision D-1 (license) and D-2 (channel) are Bruno's.
 
 ## Done when
 
@@ -42,6 +42,8 @@ Windows packaging, signing and updates. Not Android distribution (epic Android).
 
 ## Notes
 
-- Open question: OQ-4, MSIX or installer, code signing, and how an update check fits AD-9. Every story here waits on it.
-- Open question: OQ-3, the open source license must be chosen before a public release.
+- OQ-4 answered in part by AD-17; the channel is decision D-2 (recommendation: Microsoft Store, free for individual developers since September 2025, plus a GitHub zip). Stories 3, 4 and 6 carry it as `unknown`.
+- OQ-3 is decision D-1 (recommendation: Apache-2.0); story 1 carries it as `unknown`.
+- Risk: an MSIX app's writes to `%LOCALAPPDATA%` are redirected to the package's own folder, so the pilot's unpackaged data would be invisible to the Store build; story 5 imports it.
+- Assumption: the Store's own listing needs a privacy statement URL; a file in the repository ("ComParta collects nothing") serves.
 - Waits on epic-share-a-file because: it provides the Windows app to package.

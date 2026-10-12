@@ -13,6 +13,18 @@ function Invoke-Step([string]$Name, [scriptblock]$Step) {
     if ($LASTEXITCODE -ne 0) { throw "$Name failed." }
 }
 
+$nodeVersion = [version](& node --version).TrimStart('v')
+$nodeOk = ($nodeVersion.Major -eq 20 -and $nodeVersion -ge [version]'20.19.0') -or
+          ($nodeVersion.Major -eq 22 -and $nodeVersion -ge [version]'22.12.0') -or
+          ($nodeVersion.Major -gt 22)
+if (-not $nodeOk) {
+    throw "Node $nodeVersion is too old. The UI needs Node 20.19+ or 22.12+ (install the LTS from https://nodejs.org)."
+}
+
+if (-not ((& dotnet workload list) -match 'maui')) {
+    throw "The .NET MAUI workload is not installed. Run this in an administrator PowerShell: dotnet workload install maui-windows"
+}
+
 Push-Location (Join-Path $root 'src\ui')
 try {
     if (-not (Test-Path 'node_modules')) { Invoke-Step 'Install UI packages' { npm ci } }
