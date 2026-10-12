@@ -500,9 +500,18 @@ public sealed class TwoDevicesTests : IAsyncLifetime
         var transferId = TransferId.New();
         await receiver.ReceiveAsync(transferId, (await sender.GetInviteAsync(shareId))!);
         var done = WhenFinished(receiver);
-        await receiver.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
-        Assert.True((await done.Task.WaitAsync(Timeout)).Done);
+        // Connected again every few seconds while it runs, as an invite's addresses are retried,
+        // because the limited sending makes this transfer take a while.
+        var senderAddress = new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port);
         var until = DateTime.UtcNow + Timeout;
+        while (!done.Task.IsCompleted && DateTime.UtcNow < until)
+        {
+            try { await receiver.ConnectAsync(transferId, senderAddress); }
+            catch (KeyNotFoundException) { /* finished meanwhile */ }
+            await Task.WhenAny(done.Task, Task.Delay(TimeSpan.FromSeconds(3)));
+        }
+        Assert.True((await done.Task.WaitAsync(Timeout)).Done);
+        until = DateTime.UtcNow + Timeout;
         while (sender.GetActivity().Shares[shareId] is { Finished: 0 } or { Receivers: > 0 } && DateTime.UtcNow < until)
             await Task.Delay(100);
 
