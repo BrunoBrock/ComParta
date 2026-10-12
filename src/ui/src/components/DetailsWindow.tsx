@@ -41,7 +41,7 @@ function transferRows(transfer: TransferDetailsDto, stopped: boolean): [MessageK
         percent: percentOf(transfer.receivedBytes, transfer.sizeBytes),
       })
     : t('details.unknown')
-  const finished = transfer.state === 'done' || transfer.state === 'failed'
+  const finished = ['done', 'failed', 'blocked'].includes(transfer.state)
   const state =
     stopped && !finished
       ? t('stopped.chip')

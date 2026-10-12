@@ -84,6 +84,7 @@ export const notSending = {
   percent: 0,
   finishedCount: 0,
   secondsLeft: null,
+  neededBytes: null,
 } as const
 
 /** Roughly what one ready share sends while someone is getting it, in the moving fake. */
@@ -178,13 +179,20 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
         received = Math.min(total, received + step)
         if (received >= total) {
           clearInterval(timer)
-          updateTransfer(id, { receivedBytes: total, state: 'done', bytesPerSecond: 0, secondsLeft: null })
+          updateTransfer(id, {
+            receivedBytes: total,
+            state: 'done',
+            bytesPerSecond: 0,
+            secondsLeft: null,
+            neededBytes: null,
+          })
         } else {
           updateTransfer(id, {
             receivedBytes: Math.round(received),
             state: 'receiving',
             bytesPerSecond,
             secondsLeft: Math.ceil((total - received) / bytesPerSecond),
+            neededBytes: null,
           })
         }
       }, stepMs)
@@ -209,6 +217,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       state: 'connecting',
       bytesPerSecond: 0,
       secondsLeft: null,
+      neededBytes: null,
       ...known,
     }
     transfers = [...transfers.filter((t) => t.id !== id), transfer]
@@ -221,7 +230,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     const transfer = transfers.find((t) => t.id === id)
     if (!transfer) return fail('transfer.notFound')
     if (transfer.state === 'done' || transfer.state === 'failed') return fail('transfer.finished')
-    if (paused) updateTransfer(id, { state: 'paused', bytesPerSecond: 0, secondsLeft: null })
+    if (paused) updateTransfer(id, { state: 'paused', bytesPerSecond: 0, secondsLeft: null, neededBytes: null })
     else if (transfer.state === 'paused') updateTransfer(id, { state: transfer.sizeBytes ? 'receiving' : 'connecting' })
     return ok(null)
   }

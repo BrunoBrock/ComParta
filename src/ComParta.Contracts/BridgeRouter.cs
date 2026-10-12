@@ -318,10 +318,14 @@ public sealed class BridgeRouter
             TransferState.Paused => TransferStateDto.Paused,
             TransferState.Done => TransferStateDto.Done,
             TransferState.Failed => TransferStateDto.Failed,
+            TransferState.Waiting => TransferStateDto.Waiting,
+            TransferState.NoSpace => TransferStateDto.NoSpace,
+            TransferState.Blocked => TransferStateDto.Blocked,
             _ => TransferStateDto.Connecting,
         },
         view.BytesPerSecond,
-        view.SecondsLeft);
+        view.SecondsLeft,
+        view.NeededBytes);
 
     public static SettingsDto ToDto(Settings settings) =>
         new(settings.Language, settings.SystemLanguage, settings.View, settings.Sort, settings.SendStepsSeen);

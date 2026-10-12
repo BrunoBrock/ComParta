@@ -55,6 +55,9 @@ const tones: Record<TransferDto['state'], ChipTone> = {
   paused: 'paused',
   done: 'ok',
   failed: 'warn',
+  waiting: 'warn',
+  noSpace: 'warn',
+  blocked: 'warn',
 }
 
 const percent = (transfer: TransferDto) => percentOf(transfer.receivedBytes, transfer.sizeBytes)
@@ -77,6 +80,10 @@ function describe(transfer: TransferDto): string {
     if (transfer.secondsLeft !== null) parts.push(formatTimeLeft(transfer.secondsLeft))
     return parts.join(' · ')
   }
+  if (state === 'noSpace')
+    return transfer.neededBytes === null
+      ? t('transfers.state.noSpaceUnknown')
+      : t('transfers.state.noSpace', { needed: formatSize(transfer.neededBytes) })
   return t(`transfers.state.${state}`)
 }
 
@@ -197,14 +204,15 @@ export default function TransfersSection(props: TransfersSectionProps) {
               const name = transfer.name ?? t('transfers.unnamed')
               const state = shownState(transfer)
               const finished = transfer.state === 'done'
-              const canPause = transfer.state === 'connecting' || transfer.state === 'receiving'
+              const canPause = ['connecting', 'receiving', 'waiting', 'noSpace'].includes(transfer.state)
               const paused = transfer.state === 'paused'
-              const stoppedHere = stopped && !finished && transfer.state !== 'failed'
+              const ended = transfer.state === 'failed' || transfer.state === 'blocked'
+              const stoppedHere = stopped && !finished && !ended
               const shownProgress = stoppedHere
                 ? transfer.sizeBytes
                   ? { value: transfer.receivedBytes, max: transfer.sizeBytes }
                   : undefined
-                : state === 'receiving' || (state === 'paused' && transfer.sizeBytes)
+                : state === 'receiving' || (['paused', 'waiting', 'noSpace'].includes(state) && transfer.sizeBytes)
                   ? { value: transfer.receivedBytes, max: transfer.sizeBytes! }
                   : state === 'connecting'
                     ? 'unknown'
@@ -224,7 +232,7 @@ export default function TransfersSection(props: TransfersSectionProps) {
                   // A running file is only cancelled with its own button; Delete never stops it by accident.
                   onRemove={() => {
                     if (finished) setDeleting({ id: transfer.id, name })
-                    else if (transfer.state === 'failed') void remove(transfer)
+                    else if (ended) void remove(transfer)
                   }}
                   actions={
                     <>
@@ -250,7 +258,7 @@ export default function TransfersSection(props: TransfersSectionProps) {
                           </button>
                         </>
                       )}
-                      {!stoppedHere && state === 'connecting' && stuck.has(transfer.id) && (
+                      {!stoppedHere && (state === 'connecting' || state === 'waiting') && stuck.has(transfer.id) && (
                         <button
                           type="button"
                           className="quiet"

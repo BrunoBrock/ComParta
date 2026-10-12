@@ -77,7 +77,7 @@ public static class ErrorCodes
 
 public enum ShareStatusDto { Preparing, Ready, Unavailable }
 
-public enum TransferStateDto { Connecting, Receiving, Paused, Done, Failed }
+public enum TransferStateDto { Connecting, Receiving, Paused, Done, Failed, Waiting, NoSpace, Blocked }
 
 public enum ThumbnailKindDto { Share, Transfer }
 
@@ -102,7 +102,8 @@ public enum ShareActivityDto { Idle, Sending, Sent }
 /// <param name="BytesPerSecond">Current speed while receiving, else 0.</param>
 /// <param name="SecondsLeft">Roughly how long is left, or null when it cannot be told.</param>
 public sealed record TransferDto(
-    string Id, string? Name, long? SizeBytes, long ReceivedBytes, TransferStateDto State, long BytesPerSecond, long? SecondsLeft);
+    string Id, string? Name, long? SizeBytes, long ReceivedBytes, TransferStateDto State, long BytesPerSecond, long? SecondsLeft,
+    long? NeededBytes);
 
 public sealed record IdArgs(string Id);
 

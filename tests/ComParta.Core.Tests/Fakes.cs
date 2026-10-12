@@ -134,7 +134,14 @@ internal sealed class FakeEngine : ITransferEngine
 
     public Task PauseReceivingAsync(TransferId id, CancellationToken ct = default) { Paused.Add(id); return Task.CompletedTask; }
 
-    public Task ContinueReceivingAsync(TransferId id, CancellationToken ct = default) { Paused.Remove(id); return Task.CompletedTask; }
+    public List<TransferId> Continued { get; } = [];
+
+    public Task ContinueReceivingAsync(TransferId id, CancellationToken ct = default)
+    {
+        Paused.Remove(id);
+        Continued.Add(id);
+        return Task.CompletedTask;
+    }
 
     public void Report(ReceiveProgress progress) => ReceiveProgressed?.Invoke(progress);
 }

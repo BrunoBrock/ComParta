@@ -23,6 +23,7 @@ describe('receiving from another person', () => {
     state: 'receiving',
     bytesPerSecond: 0,
     secondsLeft: null,
+    neededBytes: null,
   }
 
   it('shows the empty-state message when nothing is being received', async () => {

@@ -10,6 +10,7 @@ using MonoTorrent;
 using MonoTorrent.Client;
 using MonoTorrent.Connections;
 using MonoTorrent.Connections.Peer;
+using MonoTorrent.PieceWriter;
 
 [assembly: InternalsVisibleTo("ComParta.Engine.MonoTorrent.Tests")]
 
@@ -82,6 +83,9 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
     /// <summary>For tests: false makes this device refuse every incoming connection.</summary>
     internal bool AcceptIncoming { get; init; } = true;
 
+    /// <summary>For tests: wraps the disk writer, for example to stand for a full disk.</summary>
+    internal Func<IPieceWriter, IPieceWriter> WrapWriter { get; init; } = writer => writer;
+
     /// <summary>For tests: bytes per second each item may send, so a transfer can be watched half way. 0 is no limit.</summary>
     internal int SendRateLimit { get; init; }
 
@@ -100,6 +104,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         _portMapper.MappingsChanged += (_, _) => RaiseReachabilityChanged();
         var factories = Factories.Default
             .WithPortForwarderCreator(() => _portMapper)
+            .WithPieceWriterCreator(maxOpenFiles => WrapWriter(Factories.Default.CreatePieceWriter(maxOpenFiles)))
             .WithPeerConnectionListenerCreator(endPoint =>
             {
                 var listener = Factories.Default.CreatePeerConnectionListener(endPoint);
@@ -137,6 +142,8 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
             AutoSaveLoadFastResume = true,
             AutoSaveLoadMagnetLinkMetadata = true,
             CacheDirectory = cacheFolder,
+            // No write cache: on a full disk a cached part could count as written when it never was.
+            DiskCacheBytes = 0,
             ListenEndPoints = listen,
         };
         if (policy.RequireEncryption)

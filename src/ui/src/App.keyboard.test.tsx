@@ -15,6 +15,7 @@ const arrived: TransferDto = {
   state: 'done',
   bytesPerSecond: 0,
   secondsLeft: null,
+  neededBytes: null,
 }
 
 describe('using the files with the keyboard', () => {

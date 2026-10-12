@@ -20,6 +20,7 @@ describe('the speed bar', () => {
     state: 'receiving',
     bytesPerSecond: 2 * 1024 * 1024,
     secondsLeft: 250,
+    neededBytes: null,
   }
   const speedBar = () => screen.getByRole('region', { name: en['speed.label'] })
 
@@ -118,6 +119,7 @@ describe('the details of a file', () => {
     state: 'receiving',
     bytesPerSecond: 2 * 1024 * 1024,
     secondsLeft: 250,
+    neededBytes: null,
   }
   const row = (dialog: HTMLElement, label: string) =>
     within(dialog).getByText(label, { selector: 'dt' }).nextElementSibling?.textContent

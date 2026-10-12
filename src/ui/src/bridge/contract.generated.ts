@@ -4,7 +4,7 @@ export type ShareStatusDto = "preparing" | "ready" | "unavailable";
 
 export type ShareActivityDto = "idle" | "sending" | "sent";
 
-export type TransferStateDto = "connecting" | "receiving" | "paused" | "done" | "failed";
+export type TransferStateDto = "connecting" | "receiving" | "paused" | "done" | "failed" | "waiting" | "noSpace" | "blocked";
 
 export type ConnectionHealthDto = "good" | "limited" | "blocked";
 
@@ -41,6 +41,7 @@ export interface TransferDto {
   state: TransferStateDto;
   bytesPerSecond: number;
   secondsLeft: number | null;
+  neededBytes: number | null;
 }
 
 export interface ReceiveArgs {

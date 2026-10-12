@@ -120,6 +120,9 @@ export const ptBR: Catalog = {
   'transfers.chip.paused': 'Pausado',
   'transfers.chip.done': 'Recebido',
   'transfers.chip.failed': 'Não foi possível receber',
+  'transfers.chip.waiting': 'Esperando a outra pessoa',
+  'transfers.chip.noSpace': 'Sem espaço',
+  'transfers.chip.blocked': 'Bloqueado pelo seu antivírus',
   'transfers.state.connecting':
     'Procurando o computador da outra pessoa… Ela precisa estar com o ComParta aberto.',
   'transfers.state.receiving': 'Recebendo: {percent}% ({received} de {total})',
@@ -137,6 +140,11 @@ export const ptBR: Catalog = {
   'transfers.continueFor': 'Continuar {name}',
   'transfers.state.done': 'Recebido. Está na sua pasta do ComParta.',
   'transfers.state.failed': 'Não foi possível receber este arquivo. Tire-o da lista e peça um novo convite.',
+  'transfers.state.waiting':
+    'O outro computador não está respondendo. Peça para a outra pessoa abrir o ComParta. Ele continua sozinho.',
+  'transfers.state.noSpace': 'Este computador está sem espaço. Libere {needed} e ele continua.',
+  'transfers.state.noSpaceUnknown': 'Este computador está sem espaço. Libere algum espaço e ele continua.',
+  'transfers.state.blocked': 'Seu antivírus barrou este arquivo. O ComParta não vai abri-lo.',
   'transfers.cancel': 'Cancelar',
   'transfers.cancelFor': 'Cancelar o recebimento de {name}',
   'transfers.clear': 'Tirar da lista',

@@ -79,8 +79,10 @@ public sealed record EngineActivity(
     public static EngineActivity None { get; } = new(0, 0, new Dictionary<ShareId, ItemActivity>(), new Dictionary<TransferId, ItemActivity>());
 }
 
+/// <param name="NoSpace">Writing failed because the disk is full; the transfer is stopped until it is continued.</param>
 public sealed record ReceiveProgress(
-    TransferId Id, string? Name, long? SizeBytes, long ReceivedBytes, bool Done, bool Failed = false, long BytesPerSecond = 0);
+    TransferId Id, string? Name, long? SizeBytes, long ReceivedBytes, bool Done, bool Failed = false, long BytesPerSecond = 0,
+    bool NoSpace = false);
 
 /// <summary>
 /// The only way core reaches the transfer engine (AD-2). Invites are opaque text to core.
@@ -136,7 +138,7 @@ public interface ITransferEngine
     Task<bool> ReceiveFromFileAsync(TransferId id, byte[] content, CancellationToken ct = default);
     /// <summary>Stops moving bytes for a transfer but keeps everything needed to continue it.</summary>
     Task PauseReceivingAsync(TransferId id, CancellationToken ct = default);
-    /// <summary>Continues a paused transfer.</summary>
+    /// <summary>Continues a paused transfer, or one that stopped because the disk was full.</summary>
     Task ContinueReceivingAsync(TransferId id, CancellationToken ct = default);
 }
 

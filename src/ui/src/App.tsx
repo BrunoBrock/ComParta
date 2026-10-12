@@ -43,7 +43,9 @@ const stuckCheckMs = 30 * 1000
 
 /** Waiting for the other computer: still connecting, or "receiving" before the size is known. */
 const isWaiting = (transfer: TransferDto) =>
-  transfer.state === 'connecting' || (transfer.state === 'receiving' && !transfer.sizeBytes)
+  transfer.state === 'connecting' ||
+  transfer.state === 'waiting' ||
+  (transfer.state === 'receiving' && !transfer.sizeBytes)
 
 /**
  * The whole screen. Shares and transfers are a copy of what the app reports (AD-4): loaded once,

@@ -20,6 +20,7 @@ describe('downloading from a link or a download file', () => {
     state: 'receiving',
     bytesPerSecond: 2 * 1024 * 1024,
     secondsLeft: 250,
+    neededBytes: null,
   }
 
   it('starts a download when a download link is pasted', async () => {
