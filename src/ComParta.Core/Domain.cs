@@ -113,6 +113,17 @@ public sealed record SharingPolicy(
     public static SharingPolicy Closed { get; } = new(false, false, false, false, false, false, true, 0);
 }
 
+/// <summary>How well others can reach this computer, in the three states the person sees (AD-15).</summary>
+public enum ConnectionHealth
+{
+    /// <summary>Others can reach this computer.</summary>
+    Good,
+    /// <summary>Others may not reach it; a transfer works when the other computer can be reached.</summary>
+    Limited,
+    /// <summary>Nothing can reach this computer until something is changed on it.</summary>
+    Blocked,
+}
+
 public enum ErrorKind
 {
     ShareDuplicate,

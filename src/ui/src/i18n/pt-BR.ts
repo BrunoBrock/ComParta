@@ -98,6 +98,28 @@ export const ptBR: Catalog = {
   'transfers.clearFor': 'Tirar {name} da lista',
   'transfers.openFolder': 'Abrir meus arquivos recebidos',
 
+  'connection.good': 'Outros conseguem chegar a este computador',
+  'connection.limited': 'Conexão limitada',
+  'connection.blocked': 'Ninguém consegue chegar a este computador',
+  'connection.open': 'Conexão: {state}. O que isso quer dizer?',
+  'connection.title': 'Os outros conseguem chegar a este computador?',
+  'connection.state.good': 'Sim. Quem recebe seus arquivos consegue chegar a este computador, então eles vão direto.',
+  'connection.state.limited':
+    'Talvez não. Os arquivos chegam mesmo assim quando o outro computador pode ser alcançado, então quase sempre funciona.',
+  'connection.state.blocked':
+    'Não. O Windows não deixa outros computadores chegarem ao ComParta, então ninguém consegue pegar seus arquivos daqui.',
+  'connection.fix.blocked':
+    'Escolha “Abrir as configurações do Windows”. Na lista, escolha “Alterar configurações”, marque o ComParta e escolha OK.',
+  'connection.openSettings': 'Abrir as configurações do Windows',
+  'connection.tryHeading': 'O que tentar',
+  'connection.try.open': 'Veja se o ComParta está aberto nos dois computadores e se os dois estão na internet.',
+  'connection.try.later': 'Deixe os dois abertos por um tempo. O ComParta continua tentando sozinho.',
+  'connection.try.network':
+    'Se os dois computadores mostrarem “Conexão limitada”, um de vocês pode tentar de outra rede, como a internet compartilhada do celular.',
+  'connection.close': 'Fechar',
+  'transfers.help': 'O que posso fazer?',
+  'transfers.helpFor': 'O que posso fazer sobre {name}?',
+
   'error.share.duplicate': 'Você já está compartilhando este arquivo.',
   'error.share.notFound': 'Esse arquivo não está mais na sua lista.',
   'error.share.notReady': 'Este arquivo ainda está sendo preparado. Tente de novo daqui a pouco.',

@@ -34,6 +34,21 @@ public enum OfferState { Preparing, Ready, Failed }
 /// <summary>What the engine can tell from invite text alone: the name and size it announces.</summary>
 public sealed record InviteSummary(string? Name, long? SizeBytes);
 
+/// <summary>
+/// Neutral facts about whether other devices can reach this one (AD-15). The engine reports them;
+/// core turns them into <see cref="ConnectionHealth"/>. No code contacts a service to learn them.
+/// </summary>
+/// <param name="Listening">The app accepts incoming connections on its port.</param>
+/// <param name="PortMapped">The home router agreed to pass incoming connections to this computer.</param>
+/// <param name="MappedPort">The port the router opened, when it did.</param>
+/// <param name="GlobalIPv6">This computer has an address on the newer internet protocol that others can use directly.</param>
+/// <param name="LastIncomingAt">When another device last connected to this one, or null.</param>
+public sealed record ReachabilityFacts(
+    bool Listening, bool PortMapped, int? MappedPort, bool GlobalIPv6, DateTimeOffset? LastIncomingAt)
+{
+    public static ReachabilityFacts Unknown { get; } = new(false, false, null, false, null);
+}
+
 public sealed record ReceiveProgress(
     TransferId Id, string? Name, long? SizeBytes, long ReceivedBytes, bool Done, bool Failed = false, long BytesPerSecond = 0);
 
@@ -44,6 +59,11 @@ public interface ITransferEngine
 {
     event Action<ShareId, OfferState>? OfferChanged;
     event Action<ReceiveProgress>? ReceiveProgressed;
+    /// <summary>Raised when the reachability facts may have changed, and now and then while running.</summary>
+    event Action? ReachabilityChanged;
+
+    /// <summary>What the engine knows now about being reachable (AD-15).</summary>
+    ReachabilityFacts GetReachability();
 
     Task StartAsync(SharingPolicy policy, CancellationToken ct = default);
     Task StopAsync();
@@ -98,6 +118,15 @@ public interface IStorageInfo
 {
     /// <summary>Free bytes on the drive that holds the Received root, or null when it cannot be told.</summary>
     long? GetReceivedFreeBytes();
+}
+
+/// <summary>The operating system's firewall, as far as it concerns this app (AD-15).</summary>
+public interface IFirewall
+{
+    /// <summary>True when incoming connections to the app are allowed, false when blocked, null when not decided yet.</summary>
+    bool? AllowsIncoming();
+    /// <summary>Opens the system screen where the person can let the app through.</summary>
+    Task OpenSettingsAsync(CancellationToken ct = default);
 }
 
 /// <summary>Shows received content to the person with the platform's own file browser.</summary>

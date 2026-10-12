@@ -16,6 +16,8 @@ public sealed class BridgeRouterTests
     private readonly FakeFileSystem _files = new();
     private readonly FakeShell _shell = new();
     private readonly FakeSettingsRepository _settings = new();
+    private readonly FakeFirewall _firewall = new();
+    private readonly OpenedInvites _opened = new();
     private readonly List<JsonElement> _events = [];
     private readonly BridgeRouter _router;
 
@@ -24,7 +26,8 @@ public sealed class BridgeRouterTests
         var shares = new ShareUseCases(new FakeShareRepository(), _engine, _picker, _files);
         var transfers = new TransferUseCases(new FakeTransferRepository(), _engine, picker: _picker, files: _files);
         var settings = new SettingsUseCases(_settings, new FakeSystem("pt-BR"));
-        _router = new BridgeRouter(shares, transfers, settings, _shell, _shell);
+        var connection = new ConnectionUseCases(_engine, _firewall);
+        _router = new BridgeRouter(shares, transfers, settings, connection, _opened, _shell, _shell);
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
         _picker.NextPick = Video;
@@ -245,5 +248,40 @@ public sealed class BridgeRouterTests
         var changed = Assert.Single(_events, e => e.GetProperty("event").GetString() == Events.SettingsChanged);
         Assert.Equal("en", changed.GetProperty("payload").GetProperty("language").GetString());
         Assert.Equal(ErrorCodes.SettingsInvalid, ErrorCode(await InvokeAsync(Commands.SettingsSet, new { language = "../evil" })));
+    }
+
+    [Fact]
+    public async Task Connection_health_is_read_and_reported_when_it_changes()
+    {
+        _engine.Reachability = ReachabilityFacts.Unknown with { Listening = true };
+        var first = await InvokeAsync(Commands.ConnectionGet);
+        Assert.Equal("limited", first.GetProperty("value").GetProperty("health").GetString());
+
+        _engine.Reach(_engine.Reachability with { PortMapped = true, MappedPort = 40_000 });
+
+        var changed = Assert.Single(_events, e => e.GetProperty("event").GetString() == Events.ConnectionChanged);
+        Assert.Equal("good", changed.GetProperty("payload").GetProperty("health").GetString());
+
+        _firewall.Allows = false;
+        Assert.Equal("blocked", (await InvokeAsync(Commands.ConnectionGet)).GetProperty("value").GetProperty("health").GetString());
+    }
+
+    [Fact]
+    public async Task The_firewall_settings_open_on_request()
+    {
+        Assert.True((await InvokeAsync(Commands.ConnectionOpenSettings)).GetProperty("ok").GetBoolean());
+        Assert.Equal(1, _firewall.SettingsOpened);
+    }
+
+    [Fact]
+    public async Task An_invite_opened_from_outside_is_announced_and_taken_once()
+    {
+        var link = InviteCodec.Write(FakeEngine.InvitePrefix + "abc", InviteHints.None);
+
+        Assert.True(_opened.Open(["ComParta.exe", link]));
+
+        Assert.Single(_events, e => e.GetProperty("event").GetString() == Events.InvitesChanged);
+        Assert.Equal(link, (await InvokeAsync(Commands.InvitesTakeOpened)).GetProperty("value").GetString());
+        Assert.False((await InvokeAsync(Commands.InvitesTakeOpened)).TryGetProperty("value", out _));
     }
 }

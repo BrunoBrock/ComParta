@@ -33,6 +33,17 @@ internal sealed class FakeEngine : ITransferEngine
 
     public event Action<ShareId, OfferState>? OfferChanged;
     public event Action<ReceiveProgress>? ReceiveProgressed;
+    public event Action? ReachabilityChanged;
+
+    public ReachabilityFacts Reachability { get; set; } = ReachabilityFacts.Unknown with { Listening = true };
+    public ReachabilityFacts GetReachability() => Reachability;
+
+    /// <summary>Sets new facts and tells whoever listens, as the real engine does.</summary>
+    public void Reach(ReachabilityFacts facts)
+    {
+        Reachability = facts;
+        ReachabilityChanged?.Invoke();
+    }
 
     public SharingPolicy? Policy { get; private set; }
     public Dictionary<ShareId, string> Offered { get; } = [];
@@ -154,4 +165,19 @@ internal sealed class FakeSettingsRepository : ISettingsRepository
 internal sealed class FakeSystem(string uiLanguage) : ISystemInfo
 {
     public string UiLanguage { get; } = uiLanguage;
+}
+
+internal sealed class FakeFirewall : IFirewall
+{
+    public bool? Allows { get; set; }
+    public int SettingsOpened { get; private set; }
+    public bool? AllowsIncoming() => Allows;
+    public Task OpenSettingsAsync(CancellationToken ct = default) { SettingsOpened++; return Task.CompletedTask; }
+}
+
+/// <summary>A clock the test moves by hand.</summary>
+internal sealed class ManualClock(DateTimeOffset start) : TimeProvider
+{
+    public DateTimeOffset Now { get; set; } = start;
+    public override DateTimeOffset GetUtcNow() => Now;
 }

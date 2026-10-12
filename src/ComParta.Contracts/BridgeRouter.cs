@@ -15,20 +15,32 @@ public sealed class BridgeRouter
     private readonly ShareUseCases _shares;
     private readonly TransferUseCases _transfers;
     private readonly SettingsUseCases _settings;
+    private readonly ConnectionUseCases _connection;
+    private readonly OpenedInvites _opened;
     private readonly IClipboard _clipboard;
     private readonly IContentOpener _opener;
 
     public BridgeRouter(
-        ShareUseCases shares, TransferUseCases transfers, SettingsUseCases settings, IClipboard clipboard, IContentOpener opener)
+        ShareUseCases shares,
+        TransferUseCases transfers,
+        SettingsUseCases settings,
+        ConnectionUseCases connection,
+        OpenedInvites opened,
+        IClipboard clipboard,
+        IContentOpener opener)
     {
         _shares = shares;
         _transfers = transfers;
         _settings = settings;
+        _connection = connection;
+        _opened = opened;
         _clipboard = clipboard;
         _opener = opener;
         _shares.Changed += () => Raise(Events.SharesChanged, _shares.Current().Select(ToDto).ToArray());
         _transfers.Changed += () => Raise(Events.TransfersChanged, _transfers.List().Select(ToDto).ToArray());
         _settings.Changed += () => _ = RaiseSettingsAsync();
+        _connection.Changed += health => Raise(Events.ConnectionChanged, ToDto(health));
+        _opened.Opened += () => Raise(Events.InvitesChanged, true);
     }
 
     /// <summary>An event envelope as JSON, ready to be sent to the UI.</summary>
@@ -128,6 +140,16 @@ public sealed class BridgeRouter
             case Commands.SettingsSet:
                 return ToResult(await _settings.SetLanguageAsync(Args<SetSettingsArgs>(argsJson)?.Language));
 
+            case Commands.ConnectionGet:
+                return CommandResult.Success(ToDto(_connection.Refresh()));
+
+            case Commands.ConnectionOpenSettings:
+                await _connection.OpenSettingsAsync();
+                return CommandResult.Success(null);
+
+            case Commands.InvitesTakeOpened:
+                return CommandResult.Success(_opened.Take());
+
             default:
                 return CommandResult.Failure(ErrorCodes.Unexpected);
         }
@@ -189,6 +211,13 @@ public sealed class BridgeRouter
         view.SecondsLeft);
 
     public static SettingsDto ToDto(Settings settings) => new(settings.Language, settings.SystemLanguage);
+
+    public static ConnectionDto ToDto(ConnectionHealth health) => new(health switch
+    {
+        ConnectionHealth.Good => ConnectionHealthDto.Good,
+        ConnectionHealth.Blocked => ConnectionHealthDto.Blocked,
+        _ => ConnectionHealthDto.Limited,
+    });
 
     public static InvitePreviewDto ToDto(InvitePreview preview) => new(
         preview.Hints.SenderName,

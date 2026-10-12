@@ -9,6 +9,7 @@ using ComParta.Core.Ports;
 using MonoTorrent;
 using MonoTorrent.Client;
 using MonoTorrent.Connections;
+using MonoTorrent.Connections.Peer;
 
 [assembly: InternalsVisibleTo("ComParta.Engine.MonoTorrent.Tests")]
 
@@ -24,6 +25,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
 {
     private static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan HintRetryInterval = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan ReachabilityInterval = TimeSpan.FromSeconds(30);
 
     // The magnet-link parameter for "a peer address to try directly" (BEP 9).
     private const string AddressHint = "x.pe";
@@ -39,13 +41,23 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
     private readonly string _inProgressRoot;
     private readonly ConcurrentDictionary<ShareId, Offer> _offers = new();
     private readonly ConcurrentDictionary<TransferId, Incoming> _incoming = new();
+    private readonly List<IPeerConnectionListener> _listeners = [];
+    private readonly INatDiscovery _natDiscovery;
     private ClientEngine? _engine;
+    private PortMapper? _portMapper;
     private SharingPolicy _policy = SharingPolicy.Closed;
     private Timer? _progressTimer;
+    private Timer? _reachabilityTimer;
     private int _reporting;
+    private long _lastIncomingTicks;
 
-    public MonoTorrentTransferEngine(IAppPaths paths)
+    public MonoTorrentTransferEngine(IAppPaths paths) : this(paths, new MonoNatDiscovery())
     {
+    }
+
+    internal MonoTorrentTransferEngine(IAppPaths paths, INatDiscovery natDiscovery)
+    {
+        _natDiscovery = natDiscovery;
         _sharesFolder = Path.Combine(paths.EngineRoot, "shares");
         _transfersFolder = Path.Combine(paths.EngineRoot, "transfers");
         _cacheFolder = Path.Combine(paths.EngineRoot, "cache");
@@ -56,9 +68,16 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
 
     public event Action<ShareId, OfferState>? OfferChanged;
     public event Action<ReceiveProgress>? ReceiveProgressed;
+    public event Action? ReachabilityChanged;
 
     /// <summary>The endpoint this engine was told to accept connections on. For tests.</summary>
     internal IPEndPoint? ListenEndPoint => _engine?.Settings.ListenEndPoints.Values.FirstOrDefault();
+
+    /// <summary>For tests: false makes this device refuse every incoming connection.</summary>
+    internal bool AcceptIncoming { get; init; } = true;
+
+    /// <summary>For tests: the router port mapping this engine uses.</summary>
+    internal PortMapper? PortMapper => _portMapper;
 
     public Task StartAsync(SharingPolicy policy, CancellationToken ct = default)
     {
@@ -68,14 +87,37 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
 
         // A port of 0 means "choose one and keep it", so invites given out earlier stay good.
         _policy = policy.ListenPort == 0 ? policy with { ListenPort = LoadOrChoosePort() } : policy;
-        _engine = new ClientEngine(ToEngineSettings(_policy, _cacheFolder));
+        _portMapper = new PortMapper(_natDiscovery, _policy.AllowPortForwarding);
+        _portMapper.MappingsChanged += (_, _) => RaiseReachabilityChanged();
+        var factories = Factories.Default
+            .WithPortForwarderCreator(() => _portMapper)
+            .WithPeerConnectionListenerCreator(endPoint =>
+            {
+                var listener = Factories.Default.CreatePeerConnectionListener(endPoint);
+                listener.StatusChanged += (_, _) => RaiseReachabilityChanged();
+                lock (_listeners)
+                    _listeners.Add(listener);
+                return listener;
+            });
+        _engine = new ClientEngine(ToEngineSettings(_policy, _cacheFolder, AcceptIncoming), factories);
         _progressTimer = new Timer(_ => ReportProgress(), null, ProgressInterval, ProgressInterval);
+        _reachabilityTimer = new Timer(_ => RaiseReachabilityChanged(), null, ReachabilityInterval, ReachabilityInterval);
+        NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
         return Task.CompletedTask;
     }
 
     /// <summary>The only place network options are set, and only from the policy (AD-8).</summary>
-    internal static EngineSettings ToEngineSettings(SharingPolicy policy, string cacheFolder)
+    /// <param name="acceptIncoming">False only in tests, to stand for a computer nobody can reach.</param>
+    internal static EngineSettings ToEngineSettings(SharingPolicy policy, string cacheFolder, bool acceptIncoming = true)
     {
+        // Incoming connections are accepted on both internet protocols (AD-15).
+        var listen = new Dictionary<string, IPEndPoint>();
+        if (acceptIncoming)
+        {
+            listen["ipv4"] = new IPEndPoint(IPAddress.Any, policy.ListenPort);
+            if (Socket.OSSupportsIPv6)
+                listen["ipv6"] = new IPEndPoint(IPAddress.IPv6Any, policy.ListenPort);
+        }
         var builder = new EngineSettingsBuilder
         {
             AllowLocalPeerDiscovery = policy.AllowLocalDiscovery,
@@ -85,7 +127,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
             AutoSaveLoadFastResume = true,
             AutoSaveLoadMagnetLinkMetadata = true,
             CacheDirectory = cacheFolder,
-            ListenEndPoints = new Dictionary<string, IPEndPoint> { ["ipv4"] = new IPEndPoint(IPAddress.Any, policy.ListenPort) },
+            ListenEndPoints = listen,
         };
         if (policy.RequireEncryption)
             builder.AllowedEncryption = [EncryptionType.RC4Full, EncryptionType.RC4Header];
@@ -132,10 +174,16 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
 
     public async Task StopAsync()
     {
+        NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged;
         if (_progressTimer is { } timer)
         {
             _progressTimer = null;
             await timer.DisposeAsync();
+        }
+        if (_reachabilityTimer is { } reachabilityTimer)
+        {
+            _reachabilityTimer = null;
+            await reachabilityTimer.DisposeAsync();
         }
         foreach (var offer in _offers.Values)
             offer.Cancel.Cancel();
@@ -146,6 +194,16 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
             catch (Exception) { /* shutting down anyway */ }
             engine.Dispose();
         }
+        if (_portMapper is { } portMapper)
+        {
+            // Takes the router mapping away again, so nothing stays open after the app quits.
+            try { await portMapper.StopAsync(removeExisting: true, CancellationToken.None); }
+            catch (Exception) { /* the router lets it expire */ }
+            portMapper.Dispose();
+            _portMapper = null;
+        }
+        lock (_listeners)
+            _listeners.Clear();
         _offers.Clear();
         _incoming.Clear();
     }
@@ -180,6 +238,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
 
                 // The save directory is the folder the file already sits in, so it is read where it is (AD-6).
                 var manager = await engine.AddAsync(torrent, Path.GetDirectoryName(offer.FilePath)!, ToTorrentSettings());
+                WatchIncoming(manager);
                 offer.Manager = manager;
                 await manager.HashCheckAsync(false);
                 offer.Cancel.Token.ThrowIfCancellationRequested();
@@ -252,20 +311,100 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
         // The addresses are read now, not when the share was added: a laptop changes networks.
         if (_policy.AllowAddressInInvite)
         {
-            foreach (var address in LocalAddresses())
-                invite += $"&{AddressHint}={address}:{_policy.ListenPort}";
+            foreach (var endPoint in InviteAddresses())
+                invite += $"&{AddressHint}={endPoint}";
         }
         return Task.FromResult<string?>(invite);
     }
 
-    private static IEnumerable<IPAddress> LocalAddresses() =>
-        NetworkInterface.GetAllNetworkInterfaces()
-            .Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-            .SelectMany(n => n.GetIPProperties().UnicastAddresses)
-            .Select(a => a.Address)
+    /// <summary>
+    /// Every address this computer has good reason to think others can use, best first: the one the
+    /// router opened, then addresses on the newer internet protocol, then ones on the home network (AD-15).
+    /// </summary>
+    internal IEnumerable<IPEndPoint> InviteAddresses()
+    {
+        var found = new List<IPEndPoint>();
+        if (_portMapper is { ExternalAddress: { } external } mapper && mapper.MappedPort(_policy.ListenPort) is { } mappedPort)
+            found.Add(new IPEndPoint(external, mappedPort));
+        if (AcceptIncoming && Socket.OSSupportsIPv6)
+            found.AddRange(GlobalIPv6Addresses().Select(a => new IPEndPoint(a, _policy.ListenPort)));
+        found.AddRange(LocalIPv4Addresses().Select(a => new IPEndPoint(a, _policy.ListenPort)));
+        return found.Distinct().Take(MaxAddressHints);
+    }
+
+    private static IEnumerable<IPAddress> UpAddresses()
+    {
+        try
+        {
+            return NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == OperationalStatus.Up && n.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+                .Select(a => a.Address)
+                .ToList();
+        }
+        catch (NetworkInformationException)
+        {
+            return [];
+        }
+    }
+
+    private static IEnumerable<IPAddress> LocalIPv4Addresses() =>
+        UpAddresses()
             .Where(a => a.AddressFamily == AddressFamily.InterNetwork && !a.ToString().StartsWith("169.254.", StringComparison.Ordinal))
-            .Distinct()
-            .Take(MaxAddressHints);
+            .Distinct();
+
+    /// <summary>Addresses on the newer internet protocol that reach this computer from anywhere.</summary>
+    internal static IEnumerable<IPAddress> GlobalIPv6Addresses() => UpAddresses().Where(IsGlobalIPv6).Distinct();
+
+    internal static bool IsGlobalIPv6(IPAddress address)
+    {
+        if (address.AddressFamily != AddressFamily.InterNetworkV6
+            || address.IsIPv6LinkLocal || address.IsIPv6SiteLocal || address.IsIPv6Multicast
+            || address.IsIPv6Teredo || address.IsIPv4MappedToIPv6 || IPAddress.IsLoopback(address))
+            return false;
+        var bytes = address.GetAddressBytes();
+        // Global unicast is 2000::/3; that leaves out unique local addresses (fc00::/7) and the rest.
+        return (bytes[0] & 0xE0) == 0x20;
+    }
+
+    // ---- Reachability ---------------------------------------------------------------------
+
+    public ReachabilityFacts GetReachability()
+    {
+        // MonoTorrent opens its listeners only while something is shared or received, so an idle
+        // engine counts as listening unless every listener it opened found its port taken.
+        bool listening;
+        lock (_listeners)
+        {
+            listening = _engine is { } engine && engine.Settings.ListenEndPoints.Count > 0
+                && (_listeners.Count == 0 || _listeners.Any(l => l.Status != ListenerStatus.PortNotFree));
+        }
+        var mappedPort = _portMapper?.MappedPort(_policy.ListenPort);
+        var lastIncoming = Interlocked.Read(ref _lastIncomingTicks);
+        return new ReachabilityFacts(
+            Listening: listening,
+            PortMapped: mappedPort is not null,
+            MappedPort: mappedPort,
+            GlobalIPv6: AcceptIncoming && Socket.OSSupportsIPv6 && GlobalIPv6Addresses().Any(),
+            LastIncomingAt: lastIncoming == 0 ? null : new DateTimeOffset(lastIncoming, TimeSpan.Zero));
+    }
+
+    private void WatchIncoming(TorrentManager manager) =>
+        manager.PeerConnected += (_, e) =>
+        {
+            if (e.Direction != Direction.Incoming)
+                return;
+            Interlocked.Exchange(ref _lastIncomingTicks, DateTimeOffset.UtcNow.UtcTicks);
+            RaiseReachabilityChanged();
+        };
+
+    private void OnNetworkAddressChanged(object? sender, EventArgs e) => RaiseReachabilityChanged();
+
+    private void RaiseReachabilityChanged()
+    {
+        try { ReachabilityChanged?.Invoke(); }
+        catch (Exception) { /* a listener's problem must not stop the engine */ }
+    }
 
     // ---- Receiving ------------------------------------------------------------------------
 
@@ -381,6 +520,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
             File.SetAttributes(_inProgressRoot, File.GetAttributes(_inProgressRoot) | FileAttributes.Hidden);
 
             var manager = await add(_engine!, folder);
+            WatchIncoming(manager);
             var incoming = new Incoming(id, manager, folder, hints);
             _incoming[id] = incoming;
             manager.TorrentStateChanged += (_, _) => CheckContained(incoming);
@@ -408,8 +548,16 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
     }
 
     /// <summary>For tests: connect a transfer straight to another engine instead of discovering it.</summary>
-    internal Task ConnectAsync(TransferId id, IPEndPoint other) =>
-        _incoming[id].Manager.AddPeerAsync(new PeerInfo(new Uri($"ipv4://{other}")));
+    internal Task ConnectAsync(TransferId id, IPEndPoint other) => _incoming[id].Manager.AddPeerAsync(ToPeerInfo(other));
+
+    /// <summary>
+    /// For tests: the sharing side connects out to a receiver, as it does when the lookup network
+    /// tells it where a receiver is. This is how a transfer works when only the receiver is reachable.
+    /// </summary>
+    internal Task ConnectOfferAsync(ShareId id, IPEndPoint receiver) => _offers[id].Manager!.AddPeerAsync(ToPeerInfo(receiver));
+
+    private static PeerInfo ToPeerInfo(IPEndPoint endPoint) =>
+        new(new Uri($"{(endPoint.AddressFamily == AddressFamily.InterNetworkV6 ? "ipv6" : "ipv4")}://{endPoint}"));
 
     /// <summary>Tries the addresses the invite carried, again and again while nothing is connected.</summary>
     private static async Task TryHintsAsync(Incoming incoming)
@@ -417,7 +565,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
         incoming.HintsTriedAt = Environment.TickCount64;
         foreach (var hint in incoming.Hints)
         {
-            try { await incoming.Manager.AddPeerAsync(new PeerInfo(new Uri($"ipv4://{hint}"))); }
+            try { await incoming.Manager.AddPeerAsync(ToPeerInfo(hint)); }
             catch (Exception) { /* discovery may still find the other device */ }
         }
     }
@@ -556,7 +704,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
             {
                 if (found.Count < MaxAddressHints
                     && IPEndPoint.TryParse(Uri.UnescapeDataString(part[(AddressHint.Length + 1)..]), out var endPoint)
-                    && endPoint.AddressFamily == AddressFamily.InterNetwork && endPoint.Port > 0)
+                    && IsUsableHint(endPoint))
                     found.Add(endPoint);
             }
             var magnet = string.Join('&', parts.Where(p => !p.StartsWith(AddressHint + "=", StringComparison.OrdinalIgnoreCase)));
@@ -580,6 +728,14 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
             return false;
         }
     }
+
+    /// <summary>An address worth trying: either internet protocol, a real port, never a group or "any" address.</summary>
+    private static bool IsUsableHint(IPEndPoint endPoint) =>
+        endPoint.Port > 0
+        && endPoint.AddressFamily is AddressFamily.InterNetwork or AddressFamily.InterNetworkV6
+        && !endPoint.Address.Equals(IPAddress.Any) && !endPoint.Address.Equals(IPAddress.IPv6Any)
+        && !endPoint.Address.Equals(IPAddress.Broadcast) && !endPoint.Address.IsIPv6Multicast
+        && !(endPoint.AddressFamily == AddressFamily.InterNetwork && endPoint.Address.GetAddressBytes()[0] is >= 224 and <= 239);
 
     private static string KeyOf(InfoHashes hashes) => hashes.V1OrV2.ToHex();
 

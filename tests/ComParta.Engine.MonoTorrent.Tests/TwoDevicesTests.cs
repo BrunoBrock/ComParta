@@ -36,10 +36,10 @@ public sealed class TwoDevicesTests : IAsyncLifetime
     }
 
     private async Task<(MonoTorrentTransferEngine Engine, Paths Paths)> StartDeviceAsync(
-        string name, bool allowDownloadLinks = false)
+        string name, bool allowDownloadLinks = false, bool acceptIncoming = true)
     {
         var paths = new Paths(Path.Combine(_folder, name));
-        var engine = new MonoTorrentTransferEngine(paths);
+        var engine = new MonoTorrentTransferEngine(paths) { AcceptIncoming = acceptIncoming };
         _engines.Add(engine);
         await engine.StartAsync(SharingPolicy.Closed with
         {
@@ -365,5 +365,108 @@ public sealed class TwoDevicesTests : IAsyncLifetime
 
         Assert.True(result.Done);
         Assert.Equal(Checksum(original), Checksum(Path.Combine(receiverPaths.ReceivedRoot, "wedding.mp4")));
+    }
+
+    [Fact]
+    public async Task An_idle_engine_reports_listening_and_no_router_mapping_under_the_closed_policy()
+    {
+        var (engine, _) = await StartDeviceAsync("idle");
+
+        var facts = await WaitForAsync(engine, f => f.Listening);
+
+        Assert.True(facts.Listening);
+        Assert.False(facts.PortMapped);
+        Assert.Null(facts.MappedPort);
+        Assert.Null(facts.LastIncomingAt);
+    }
+
+    [Fact]
+    public async Task A_sender_nobody_can_reach_still_delivers_by_connecting_out_to_the_receiver()
+    {
+        var original = CreateFile("holiday.mp4", 700_000);
+        var (sender, _) = await StartDeviceAsync("sender", acceptIncoming: false);
+        var (receiver, receiverPaths) = await StartDeviceAsync("receiver");
+        Assert.Null(sender.ListenEndPoint);
+        Assert.False(sender.GetReachability().Listening);
+
+        var shareId = ShareId.New();
+        Assert.Equal(OfferState.Ready, await OfferAndWaitAsync(sender, shareId, original));
+        var done = WhenFinished(receiver);
+        Assert.True(await receiver.ReceiveAsync(TransferId.New(), (await sender.GetInviteAsync(shareId))!));
+
+        await sender.ConnectOfferAsync(shareId, new IPEndPoint(IPAddress.Loopback, receiver.ListenEndPoint!.Port));
+        var result = await done.Task.WaitAsync(Timeout);
+
+        Assert.True(result.Done);
+        Assert.Equal(Checksum(original), Checksum(Path.Combine(receiverPaths.ReceivedRoot, "holiday.mp4")));
+        // The receiver saw someone connect in, which is what makes its connection "good".
+        Assert.NotNull(receiver.GetReachability().LastIncomingAt);
+        Assert.Null(sender.GetReachability().LastIncomingAt);
+    }
+
+    [Fact]
+    public async Task Two_devices_connect_over_IPv6_using_only_the_address_in_the_invite()
+    {
+        if (!CanUseIPv6Loopback())
+            return; // This machine has no IPv6; Windows CI runs it.
+
+        var original = CreateFile("ipv6.bin", 300_000);
+        var policy = SharingPolicy.Closed with { AllowAddressInInvite = true };
+        var sender = new MonoTorrentTransferEngine(new Paths(Path.Combine(_folder, "sender")));
+        _engines.Add(sender);
+        await sender.StartAsync(policy with { ListenPort = FreePort() });
+        var receiverPaths = new Paths(Path.Combine(_folder, "receiver"));
+        var receiver = new MonoTorrentTransferEngine(receiverPaths);
+        _engines.Add(receiver);
+        await receiver.StartAsync(policy with { ListenPort = FreePort() });
+
+        var shareId = ShareId.New();
+        Assert.Equal(OfferState.Ready, await OfferAndWaitAsync(sender, shareId, original));
+        // Only the IPv6 loopback address, so nothing else can carry the transfer.
+        var invite = (await sender.GetInviteAsync(shareId))!.Split("&x.pe=")[0]
+            + $"&x.pe={Uri.EscapeDataString(new IPEndPoint(IPAddress.IPv6Loopback, sender.ListenEndPoint!.Port).ToString())}";
+        var done = WhenFinished(receiver);
+        Assert.True(await receiver.ReceiveAsync(TransferId.New(), invite));
+
+        var result = await done.Task.WaitAsync(Timeout);
+
+        Assert.True(result.Done);
+        Assert.Equal(Checksum(original), Checksum(Path.Combine(receiverPaths.ReceivedRoot, "ipv6.bin")));
+    }
+
+    [Fact]
+    public async Task An_invite_address_that_is_no_use_is_dropped()
+    {
+        var (receiver, _) = await StartDeviceAsync("receiver");
+        var magnet = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567";
+
+        Assert.True(await receiver.ReceiveAsync(TransferId.New(), magnet + "&x.pe=0.0.0.0:80&x.pe=239.1.2.3:80&x.pe=[ff02::1]:80"));
+    }
+
+    private static async Task<ReachabilityFacts> WaitForAsync(MonoTorrentTransferEngine engine, Func<ReachabilityFacts, bool> condition)
+    {
+        var until = DateTime.UtcNow + Timeout;
+        while (DateTime.UtcNow < until)
+        {
+            var facts = engine.GetReachability();
+            if (condition(facts))
+                return facts;
+            await Task.Delay(100);
+        }
+        return engine.GetReachability();
+    }
+
+    private static bool CanUseIPv6Loopback()
+    {
+        try
+        {
+            using var socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
+            socket.Bind(new IPEndPoint(IPAddress.IPv6Loopback, 0));
+            return true;
+        }
+        catch (SocketException)
+        {
+            return false;
+        }
     }
 }

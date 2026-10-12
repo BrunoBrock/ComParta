@@ -1,6 +1,7 @@
 import type { Bridge } from './bridge.ts'
 import type {
   CommandResult,
+  ConnectionHealthDto,
   ErrorCode,
   EventEnvelope,
   CopyInviteArgs,
@@ -29,6 +30,8 @@ export interface FakeBridgeOptions {
   systemLanguage?: string
   /** A language the person chose earlier. */
   language?: string | null
+  /** How well others can reach this computer; good when left out. */
+  connection?: ConnectionHealthDto
 }
 
 export interface FakeBridge extends Bridge {
@@ -43,6 +46,12 @@ export interface FakeBridge extends Bridge {
   /** What the system clipboard holds, for the "found an invite you copied" path. */
   clipboardText: string | null
   openedFolder: number
+  /** How many times the firewall settings were opened. */
+  openedConnectionSettings: number
+  /** Change the connection health, as the app does when the network changes. */
+  setConnection(health: ConnectionHealthDto): void
+  /** An invite link clicked outside the app, as the app reports it. */
+  openInvite(text: string): void
   /** Change state from outside, as the app does when something happens on its own. */
   setShares(shares: ShareDto[]): void
   setTransfers(transfers: TransferDto[]): void
@@ -142,6 +151,8 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     return ok(null)
   }
 
+  let connection: ConnectionHealthDto = options.connection ?? 'good'
+  let openedInvite: string | null = null
   let settings: SettingsDto = { language: options.language ?? null, systemLanguage: options.systemLanguage ?? 'en' }
   const freeBytes = options.freeBytes === undefined ? 120 * 1024 ** 3 : options.freeBytes
 
@@ -252,6 +263,19 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       return ok(null)
     },
 
+    'connection.get': () => ok({ health: connection }),
+
+    'connection.openSettings': () => {
+      fake.openedConnectionSettings++
+      return ok(null)
+    },
+
+    'invites.takeOpened': () => {
+      const taken = openedInvite
+      openedInvite = null
+      return ok(taken)
+    },
+
     'received.openFolder': () => {
       fake.openedFolder++
       return ok(null)
@@ -265,6 +289,17 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     copiedInvite: null as string | null,
     clipboardText: null as string | null,
     openedFolder: 0,
+    openedConnectionSettings: 0,
+
+    setConnection(health: ConnectionHealthDto) {
+      connection = health
+      emit({ event: 'connection.changed', payload: { health } })
+    },
+
+    openInvite(text: string) {
+      openedInvite = text
+      emit({ event: 'invites.changed', payload: true })
+    },
 
     async invoke(command: string, args?: unknown) {
       if (fake.failNextWith) {

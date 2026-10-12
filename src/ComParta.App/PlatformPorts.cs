@@ -13,17 +13,19 @@ public sealed class AppPaths : Ports.IAppPaths
 
 	public AppPaths()
 	{
+		_root = DataRoot();
+		ReceivedRoot = string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("COMPARTA_HOME"))
+			? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ComParta")
+			: Path.Combine(_root, "Received");
+	}
+
+	/// <summary>The folder that holds the database and engine data, and names the running copy (AD-14).</summary>
+	public static string DataRoot()
+	{
 		var home = Environment.GetEnvironmentVariable("COMPARTA_HOME");
-		if (string.IsNullOrWhiteSpace(home))
-		{
-			_root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ComParta");
-			ReceivedRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "ComParta");
-		}
-		else
-		{
-			_root = Path.GetFullPath(home);
-			ReceivedRoot = Path.Combine(_root, "Received");
-		}
+		return string.IsNullOrWhiteSpace(home)
+			? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ComParta")
+			: Path.GetFullPath(home);
 	}
 
 	public string DatabasePath => Path.Combine(_root, "comparta.db");
