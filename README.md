@@ -44,12 +44,18 @@ You need Windows 10 or 11, the [.NET 10 SDK](https://dotnet.microsoft.com/downlo
 Windows workload (`dotnet workload install maui-windows`), and [Node.js](https://nodejs.org) 22 or newer.
 
 ```powershell
-.\build.ps1            # build the screen and the app, run every test
-.\build.ps1 -Publish   # also create publish\ComParta, a folder to copy to another PC
+.\build.ps1           # shows a menu of what you can do
+.\build.ps1 Publish   # build, test, then create publish\ComParta, a folder to run here or copy to another PC
+.\build.ps1 Build     # build the screen and the app, without tests
+.\build.ps1 Test      # run every test
+.\build.ps1 Check     # build and run every test; what CI does, and what runs when there is no menu to show
 ```
 
-Run `publish\ComParta\ComParta.exe`. The folder needs nothing installed on the other PC except
-the Microsoft Edge WebView2 Runtime, which Windows 11 and current Windows 10 already have.
+Add `-SkipTests` to `Publish` or `Check` to leave the tests out.
+
+Run `publish\ComParta\ComParta.exe`. Close it before publishing again; Windows will not let the
+folder be replaced while the app is running from it. The folder needs nothing installed on the other
+PC except the Microsoft Edge WebView2 Runtime, which Windows 11 and current Windows 10 already have.
 
 The app is not code-signed yet. Windows SmartScreen will warn on first run, and a PC with Smart
 App Control switched on will refuse to run it.
