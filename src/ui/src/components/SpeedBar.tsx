@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, ChevronDown, Play, Square } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import type { ActivityDto, SetActivityArgs } from '../bridge/index.ts'
-import { formatSize, t } from '../i18n/index.ts'
+import { formatRate, t } from '../i18n/index.ts'
 
 interface SpeedBarProps {
   /** null until the app has answered. */
@@ -14,8 +14,6 @@ const choices: { key: 'stop.menuBoth' | 'stop.menuSending' | 'stop.menuReceiving
   { key: 'stop.menuSending', stopped: { sendingStopped: true, receivingStopped: false } },
   { key: 'stop.menuReceiving', stopped: { sendingStopped: false, receivingStopped: true } },
 ]
-
-const rate = (bytesPerSecond: number) => t('speed.rate', { size: formatSize(bytesPerSecond) })
 
 /**
  * Everything ComParta is receiving and sending right now, and one place to stop it all (UX design,
@@ -71,7 +69,7 @@ export default function SpeedBar({ activity, onSet }: SpeedBarProps) {
           ) : (
             <>
               <span className="speed-word">{t('speed.receiving')} </span>
-              {rate(activity?.receivingBytesPerSecond ?? 0)}
+              {formatRate(activity?.receivingBytesPerSecond ?? 0)}
             </>
           )}
         </span>
@@ -84,7 +82,7 @@ export default function SpeedBar({ activity, onSet }: SpeedBarProps) {
           ) : (
             <>
               <span className="speed-word">{t('speed.sending')} </span>
-              {rate(activity?.sendingBytesPerSecond ?? 0)}
+              {formatRate(activity?.sendingBytesPerSecond ?? 0)}
             </>
           )}
         </span>

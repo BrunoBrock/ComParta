@@ -60,6 +60,21 @@ export function formatSize(bytes: number): string {
   return t('size.gb', { value: number(bytes / 1024 ** 3, 2) })
 }
 
+/** A speed, such as "2.4 MB/s". */
+export function formatRate(bytesPerSecond: number): string {
+  return t('speed.rate', { size: formatSize(bytesPerSecond) })
+}
+
+/** A moment the person will recognise, such as "Oct 12, 2026, 10:33 AM", in their language. */
+export function formatDateTime(iso: string): string {
+  return new Intl.DateTimeFormat(current, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso))
+}
+
+/** Whole percent, rounded down so a file never reads 100% before it has all arrived. */
+export function percentOf(received: number, total: number | null): number {
+  return total ? Math.floor((received / total) * 100) : 0
+}
+
 /** Rough on purpose: people want "about 5 minutes", not a countdown. */
 export function formatTimeLeft(seconds: number): string {
   if (seconds < 60) return t('transfers.left.seconds')

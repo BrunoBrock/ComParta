@@ -1,6 +1,6 @@
 import { CircleHelp, FolderOpen, Pause, Play, X } from 'lucide-react'
 import type { Bridge, ErrorCode, TransferDto } from '../bridge/index.ts'
-import { formatSize, formatTimeLeft, t } from '../i18n/index.ts'
+import { formatSize, formatTimeLeft, percentOf, t } from '../i18n/index.ts'
 import { matches } from '../search.ts'
 import type { DetailsOf } from './DetailsWindow.tsx'
 import ItemView, { type ViewMode } from './ItemView.tsx'
@@ -33,8 +33,7 @@ const tones: Record<TransferDto['state'], ChipTone> = {
   failed: 'warn',
 }
 
-const percentOf = (transfer: TransferDto) =>
-  transfer.sizeBytes ? Math.floor((transfer.receivedBytes / transfer.sizeBytes) * 100) : 0
+const percent = (transfer: TransferDto) => percentOf(transfer.receivedBytes, transfer.sizeBytes)
 
 /** Receiving without a known size reads as still looking for the other computer. */
 const shownState = (transfer: TransferDto) =>
@@ -45,7 +44,7 @@ function describe(transfer: TransferDto): string {
   if (state === 'receiving') {
     const parts = [
       t('transfers.state.receiving', {
-        percent: percentOf(transfer),
+        percent: percent(transfer),
         received: formatSize(transfer.receivedBytes),
         total: formatSize(transfer.sizeBytes!),
       }),
@@ -138,7 +137,7 @@ export default function TransfersSection(props: TransfersSectionProps) {
                 name={name}
                 size={transfer.sizeBytes !== null ? formatSize(transfer.sizeBytes) : null}
                 tone={stoppedHere ? 'paused' : tones[state]}
-                chip={stoppedHere ? t('stopped.chip') : t(`transfers.chip.${state}`, { percent: percentOf(transfer) })}
+                chip={stoppedHere ? t('stopped.chip') : t(`transfers.chip.${state}`, { percent: percent(transfer) })}
                 note={stoppedHere ? t('stopped.note') : describe(transfer)}
                 progress={shownProgress}
                 onDetails={() => onDetails({ kind: 'transfer', id: transfer.id, name })}
