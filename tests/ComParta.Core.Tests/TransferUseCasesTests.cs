@@ -125,6 +125,30 @@ public sealed class TransferUseCasesTests
     }
 
     [Fact]
+    public async Task After_a_restart_progress_is_what_the_engine_has_and_done_stays_done()
+    {
+        var first = Create();
+        var unfinished = (await first.ReceiveAsync("invite:abc")).Value!.Transfer.Id;
+        var finished = (await first.ReceiveAsync("invite:def")).Value!.Transfer.Id;
+        _engine.Report(new ReceiveProgress(unfinished, "film.mp4", 1_000, 300, false));
+        _engine.Report(new ReceiveProgress(finished, "a.txt", 10, 10, true));
+        _engine.Receiving.Remove(finished);
+
+        var restarted = Create();
+        await restarted.StartAsync();
+        // The engine's first report after the restart comes from what is already on disk.
+        _engine.Report(new ReceiveProgress(unfinished, "film.mp4", 1_000, 600, false));
+        _engine.Report(new ReceiveProgress(finished, "a.txt", 10, 0, false));
+
+        var resumed = restarted.List().Single(v => v.Transfer.Id == unfinished);
+        Assert.Equal(TransferState.Receiving, resumed.State);
+        Assert.Equal(600, resumed.ReceivedBytes);
+        var done = restarted.List().Single(v => v.Transfer.Id == finished);
+        Assert.Equal(TransferState.Done, done.State);
+        Assert.Equal(10, done.ReceivedBytes);
+    }
+
+    [Fact]
     public async Task A_transfer_the_engine_lost_is_dropped_at_start_up()
     {
         await Create().ReceiveAsync("invite:abc");
@@ -242,16 +266,24 @@ public sealed class TransferUseCasesTests
     }
 
     [Fact]
-    public async Task Time_left_comes_from_the_current_speed()
+    public async Task Time_left_comes_from_a_smoothed_speed_and_is_unknown_after_a_stall()
     {
-        var transfers = Create();
+        var clock = new ManualClock(DateTimeOffset.UnixEpoch);
+        var transfers = new TransferUseCases(_repository, _engine, clock, _picker, _files, _storage);
         var id = (await transfers.ReceiveAsync("invite:abc")).Value!.Transfer.Id;
 
+        _engine.Report(new ReceiveProgress(id, "a.mp4", 1000, 300, false, BytesPerSecond: 100));
+        Assert.Null(Assert.Single(transfers.List()).SecondsLeft);
+        clock.Now += TimeSpan.FromSeconds(1);
         _engine.Report(new ReceiveProgress(id, "a.mp4", 1000, 400, false, BytesPerSecond: 100));
 
         var listed = Assert.Single(transfers.List());
         Assert.Equal(100, listed.BytesPerSecond);
         Assert.Equal(6, listed.SecondsLeft);
+
+        clock.Now += TimeSpan.FromSeconds(TimeLeft.StallAfter.TotalSeconds);
+        _engine.Report(new ReceiveProgress(id, "a.mp4", 1000, 400, false));
+        Assert.Null(Assert.Single(transfers.List()).SecondsLeft);
     }
 
     [Fact]

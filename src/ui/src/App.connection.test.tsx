@@ -64,6 +64,7 @@ describe('a transfer stuck waiting', () => {
     state: 'connecting',
     bytesPerSecond: 0,
     secondsLeft: null,
+    neededBytes: null,
   }
 
   afterEach(() => {

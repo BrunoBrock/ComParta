@@ -41,7 +41,7 @@ function transferRows(transfer: TransferDetailsDto, stopped: boolean): [MessageK
         percent: percentOf(transfer.receivedBytes, transfer.sizeBytes),
       })
     : t('details.unknown')
-  const finished = transfer.state === 'done' || transfer.state === 'failed'
+  const finished = ['done', 'failed', 'blocked'].includes(transfer.state)
   const state =
     stopped && !finished
       ? t('stopped.chip')
@@ -92,8 +92,8 @@ export default function DetailsWindow({ bridge, item, stopped, onClose, onError,
 
   // The main action sits on top of the window's buttons (UX design, Details panel).
   async function copyInvite(share: ShareDetailsDto) {
-    const ready = { id: item.id, name: item.name, sizeBytes: share.sizeBytes, status: share.status }
-    const result = await bridge.invoke('shares.copyInvite', { id: item.id, message: inviteMessage(ready) })
+    const message = inviteMessage({ name: item.name, sizeBytes: share.sizeBytes })
+    const result = await bridge.invoke('shares.copyInvite', { id: item.id, message })
     if (result.ok) onInfo(t('shares.inviteCopied', { name: item.name }))
     else onError(result.error.code)
   }

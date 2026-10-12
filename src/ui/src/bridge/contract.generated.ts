@@ -2,7 +2,9 @@
 
 export type ShareStatusDto = "preparing" | "ready" | "unavailable";
 
-export type TransferStateDto = "connecting" | "receiving" | "paused" | "done" | "failed";
+export type ShareActivityDto = "idle" | "sending" | "sent";
+
+export type TransferStateDto = "connecting" | "receiving" | "paused" | "done" | "failed" | "waiting" | "noSpace" | "blocked";
 
 export type ConnectionHealthDto = "good" | "limited" | "blocked";
 
@@ -10,11 +12,18 @@ export type TransferSourceDto = "invite" | "downloadLink" | "downloadFile";
 
 export type ThumbnailKindDto = "share" | "transfer";
 
+export type ItemKindDto = "share" | "transfer";
+
 export interface ShareDto {
   id: string;
   name: string;
   sizeBytes: number;
   status: ShareStatusDto;
+  activity: ShareActivityDto;
+  receiverCount: number;
+  percent: number;
+  finishedCount: number;
+  secondsLeft: number | null;
 }
 
 export interface IdArgs {
@@ -34,6 +43,7 @@ export interface TransferDto {
   state: TransferStateDto;
   bytesPerSecond: number;
   secondsLeft: number | null;
+  neededBytes: number | null;
 }
 
 export interface ReceiveArgs {
@@ -122,6 +132,12 @@ export interface ThumbnailArgs {
   size: number;
 }
 
+export interface DetailsTargetDto {
+  kind: ItemKindDto;
+  id: string;
+  name: string;
+}
+
 export const errorCodes = [
   "share.duplicate",
   "share.notFound",
@@ -179,6 +195,7 @@ export interface Events {
   "connection.changed": ConnectionDto;
   "invites.changed": boolean;
   "activity.changed": ActivityDto;
+  "details.changed": DetailsTargetDto;
 }
 
 export type CommandResult<T> = { ok: true; value: T } | { ok: false; error: { code: ErrorCode } };

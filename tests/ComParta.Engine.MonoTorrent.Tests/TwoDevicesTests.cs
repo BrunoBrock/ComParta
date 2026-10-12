@@ -36,10 +36,15 @@ public sealed class TwoDevicesTests : IAsyncLifetime
     }
 
     private async Task<(MonoTorrentTransferEngine Engine, Paths Paths)> StartDeviceAsync(
-        string name, bool allowDownloadLinks = false, bool acceptIncoming = true)
+        string name, bool allowDownloadLinks = false, bool acceptIncoming = true, int sendRateLimit = 0, FullDiskWriter[]? disk = null)
     {
         var paths = new Paths(Path.Combine(_folder, name));
-        var engine = new MonoTorrentTransferEngine(paths) { AcceptIncoming = acceptIncoming };
+        var engine = new MonoTorrentTransferEngine(paths)
+        {
+            AcceptIncoming = acceptIncoming,
+            SendRateLimit = sendRateLimit,
+            WrapWriter = disk is null ? writer => writer : writer => disk[0] = new FullDiskWriter(writer) { Full = true },
+        };
         _engines.Add(engine);
         await engine.StartAsync(SharingPolicy.Closed with
         {
@@ -474,6 +479,126 @@ public sealed class TwoDevicesTests : IAsyncLifetime
         Assert.True(activityRaised > 0);
         if (received is not null)
             Assert.True(received.BytesReceived > 0);
+    }
+
+    [Fact]
+    public async Task The_sender_counts_a_device_getting_the_file_and_then_one_that_finished()
+    {
+        var original = CreateFile("holiday.mp4", 3 * 1024 * 1024);
+        var (sender, _) = await StartDeviceAsync("sender", sendRateLimit: 1024 * 1024);
+        var (receiver, _) = await StartDeviceAsync("receiver");
+        var shareId = ShareId.New();
+        await OfferAndWaitAsync(sender, shareId, original);
+        var seen = new List<ItemActivity>();
+        sender.ActivityChanged += () =>
+        {
+            if (sender.GetActivity().Shares.GetValueOrDefault(shareId) is { } activity)
+                lock (seen)
+                    seen.Add(activity);
+        };
+
+        var transferId = TransferId.New();
+        await receiver.ReceiveAsync(transferId, (await sender.GetInviteAsync(shareId))!);
+        var done = WhenFinished(receiver);
+        // Connected again every few seconds while it runs, as an invite's addresses are retried,
+        // because the limited sending makes this transfer take a while.
+        var senderAddress = new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port);
+        var until = DateTime.UtcNow + Timeout;
+        while (!done.Task.IsCompleted && DateTime.UtcNow < until)
+        {
+            try { await receiver.ConnectAsync(transferId, senderAddress); }
+            catch (KeyNotFoundException) { /* finished meanwhile */ }
+            await Task.WhenAny(done.Task, Task.Delay(TimeSpan.FromSeconds(3)));
+        }
+        Assert.True((await done.Task.WaitAsync(Timeout)).Done);
+        until = DateTime.UtcNow + Timeout;
+        while (sender.GetActivity().Shares[shareId] is { Finished: 0 } or { Receivers: > 0 } && DateTime.UtcNow < until)
+            await Task.Delay(100);
+
+        var after = sender.GetActivity().Shares[shareId];
+        Assert.Equal(1, after.Finished);
+        Assert.Equal(0, after.Receivers);
+        List<ItemActivity> during;
+        lock (seen)
+            during = seen.Where(a => a.Receivers > 0).ToList();
+        Assert.NotEmpty(during);
+        Assert.All(during, a => Assert.Equal(1, a.Receivers));
+        Assert.Contains(during, a => a.ReceiversPercent is > 0 and < 100);
+        Assert.True(during.Select(a => a.ReceiversPercent).SequenceEqual(during.Select(a => a.ReceiversPercent).Order()), "progress only rises");
+    }
+
+    [Fact]
+    public async Task A_full_disk_stops_the_transfer_with_its_own_report_and_it_finishes_once_there_is_room()
+    {
+        var original = CreateFile("family album.zip", 2 * 1024 * 1024);
+        var (sender, _) = await StartDeviceAsync("sender");
+        var disk = new FullDiskWriter[1];
+        var (receiver, receiverPaths) = await StartDeviceAsync("receiver", disk: disk);
+        var shareId = ShareId.New();
+        await OfferAndWaitAsync(sender, shareId, original);
+        var transferId = TransferId.New();
+        var noSpace = new TaskCompletionSource<ReceiveProgress>(TaskCreationOptions.RunContinuationsAsynchronously);
+        receiver.ReceiveProgressed += progress =>
+        {
+            if (progress.NoSpace)
+                noSpace.TrySetResult(progress);
+        };
+        var done = WhenFinished(receiver);
+        await receiver.ReceiveAsync(transferId, (await sender.GetInviteAsync(shareId))!);
+        var senderAddress = new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port);
+        await receiver.ConnectAsync(transferId, senderAddress);
+
+        var full = await noSpace.Task.WaitAsync(Timeout);
+        Assert.False(full.Failed);
+        Assert.Equal(2 * 1024 * 1024, full.SizeBytes);
+        Assert.False(done.Task.IsCompleted);
+
+        disk[0].Full = false;
+        await receiver.ContinueReceivingAsync(transferId);
+        await receiver.ConnectAsync(transferId, senderAddress);
+
+        Assert.True((await done.Task.WaitAsync(Timeout)).Done);
+        Assert.Equal(Checksum(original), Checksum(Path.Combine(receiverPaths.ReceivedRoot, "family album.zip")));
+    }
+
+    [Fact]
+    public async Task A_transfer_continued_in_a_new_run_reports_what_it_already_has_at_once()
+    {
+        var original = CreateFile("long film.mp4", 4 * 1024 * 1024);
+        var (sender, _) = await StartDeviceAsync("sender", sendRateLimit: 1024 * 1024);
+        var shareId = ShareId.New();
+        await OfferAndWaitAsync(sender, shareId, original);
+        var paths = new Paths(Path.Combine(_folder, "receiver"));
+        var first = new MonoTorrentTransferEngine(paths);
+        await first.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var halfWay = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        first.ReceiveProgressed += progress =>
+        {
+            if (progress.SizeBytes is { } size && progress.ReceivedBytes > size / 2)
+                halfWay.TrySetResult();
+        };
+        var transferId = TransferId.New();
+        await first.ReceiveAsync(transferId, (await sender.GetInviteAsync(shareId))!);
+        await first.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        await halfWay.Task.WaitAsync(Timeout);
+        await first.StopAsync();
+
+        // The next run, with the sender gone: whatever it reports comes from what is on disk.
+        await sender.StopOfferingAsync(shareId);
+        var second = new MonoTorrentTransferEngine(paths);
+        _engines.Add(second);
+        await second.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var firstReport = new TaskCompletionSource<ReceiveProgress>(TaskCreationOptions.RunContinuationsAsynchronously);
+        second.ReceiveProgressed += progress =>
+        {
+            if (progress.Id == transferId)
+                firstReport.TrySetResult(progress);
+        };
+        Assert.True(await second.ResumeReceivingAsync(transferId));
+
+        var report = await firstReport.Task.WaitAsync(Timeout);
+        Assert.Equal(4 * 1024 * 1024, report.SizeBytes);
+        Assert.True(report.ReceivedBytes > report.SizeBytes * 0.4, $"first report {report.ReceivedBytes}");
     }
 
     [Fact]

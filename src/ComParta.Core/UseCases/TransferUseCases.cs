@@ -9,6 +9,10 @@ public sealed class TransferUseCases
 {
     /// <summary>Download files are small descriptions; anything larger is not one.</summary>
     public const int MaxDownloadFileBytes = 16 * 1024 * 1024;
+    /// <summary>How long without any connection before a transfer says it is waiting (UX States table).</summary>
+    public static readonly TimeSpan WaitingAfter = TimeSpan.FromMinutes(2);
+    /// <summary>How often a transfer stopped for lack of room looks again.</summary>
+    public static readonly TimeSpan NoSpaceRetry = TimeSpan.FromMinutes(1);
 
     private readonly ITransferRepository _repository;
     private readonly ITransferEngine _engine;
@@ -18,6 +22,11 @@ public sealed class TransferUseCases
     private readonly TimeProvider _clock;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Dictionary<TransferId, TransferView> _transfers = [];
+    private readonly Dictionary<TransferId, TimeLeft> _timeLeft = [];
+    // When each transfer last had a connection or received something.
+    private readonly Dictionary<TransferId, DateTimeOffset> _lastContact = [];
+    // When each transfer stopped for lack of room last looked for room.
+    private readonly Dictionary<TransferId, DateTimeOffset> _roomCheckedAt = [];
 
     public TransferUseCases(
         ITransferRepository repository,
@@ -34,6 +43,7 @@ public sealed class TransferUseCases
         _storage = storage;
         _clock = clock ?? TimeProvider.System;
         _engine.ReceiveProgressed += OnReceiveProgressed;
+        _engine.ActivityChanged += OnActivityChanged;
     }
 
     /// <summary>Raised whenever the list or a transfer's progress changes.</summary>
@@ -197,7 +207,7 @@ public sealed class TransferUseCases
                 if (!_transfers.TryGetValue(id, out view))
                     return Result.Fail(ErrorKind.TransferNotFound);
             }
-            if (view.State is TransferState.Done or TransferState.Failed)
+            if (view.State is TransferState.Done or TransferState.Failed or TransferState.Blocked)
                 return Result.Fail(ErrorKind.TransferFinished);
             if (view.Transfer.Paused == paused)
                 return Result.Success;
@@ -234,6 +244,9 @@ public sealed class TransferUseCases
             {
                 if (!_transfers.Remove(id, out view))
                     return Result.Fail(ErrorKind.TransferNotFound);
+                _timeLeft.Remove(id);
+                _lastContact.Remove(id);
+                _roomCheckedAt.Remove(id);
             }
             if (view.State != TransferState.Done)
                 await _engine.StopReceivingAsync(id, ct);
@@ -249,38 +262,137 @@ public sealed class TransferUseCases
     {
         TransferView updated;
         bool persist;
+        var outOfRoom = false;
         lock (_transfers)
         {
-            if (!_transfers.TryGetValue(progress.Id, out var view) || view.State == TransferState.Done)
+            if (!_transfers.TryGetValue(progress.Id, out var view) || view.State is TransferState.Done or TransferState.Blocked)
                 return;
             // A paused transfer moves nothing; a late report from before the pause is not news.
             if (view.State == TransferState.Paused && !progress.Done)
                 return;
+            // One stopped for lack of room waits for the next look, not for late reports.
+            if (view.State == TransferState.NoSpace && !progress.Done && !progress.NoSpace)
+                return;
 
+            var now = _clock.GetUtcNow();
             var transfer = view.Transfer with
             {
                 Name = progress.Name ?? view.Transfer.Name,
                 SizeBytes = progress.SizeBytes ?? view.Transfer.SizeBytes,
                 Done = progress.Done,
             };
-            var state = progress.Done ? TransferState.Done
-                : progress.Failed ? TransferState.Failed
-                : transfer.SizeBytes is null ? TransferState.Connecting
-                : progress.ReceivedBytes > 0 ? TransferState.Receiving
-                : view.State;
             var received = progress.Done ? transfer.SizeBytes ?? progress.ReceivedBytes
                 : progress.Failed ? view.ReceivedBytes
                 : progress.ReceivedBytes;
-            updated = new TransferView(transfer, state, received, state == TransferState.Receiving ? progress.BytesPerSecond : 0);
+            if (received > view.ReceivedBytes)
+                _lastContact[progress.Id] = now;
+            var left = transfer.SizeBytes is { } size ? size - received : (long?)null;
+            var free = _storage?.GetReceivedFreeBytes();
+            outOfRoom = !progress.Done && !progress.Failed && !progress.NoSpace && left is > 0 && free is { } room && room < left;
+
+            var state = progress.Done ? TransferState.Done
+                : progress.Failed ? TransferState.Failed
+                : progress.NoSpace || outOfRoom ? TransferState.NoSpace
+                : transfer.SizeBytes is null ? TransferState.Connecting
+                : received > 0 ? TransferState.Receiving
+                : view.State == TransferState.Waiting ? TransferState.Connecting
+                : view.State;
+            if (state is TransferState.Connecting or TransferState.Receiving && OutOfContact(progress.Id, now))
+                state = TransferState.Waiting;
+
+            long? secondsLeft = null;
+            if (state == TransferState.Receiving)
+            {
+                if (!_timeLeft.TryGetValue(progress.Id, out var timeLeft))
+                    _timeLeft[progress.Id] = timeLeft = new TimeLeft(_clock);
+                secondsLeft = timeLeft.Update(received, left ?? 0);
+            }
+            else
+                _timeLeft.Remove(progress.Id);
+            if (state == TransferState.NoSpace)
+                _roomCheckedAt.TryAdd(progress.Id, now);
+            long? needed = state == TransferState.NoSpace && left is { } l && free is { } f ? Math.Max(l - f, 1) : null;
+            updated = new TransferView(
+                transfer, state, received, state == TransferState.Receiving ? progress.BytesPerSecond : 0, secondsLeft, needed);
             if (updated == view)
                 return;
             persist = transfer != view.Transfer;
             _transfers[progress.Id] = updated;
         }
 
+        // Stopped here, before the disk fills, so nothing half-written is lost (UX States table).
+        if (outOfRoom)
+            _ = PauseQuietlyAsync(progress.Id);
         if (persist)
             _ = PersistAsync(updated.Transfer);
         Changed?.Invoke();
+    }
+
+    private bool OutOfContact(TransferId id, DateTimeOffset now) =>
+        _lastContact.TryGetValue(id, out var last) && now - last >= WaitingAfter;
+
+    /// <summary>
+    /// Each second: a connection counts as contact, a transfer without any for a while says it is
+    /// waiting, and one stopped for lack of room looks again every minute.
+    /// </summary>
+    private void OnActivityChanged()
+    {
+        EngineActivity activity;
+        try { activity = _engine.GetActivity(); }
+        catch (Exception) { return; }
+        var now = _clock.GetUtcNow();
+        var changed = false;
+        var retry = new List<TransferId>();
+        lock (_transfers)
+        {
+            foreach (var view in _transfers.Values.ToList())
+            {
+                var id = view.Transfer.Id;
+                if (activity.Transfers.GetValueOrDefault(id) is { Connections: > 0 })
+                    _lastContact[id] = now;
+                var next = view.State switch
+                {
+                    TransferState.Connecting or TransferState.Receiving when OutOfContact(id, now) => TransferState.Waiting,
+                    TransferState.Waiting when !OutOfContact(id, now) =>
+                        view.ReceivedBytes > 0 && view.Transfer.SizeBytes is not null ? TransferState.Receiving : TransferState.Connecting,
+                    _ => view.State,
+                };
+                if (view.State == TransferState.NoSpace
+                    && _roomCheckedAt.TryGetValue(id, out var checkedAt) && now - checkedAt >= NoSpaceRetry)
+                {
+                    _roomCheckedAt[id] = now;
+                    var left = (view.Transfer.SizeBytes ?? 0) - view.ReceivedBytes;
+                    if (_storage?.GetReceivedFreeBytes() is not { } free || free >= left)
+                    {
+                        retry.Add(id);
+                        _roomCheckedAt.Remove(id);
+                        _lastContact[id] = now;
+                        next = view.ReceivedBytes > 0 ? TransferState.Receiving : TransferState.Connecting;
+                    }
+                }
+                if (next == view.State)
+                    continue;
+                _transfers[id] = view with { State = next, BytesPerSecond = 0, SecondsLeft = null, NeededBytes = null };
+                _timeLeft.Remove(id);
+                changed = true;
+            }
+        }
+        foreach (var id in retry)
+            _ = ContinueQuietlyAsync(id);
+        if (changed)
+            Changed?.Invoke();
+    }
+
+    private async Task PauseQuietlyAsync(TransferId id)
+    {
+        try { await _engine.PauseReceivingAsync(id); }
+        catch (Exception) { /* the next look tries again */ }
+    }
+
+    private async Task ContinueQuietlyAsync(TransferId id)
+    {
+        try { await _engine.ContinueReceivingAsync(id); }
+        catch (Exception) { /* the next report says how it is going */ }
     }
 
     private async Task PersistAsync(Transfer transfer)
@@ -292,7 +404,13 @@ public sealed class TransferUseCases
     private TransferView Set(TransferView view)
     {
         lock (_transfers)
+        {
             _transfers[view.Transfer.Id] = view;
+            // Time left starts again from a new speed after a pause, and so does the wait.
+            _timeLeft.Remove(view.Transfer.Id);
+            _roomCheckedAt.Remove(view.Transfer.Id);
+            _lastContact[view.Transfer.Id] = _clock.GetUtcNow();
+        }
         return view;
     }
 }

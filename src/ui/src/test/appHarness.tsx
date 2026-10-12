@@ -4,12 +4,12 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach } from 'vitest'
 import App from '../App.tsx'
 import type { ShareDto } from '../bridge/contract.generated.ts'
-import { createFakeBridge, type FakeBridgeOptions } from '../bridge/fakeBridge.ts'
+import { createFakeBridge, notSending, type FakeBridgeOptions } from '../bridge/fakeBridge.ts'
 import { en } from '../i18n/en.ts'
 import { setLanguage } from '../i18n/index.ts'
 
-export const video: ShareDto = { id: 's1', name: 'Birthday party.mp4', sizeBytes: 1_288_490_188, status: 'ready' }
-export const album: ShareDto = { id: 's2', name: 'Holiday photos.zip', sizeBytes: 2048, status: 'unavailable' }
+export const video: ShareDto = { id: 's1', name: 'Birthday party.mp4', sizeBytes: 1_288_490_188, status: 'ready', ...notSending }
+export const album: ShareDto = { id: 's2', name: 'Holiday photos.zip', sizeBytes: 2048, status: 'unavailable', ...notSending }
 
 beforeEach(() => {
   localStorage.clear()

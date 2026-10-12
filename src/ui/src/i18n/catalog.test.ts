@@ -67,7 +67,9 @@ describe('the translation catalog', () => {
     const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort()
     for (const language of languages) {
       for (const [key, text] of Object.entries(en)) {
-        expect(placeholders(catalogs[language][key as keyof typeof en]), `${language} ${key}`).toEqual(placeholders(text))
+        expect(placeholders(catalogs[language][key as keyof typeof en]), `${language} ${key}`).toEqual(
+          placeholders(text),
+        )
       }
     }
   })
@@ -108,9 +110,16 @@ describe('in Brazilian Portuguese', () => {
     expect(formatSize(1023)).toBe('1.023 bytes')
   })
 
-  it('says how long is left', () => {
+  it.each([
+    [30, 'falta menos de um minuto'],
+    [60, 'falta cerca de 1 minuto'],
+    [600, 'faltam cerca de 10 minutos'],
+    [3600, 'falta cerca de 1 hora'],
+    [5 * 3600, 'faltam cerca de 5 horas'],
+    [3 * 86400, 'falta mais de um dia'],
+  ])('says %d seconds are left as %s', (seconds, expected) => {
     setLanguage('pt-BR')
-    expect(formatTimeLeft(600)).toBe('faltam cerca de 10 minutos')
+    expect(formatTimeLeft(seconds)).toBe(expected)
   })
 })
 

@@ -13,6 +13,7 @@ describe('using what was received', () => {
     state: 'done',
     bytesPerSecond: 0,
     secondsLeft: null,
+    neededBytes: null,
   }
   const onTheWay: TransferDto = {
     id: 't2',
@@ -22,6 +23,7 @@ describe('using what was received', () => {
     state: 'receiving',
     bytesPerSecond: 0,
     secondsLeft: null,
+    neededBytes: null,
   }
 
   const button = (label: string) => within(transfersSection()).findByRole('button', { name: label })
@@ -117,6 +119,7 @@ describe('pictures of received files', () => {
       state: 'done',
       bytesPerSecond: 0,
       secondsLeft: null,
+      neededBytes: null,
     }
     const zip: TransferDto = { ...video, id: 't4', name: 'Photos.zip' }
     const { user } = setup({ transfers: [video, zip] })

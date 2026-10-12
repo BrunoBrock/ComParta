@@ -46,6 +46,8 @@ public static class Events
     /// <summary>True when an invite opened from outside the app waits; the UI takes it with <c>invites.takeOpened</c>.</summary>
     public const string InvitesChanged = "invites.changed";
     public const string ActivityChanged = "activity.changed";
+    /// <summary>The item whose details should show, after the person clicked a system notification (CAP-20).</summary>
+    public const string DetailsChanged = "details.changed";
 }
 
 /// <summary>Stable codes; the words for them live in the UI's translation catalog (AD-11).</summary>
@@ -77,9 +79,13 @@ public static class ErrorCodes
 
 public enum ShareStatusDto { Preparing, Ready, Unavailable }
 
-public enum TransferStateDto { Connecting, Receiving, Paused, Done, Failed }
+public enum TransferStateDto { Connecting, Receiving, Paused, Done, Failed, Waiting, NoSpace, Blocked }
 
 public enum ThumbnailKindDto { Share, Transfer }
+
+public enum ItemKindDto { Share, Transfer }
+
+public sealed record DetailsTargetDto(ItemKindDto Kind, string Id, string Name);
 
 /// <param name="Size">The picture's longest side in pixels; the app keeps it between 32 and 512.</param>
 public sealed record ThumbnailArgs(ThumbnailKindDto Kind, string Id, int Size);
@@ -88,12 +94,22 @@ public enum ConnectionHealthDto { Good, Limited, Blocked }
 
 public enum TransferSourceDto { Invite, DownloadLink, DownloadFile }
 
-public sealed record ShareDto(string Id, string Name, long SizeBytes, ShareStatusDto Status);
+/// <param name="Activity">Whether devices are getting the file now, or someone finished since the app started.</param>
+/// <param name="ReceiverCount">How many devices are getting it now.</param>
+/// <param name="Percent">How much of it they have, on average, 0 to 100.</param>
+/// <param name="FinishedCount">How many devices got all of it since the app started.</param>
+/// <param name="SecondsLeft">Roughly how long until they have all of it, or null when it cannot be told.</param>
+public sealed record ShareDto(
+    string Id, string Name, long SizeBytes, ShareStatusDto Status,
+    ShareActivityDto Activity, int ReceiverCount, int Percent, int FinishedCount, long? SecondsLeft);
+
+public enum ShareActivityDto { Idle, Sending, Sent }
 
 /// <param name="BytesPerSecond">Current speed while receiving, else 0.</param>
 /// <param name="SecondsLeft">Roughly how long is left, or null when it cannot be told.</param>
 public sealed record TransferDto(
-    string Id, string? Name, long? SizeBytes, long ReceivedBytes, TransferStateDto State, long BytesPerSecond, long? SecondsLeft);
+    string Id, string? Name, long? SizeBytes, long ReceivedBytes, TransferStateDto State, long BytesPerSecond, long? SecondsLeft,
+    long? NeededBytes);
 
 public sealed record IdArgs(string Id);
 
@@ -216,6 +232,7 @@ public static class Contract
         new(Events.ConnectionChanged, typeof(ConnectionDto)),
         new(Events.InvitesChanged, typeof(bool)),
         new(Events.ActivityChanged, typeof(ActivityDto)),
+        new(Events.DetailsChanged, typeof(DetailsTargetDto)),
     ];
 
     /// <summary>camelCase JSON with enums as camelCase strings, as the conventions require.</summary>

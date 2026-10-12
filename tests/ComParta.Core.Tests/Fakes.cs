@@ -134,7 +134,14 @@ internal sealed class FakeEngine : ITransferEngine
 
     public Task PauseReceivingAsync(TransferId id, CancellationToken ct = default) { Paused.Add(id); return Task.CompletedTask; }
 
-    public Task ContinueReceivingAsync(TransferId id, CancellationToken ct = default) { Paused.Remove(id); return Task.CompletedTask; }
+    public List<TransferId> Continued { get; } = [];
+
+    public Task ContinueReceivingAsync(TransferId id, CancellationToken ct = default)
+    {
+        Paused.Remove(id);
+        Continued.Add(id);
+        return Task.CompletedTask;
+    }
 
     public void Report(ReceiveProgress progress) => ReceiveProgressed?.Invoke(progress);
 }
@@ -246,4 +253,15 @@ internal sealed class ManualClock(DateTimeOffset start) : TimeProvider
 {
     public DateTimeOffset Now { get; set; } = start;
     public override DateTimeOffset GetUtcNow() => Now;
+}
+
+internal sealed class FakeNotifier : INotifier
+{
+    public List<Notification> Shown { get; } = [];
+    public void Show(Notification notification) => Shown.Add(notification);
+}
+
+internal sealed class FakeWindow : IWindowState
+{
+    public bool IsInFront { get; set; }
 }

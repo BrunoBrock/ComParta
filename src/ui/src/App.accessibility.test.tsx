@@ -13,6 +13,7 @@ const arriving: TransferDto = {
   state: 'receiving',
   bytesPerSecond: 100,
   secondsLeft: 6,
+  neededBytes: null,
 }
 
 describe('the screen for assistive technology', () => {

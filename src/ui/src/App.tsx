@@ -43,7 +43,9 @@ const stuckCheckMs = 30 * 1000
 
 /** Waiting for the other computer: still connecting, or "receiving" before the size is known. */
 const isWaiting = (transfer: TransferDto) =>
-  transfer.state === 'connecting' || (transfer.state === 'receiving' && !transfer.sizeBytes)
+  transfer.state === 'connecting' ||
+  transfer.state === 'waiting' ||
+  (transfer.state === 'receiving' && !transfer.sizeBytes)
 
 /**
  * The whole screen. Shares and transfers are a copy of what the app reports (AD-4): loaded once,
@@ -126,6 +128,8 @@ export default function App({ bridge }: AppProps) {
       else if (event.event === 'settings.changed') applySettings(event.payload)
       else if (event.event === 'connection.changed') setConnection(event.payload.health)
       else if (event.event === 'activity.changed') setActivity(event.payload)
+      // The person clicked a system notification about this item (CAP-20).
+      else if (event.event === 'details.changed') setDetails(event.payload)
     })
 
     void bridge.invoke('activity.get').then((result) => {
