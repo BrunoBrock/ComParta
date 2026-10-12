@@ -142,7 +142,10 @@ public sealed class BridgeRouter
                 return CommandResult.Success(ToDto(await _settings.GetAsync()));
 
             case Commands.SettingsSet:
-                return ToResult(await _settings.SetLanguageAsync(Args<SetSettingsArgs>(argsJson)?.Language));
+            {
+                var args = Args<SetSettingsArgs>(argsJson);
+                return ToResult(await _settings.SetAsync(args?.Language, args?.View, args?.Sort));
+            }
 
             case Commands.ConnectionGet:
                 return CommandResult.Success(ToDto(_connection.Refresh()));
@@ -244,7 +247,8 @@ public sealed class BridgeRouter
         view.BytesPerSecond,
         view.SecondsLeft);
 
-    public static SettingsDto ToDto(Settings settings) => new(settings.Language, settings.SystemLanguage);
+    public static SettingsDto ToDto(Settings settings) =>
+        new(settings.Language, settings.SystemLanguage, settings.View, settings.Sort);
 
     public static ActivityDto ToDto(Activity activity) => new(
         activity.ReceivingBytesPerSecond, activity.SendingBytesPerSecond, activity.SendingStopped, activity.ReceivingStopped);

@@ -102,10 +102,13 @@ public sealed record InvitePreviewDto(
 
 /// <param name="Language">The language the person chose, or null to follow the system.</param>
 /// <param name="SystemLanguage">The language the operating system shows, as a tag like "pt-BR".</param>
-public sealed record SettingsDto(string? Language, string SystemLanguage);
+/// <param name="View">"grid" or "list", or null for the default.</param>
+/// <param name="Sort">"added", "name" or "size", or null for the default.</param>
+public sealed record SettingsDto(string? Language, string SystemLanguage, string? View, string? Sort);
 
+/// <summary>Every choice at once; the UI sends what it has, with the one it changed.</summary>
 /// <param name="Language">A language tag, or null to follow the system again.</param>
-public sealed record SetSettingsArgs(string? Language);
+public sealed record SetSettingsArgs(string? Language, string? View, string? Sort);
 
 /// <param name="Health">How well others can reach this computer (AD-15).</param>
 public sealed record ConnectionDto(ConnectionHealthDto Health);

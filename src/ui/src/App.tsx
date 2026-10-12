@@ -5,6 +5,8 @@ import type {
   Bridge,
   ConnectionHealthDto,
   SetActivityArgs,
+  SetSettingsArgs,
+  SettingsDto,
   ErrorCode,
   InvitePreviewDto,
   ShareDto,
@@ -24,7 +26,7 @@ import SpeedBar from './components/SpeedBar.tsx'
 import TransfersSection from './components/TransfersSection.tsx'
 import IconButton from './components/ui/IconButton.tsx'
 import { errorMessage, getLanguage, type Language, pickLanguage, setLanguage, t } from './i18n/index.ts'
-import { loadView, saveView } from './viewPrefs.ts'
+import type { SortOrder } from './order.ts'
 
 interface AppProps {
   bridge: Bridge
@@ -48,7 +50,11 @@ export default function App({ bridge }: AppProps) {
   const [transfers, setTransfers] = useState<TransferDto[] | null>(null)
   const [notice, setNotice] = useState<NoticeContent | null>(null)
   const [section, setSection] = useState<Section>('shared')
-  const [view, setView] = useState<ViewMode>(loadView)
+  const [view, setView] = useState<ViewMode>('grid')
+  const [sort, setSort] = useState<SortOrder>('added')
+  // The person's choices, sent back whole when one of them changes (settings.set). A ref, so two
+  // quick changes never send an older copy of the other.
+  const choices = useRef<SetSettingsArgs>({ language: null, view: null, sort: null })
   const [query, setQuery] = useState('')
   const [receiving, setReceiving] = useState(false)
   // An invite pasted anywhere in the window, already read, for the confirmation.
@@ -73,8 +79,11 @@ export default function App({ bridge }: AppProps) {
 
   useEffect(() => {
     let active = true
-    const applySettings = (settings: { language: string | null; systemLanguage: string }) => {
-      const chosen = pickLanguage(settings.language, settings.systemLanguage)
+    const applySettings = (stored: SettingsDto) => {
+      choices.current = { language: stored.language, view: stored.view, sort: stored.sort }
+      setView(stored.view === 'list' ? 'list' : 'grid')
+      setSort(stored.sort === 'name' || stored.sort === 'size' ? stored.sort : 'added')
+      const chosen = pickLanguage(stored.language, stored.systemLanguage)
       setLanguage(chosen)
       document.documentElement.lang = chosen
       setShownLanguage(chosen)
@@ -192,14 +201,25 @@ export default function App({ bridge }: AppProps) {
     if (!result.ok) showError(result.error.code)
   }
 
-  async function chooseLanguage(next: Language) {
-    const result = await bridge.invoke('settings.set', { language: next })
+  async function saveSettings(change: Partial<SetSettingsArgs>) {
+    choices.current = { ...choices.current, ...change }
+    const result = await bridge.invoke('settings.set', choices.current)
     if (!result.ok) showError(result.error.code)
   }
 
+  function chooseLanguage(next: Language) {
+    void saveSettings({ language: next })
+  }
+
+  // The screen changes at once; the stored choice follows.
   function changeView(next: ViewMode) {
     setView(next)
-    saveView(next)
+    void saveSettings({ view: next })
+  }
+
+  function changeSort(next: SortOrder) {
+    setSort(next)
+    void saveSettings({ sort: next })
   }
 
   async function add() {
@@ -233,6 +253,8 @@ export default function App({ bridge }: AppProps) {
       query={query}
       view={view}
       onViewChange={changeView}
+      sort={sort}
+      onSortChange={changeSort}
       onError={showError}
       onInfo={showInfo}
       onStart={clearNotice}
@@ -248,6 +270,8 @@ export default function App({ bridge }: AppProps) {
       query={query}
       view={view}
       onViewChange={changeView}
+      sort={sort}
+      onSortChange={changeSort}
       onError={showError}
       onStart={clearNotice}
       onClearSearch={clearSearch}

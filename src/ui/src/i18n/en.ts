@@ -16,6 +16,11 @@ export const en = {
   'view.label': 'How to show the files',
   'view.grid': 'Grid',
   'view.list': 'List',
+  'sort.label': 'Order: {order}',
+  'sort.menu': 'Order',
+  'sort.added': 'Newest first',
+  'sort.name': 'Name',
+  'sort.size': 'Largest first',
 
   'nav.help': 'Help',
   'nav.settings': 'Settings',

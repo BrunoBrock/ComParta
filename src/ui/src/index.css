@@ -1184,3 +1184,44 @@ dialog.sheet {
   border-radius: var(--radius);
   overflow: hidden;
 }
+
+/* The ⇅ order menu beside Grid and List. */
+.sort-menu {
+  position: relative;
+}
+
+.sort-options {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  min-width: 220px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
+}
+
+.sort-options button {
+  width: 100%;
+  justify-content: flex-start;
+  color: var(--color-text);
+}
+
+.invisible {
+  visibility: hidden;
+}
+
+@media (max-width: 600px) {
+  .sort-current {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

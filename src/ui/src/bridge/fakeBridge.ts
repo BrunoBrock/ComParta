@@ -39,6 +39,9 @@ export interface FakeBridgeOptions {
   connection?: ConnectionHealthDto
   /** Sending or receiving already stopped from the speed bar, as the app remembers it. */
   stopped?: Partial<SetActivityArgs>
+  /** How files were shown and ordered last time, as the app stored it. */
+  view?: string | null
+  sort?: string | null
 }
 
 export interface FakeBridge extends Bridge {
@@ -194,7 +197,12 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
 
   let connection: ConnectionHealthDto = options.connection ?? 'good'
   let openedInvite: string | null = null
-  let settings: SettingsDto = { language: options.language ?? null, systemLanguage: options.systemLanguage ?? 'en' }
+  let settings: SettingsDto = {
+    language: options.language ?? null,
+    systemLanguage: options.systemLanguage ?? 'en',
+    view: options.view ?? null,
+    sort: options.sort ?? null,
+  }
   const freeBytes = options.freeBytes === undefined ? 120 * 1024 ** 3 : options.freeBytes
 
   /** Reads text the way the app's invite codec and engine do, or null when it is neither. */
@@ -309,7 +317,10 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     'settings.get': () => ok({ ...settings }),
 
     'settings.set': (args) => {
-      settings = { ...settings, language: (args as SetSettingsArgs).language }
+      const { language, view, sort } = args as SetSettingsArgs
+      if ((view !== null && view !== 'grid' && view !== 'list') || (sort !== null && !['added', 'name', 'size'].includes(sort)))
+        return fail('settings.invalid')
+      settings = { ...settings, language, view, sort }
       emit({ event: 'settings.changed', payload: { ...settings } })
       return ok(null)
     },

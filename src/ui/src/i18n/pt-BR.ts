@@ -17,6 +17,11 @@ export const ptBR: Catalog = {
   'view.label': 'Como mostrar os arquivos',
   'view.grid': 'Grade',
   'view.list': 'Lista',
+  'sort.label': 'Ordem: {order}',
+  'sort.menu': 'Ordem',
+  'sort.added': 'Mais recentes primeiro',
+  'sort.name': 'Nome',
+  'sort.size': 'Maiores primeiro',
 
   'nav.help': 'Ajuda',
   'nav.settings': 'Configurações',

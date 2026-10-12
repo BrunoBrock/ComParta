@@ -50,10 +50,14 @@ export interface InvitePreviewDto {
 export interface SettingsDto {
   language: string | null;
   systemLanguage: string;
+  view: string | null;
+  sort: string | null;
 }
 
 export interface SetSettingsArgs {
   language: string | null;
+  view: string | null;
+  sort: string | null;
 }
 
 export interface ConnectionDto {

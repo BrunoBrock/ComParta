@@ -252,6 +252,23 @@ public sealed class BridgeRouterTests
     }
 
     [Fact]
+    public async Task The_view_and_order_are_stored_with_the_language_and_checked()
+    {
+        Assert.True((await InvokeAsync(Commands.SettingsSet, new { language = "en", view = "list", sort = "size" }))
+            .GetProperty("ok").GetBoolean());
+
+        var stored = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.Equal("list", stored.GetProperty("view").GetString());
+        Assert.Equal("size", stored.GetProperty("sort").GetString());
+        Assert.Equal(ErrorCodes.SettingsInvalid, ErrorCode(await InvokeAsync(Commands.SettingsSet, new { view = "table" })));
+        Assert.Equal(ErrorCodes.SettingsInvalid, ErrorCode(await InvokeAsync(Commands.SettingsSet, new { sort = "colour" })));
+        Assert.Equal("list", (await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("view").GetString());
+
+        Assert.True((await InvokeAsync(Commands.SettingsSet, new { language = "en" })).GetProperty("ok").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, (await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("view").ValueKind);
+    }
+
+    [Fact]
     public async Task Connection_health_is_read_and_reported_when_it_changes()
     {
         _engine.Reachability = ReachabilityFacts.Unknown with { Listening = true };

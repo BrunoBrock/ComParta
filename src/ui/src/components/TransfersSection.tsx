@@ -1,6 +1,7 @@
 import { CircleHelp, FolderOpen, Pause, Play, X } from 'lucide-react'
 import type { Bridge, ErrorCode, TransferDto } from '../bridge/index.ts'
 import { formatSize, formatTimeLeft, percentOf, t } from '../i18n/index.ts'
+import { inOrder, type SortOrder } from '../order.ts'
 import { matches } from '../search.ts'
 import type { DetailsOf } from './DetailsWindow.tsx'
 import ItemView, { type ViewMode } from './ItemView.tsx'
@@ -14,6 +15,8 @@ interface TransfersSectionProps {
   query: string
   view: ViewMode
   onViewChange: (view: ViewMode) => void
+  sort: SortOrder
+  onSortChange: (sort: SortOrder) => void
   onError: (code: ErrorCode) => void
   onStart: () => void
   onClearSearch: () => void
@@ -66,6 +69,8 @@ export default function TransfersSection(props: TransfersSectionProps) {
     query,
     view,
     onViewChange,
+    sort,
+    onSortChange,
     onError,
     onStart,
     onClearSearch,
@@ -92,11 +97,18 @@ export default function TransfersSection(props: TransfersSectionProps) {
     if (!result.ok) onError(result.error.code)
   }
 
-  const shown = transfers?.filter((transfer) => matches(transfer.name ?? '', query)).sort(order) ?? null
+  const found = transfers?.filter((transfer) => matches(transfer.name ?? '', query))
+  const shown = found
+    ? inOrder(found, sort, (transfer) => transfer.name ?? '', (transfer) => transfer.sizeBytes).sort(order)
+    : null
 
   return (
     <section aria-labelledby="transfers-heading" className="content-section">
-      <SectionHead id="transfers-heading" title={t('transfers.heading')} view={view} onViewChange={onViewChange}>
+      <SectionHead id="transfers-heading" title={t('transfers.heading')} view={view}
+        onViewChange={onViewChange}
+        sort={sort}
+        onSortChange={onSortChange}
+      >
         <button type="button" onClick={openFolder}>
           <FolderOpen size={18} aria-hidden="true" />
           {t('transfers.openFolder')}

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { getComPartaUrl } from '../appLinks.ts'
 import type { Bridge, ErrorCode, ShareDto } from '../bridge/index.ts'
 import { formatSize, t } from '../i18n/index.ts'
+import { inOrder, type SortOrder } from '../order.ts'
 import { matches } from '../search.ts'
 import type { DetailsOf } from './DetailsWindow.tsx'
 import ItemView, { type ViewMode } from './ItemView.tsx'
@@ -17,6 +18,8 @@ interface SharesSectionProps {
   query: string
   view: ViewMode
   onViewChange: (view: ViewMode) => void
+  sort: SortOrder
+  onSortChange: (sort: SortOrder) => void
   onError: (code: ErrorCode) => void
   onInfo: (text: string) => void
   /** Called when the person starts a new action, so an old message can go away. */
@@ -30,7 +33,7 @@ interface SharesSectionProps {
 const tones: Record<ShareDto['status'], ChipTone> = { preparing: 'busy', ready: 'ok', unavailable: 'warn' }
 
 export default function SharesSection(props: SharesSectionProps) {
-  const { bridge, shares, query, view, onViewChange, onError, onInfo, onStart, onClearSearch, stopped, onDetails } =
+  const { bridge, shares, query, view, onViewChange, sort, onSortChange, onError, onInfo, onStart, onClearSearch, stopped, onDetails } =
     props
   // View state only: which share the confirmation is open for.
   const [removing, setRemoving] = useState<ShareDto | null>(null)
@@ -66,11 +69,16 @@ export default function SharesSection(props: SharesSectionProps) {
     if (!result.ok) onError(result.error.code)
   }
 
-  const shown = shares?.filter((share) => matches(share.name, query)) ?? null
+  const found = shares?.filter((share) => matches(share.name, query))
+  const shown = found ? inOrder(found, sort, (share) => share.name, (share) => share.sizeBytes) : null
 
   return (
     <section aria-labelledby="shares-heading" className="content-section">
-      <SectionHead id="shares-heading" title={t('shares.heading')} view={view} onViewChange={onViewChange} />
+      <SectionHead id="shares-heading" title={t('shares.heading')} view={view}
+        onViewChange={onViewChange}
+        sort={sort}
+        onSortChange={onSortChange}
+      />
 
       {shares !== null && shares.length === 0 && <p className="empty">{t('shares.empty')}</p>}
       {shares !== null && shares.length > 0 && shown!.length === 0 && (
