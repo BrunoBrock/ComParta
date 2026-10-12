@@ -24,6 +24,7 @@ public sealed class BridgeRouterTests
     private readonly List<JsonElement> _events = [];
     private readonly BridgeRouter _router;
     private readonly NotificationUseCases _notifications;
+    private readonly FakePresence _presence = new();
 
     public BridgeRouterTests()
     {
@@ -37,7 +38,8 @@ public sealed class BridgeRouterTests
         var sending = new SendingUseCases(_engine, shares, _clock);
         _notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, new FakeNotifier(), new FakeWindow());
         _router = new BridgeRouter(shares, transfers, settings, connection, _opened, activity, received, _shell, _shell, thumbnails, _dropped,
-            sending, _notifications);
+            sending, _notifications,
+            new BackgroundUseCases(_engine, shares, transfers, sending, settings, _settings, _notifications, _presence, _clock));
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
         _picker.NextPick = Video;
@@ -321,6 +323,32 @@ public sealed class BridgeRouterTests
         Assert.Equal(ErrorCodes.SettingsInvalid, ErrorCode(await InvokeAsync(Commands.SettingsSet, new { sendStepsSeen = 4 })));
         Assert.Equal(ErrorCodes.SettingsInvalid, ErrorCode(await InvokeAsync(Commands.SettingsSet, new { sendStepsSeen = -1 })));
         Assert.Equal(2, (await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("sendStepsSeen").GetInt32());
+    }
+
+    [Fact]
+    public async Task Start_with_Windows_is_off_by_default_and_stored_when_chosen()
+    {
+        Assert.False((await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("startWithWindows").GetBoolean());
+
+        Assert.True((await InvokeAsync(Commands.SettingsSet, new { startWithWindows = true })).GetProperty("ok").GetBoolean());
+
+        Assert.True((await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("startWithWindows").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Quitting_names_what_would_stop_and_quits_once_confirmed()
+    {
+        var id = JsonDocument.Parse(await _router.InvokeAsync(Commands.TransfersReceive, JsonSerializer.Serialize(new { invite = "invite:abc" })))
+            .RootElement.GetProperty("value").GetProperty("id").GetString();
+        _engine.Report(new ReceiveProgress(TransferId.TryParse(id, out var transfer) ? transfer : default, "film.mp4", 1_000, 10, false));
+
+        var asked = (await InvokeAsync(Commands.AppQuit, new { force = false })).GetProperty("value");
+        Assert.False(asked.GetProperty("quitting").GetBoolean());
+        Assert.Equal("film.mp4", asked.GetProperty("moving")[0].GetString());
+        Assert.Equal(0, _presence.Quits);
+
+        Assert.True((await InvokeAsync(Commands.AppQuit, new { force = true })).GetProperty("value").GetProperty("quitting").GetBoolean());
+        Assert.Equal(1, _presence.Quits);
     }
 
     [Fact]

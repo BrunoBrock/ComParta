@@ -21,6 +21,7 @@ import Notice from './components/Notice.tsx'
 import Rail, { type Section } from './components/Rail.tsx'
 import ReceiveDialog from './components/ReceiveDialog.tsx'
 import SendSteps from './components/SendSteps.tsx'
+import QuitDialog from './components/QuitDialog.tsx'
 import SettingsDialog from './components/SettingsDialog.tsx'
 import SharesSection from './components/SharesSection.tsx'
 import SpeedBar from './components/SpeedBar.tsx'
@@ -63,7 +64,16 @@ export default function App({ bridge }: AppProps) {
   const [sort, setSort] = useState<SortOrder>('added')
   // The person's choices, sent back whole when one of them changes (settings.set). A ref, so two
   // quick changes never send an older copy of the other.
-  const choices = useRef<SetSettingsArgs>({ language: null, view: null, sort: null, sendStepsSeen: 0 })
+  const choices = useRef<SetSettingsArgs>({
+    language: null,
+    view: null,
+    sort: null,
+    sendStepsSeen: 0,
+    startWithWindows: false,
+  })
+  const [startWithWindows, setStartWithWindows] = useState(false)
+  // Files that would stop moving if the app quit now; the person confirms first (AD-14).
+  const [quitting, setQuitting] = useState<readonly string[] | null>(null)
   const [query, setQuery] = useState('')
   const [receiving, setReceiving] = useState(false)
   // An invite pasted anywhere in the window, already read, for the confirmation.
@@ -114,7 +124,9 @@ export default function App({ bridge }: AppProps) {
         view: stored.view,
         sort: stored.sort,
         sendStepsSeen: stored.sendStepsSeen,
+        startWithWindows: stored.startWithWindows,
       }
+      setStartWithWindows(stored.startWithWindows)
       setView(stored.view === 'list' ? 'list' : 'grid')
       setSort(stored.sort === 'name' || stored.sort === 'size' ? stored.sort : 'added')
       const chosen = pickLanguage(stored.language, stored.systemLanguage)
@@ -128,6 +140,7 @@ export default function App({ bridge }: AppProps) {
       else if (event.event === 'settings.changed') applySettings(event.payload)
       else if (event.event === 'connection.changed') setConnection(event.payload.health)
       else if (event.event === 'activity.changed') setActivity(event.payload)
+      else if (event.event === 'quit.changed') setQuitting(event.payload.moving)
       // The person clicked a system notification about this item (CAP-20).
       else if (event.event === 'details.changed') setDetails(event.payload)
     })
@@ -245,6 +258,17 @@ export default function App({ bridge }: AppProps) {
 
   function chooseLanguage(next: Language) {
     void saveSettings({ language: next })
+  }
+
+  function chooseStartWithWindows(on: boolean) {
+    setStartWithWindows(on)
+    void saveSettings({ startWithWindows: on })
+  }
+
+  async function quitAnyway() {
+    setQuitting(null)
+    const result = await bridge.invoke('app.quit', { force: true })
+    if (!result.ok) showError(result.error.code)
   }
 
   // The screen changes at once; the stored choice follows.
@@ -457,8 +481,16 @@ export default function App({ bridge }: AppProps) {
       )}
 
       {opened === 'settings' && (
-        <SettingsDialog language={language} onLanguage={chooseLanguage} onClose={() => setOpened(null)} />
+        <SettingsDialog
+          language={language}
+          onLanguage={chooseLanguage}
+          startWithWindows={startWithWindows}
+          onStartWithWindows={chooseStartWithWindows}
+          onClose={() => setOpened(null)}
+        />
       )}
+
+      {quitting && <QuitDialog moving={quitting} onConfirm={quitAnyway} onCancel={() => setQuitting(null)} />}
 
       {helping && (
         <ConnectionHelp health={connection} onOpenSettings={openConnectionSettings} onClose={() => setHelping(false)} />

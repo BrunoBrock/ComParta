@@ -5,11 +5,19 @@ import Dialog from './ui/Dialog.tsx'
 interface SettingsDialogProps {
   language: Language
   onLanguage: (language: Language) => void
+  startWithWindows: boolean
+  onStartWithWindows: (on: boolean) => void
   onClose: () => void
 }
 
-/** The settings there are so far: the language. Epic 12 adds the rest (UX design, Settings). */
-export default function SettingsDialog({ language, onLanguage, onClose }: SettingsDialogProps) {
+/** The settings there are so far: the language and start with Windows. Epic 12 adds the rest (UX design, Settings). */
+export default function SettingsDialog({
+  language,
+  onLanguage,
+  startWithWindows,
+  onStartWithWindows,
+  onClose,
+}: SettingsDialogProps) {
   return (
     <Dialog labelledBy="settings-title" onClose={onClose}>
       <h2 id="settings-title">{t('settings.title')}</h2>
@@ -29,6 +37,18 @@ export default function SettingsDialog({ language, onLanguage, onClose }: Settin
       </select>
       <p id="settings-language-hint" className="hint">
         {t('settings.languageHint')}
+      </p>
+      <label className="settings-check">
+        <input
+          type="checkbox"
+          checked={startWithWindows}
+          aria-describedby="settings-start-hint"
+          onChange={(event) => onStartWithWindows(event.target.checked)}
+        />
+        {t('settings.startWithWindows')}
+      </label>
+      <p id="settings-start-hint" className="hint">
+        {t('settings.startWithWindowsHint')}
       </p>
       <div className="dialog-actions">
         <Button onClick={onClose} autoFocus>

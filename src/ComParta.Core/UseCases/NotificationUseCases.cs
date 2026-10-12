@@ -58,6 +58,31 @@ public sealed class NotificationUseCases
     /// <summary>The shell calls this with what a clicked notification carried.</summary>
     public void Open(NotifiedItem kind, string id, string name) => OpenRequested?.Invoke(kind, id, name);
 
+    /// <summary>
+    /// Says once why the app is still running after its window closed (AD-14). Shown even though
+    /// the window was in front a moment ago, since it is closing.
+    /// </summary>
+    public void ExplainBackground()
+    {
+        string language;
+        lock (_lock)
+            language = _language;
+        try
+        {
+            _notifier.Show(new Notification(
+                NotificationTexts.Format(language, "notify.background.title", ""),
+                NotificationTexts.Format(language, "notify.background.body", "")));
+        }
+        catch (Exception) { /* the icon is still there to find */ }
+    }
+
+    /// <summary>A short text outside the window, such as the icon's menu, in the person's language.</summary>
+    public string Text(string key)
+    {
+        lock (_lock)
+            return NotificationTexts.Format(_language, key, "");
+    }
+
     private async Task LoadLanguageAsync(CancellationToken ct = default)
     {
         try

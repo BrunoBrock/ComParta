@@ -8,15 +8,18 @@ namespace ComParta.Core.UseCases;
 /// <param name="View">How files are shown, "grid" or "list", or null for the default.</param>
 /// <param name="Sort">How files are ordered, "added", "name" or "size", or null for the default.</param>
 /// <param name="SendStepsSeen">How many times the guided send has run; at <see cref="SettingsUseCases.SendStepsShown"/> it stops.</param>
-public sealed record Settings(string? Language, string SystemLanguage, string? View = null, string? Sort = null, int SendStepsSeen = 0);
+/// <param name="StartWithWindows">Start hidden in the notification area when the person signs in (AD-14). Off until they agree.</param>
+public sealed record Settings(
+    string? Language, string SystemLanguage, string? View = null, string? Sort = null, int SendStepsSeen = 0, bool StartWithWindows = false);
 
-/// <summary>The person's choices. Later stories add fields (your name, start with Windows, theme).</summary>
+/// <summary>The person's choices. Later stories add fields (your name, theme).</summary>
 public sealed partial class SettingsUseCases(ISettingsRepository repository, ISystemInfo system)
 {
     private const string LanguageKey = "language";
     private const string ViewKey = "view";
     private const string SortKey = "sort";
     private const string SendStepsKey = "sendStepsSeen";
+    private const string StartWithWindowsKey = "startWithWindows";
 
     /// <summary>The guided send runs this many times, or until the person opts out (UX design).</summary>
     public const int SendStepsShown = 3;
@@ -34,14 +37,15 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
         system.UiLanguage,
         await repository.GetAsync(ViewKey, ct),
         await repository.GetAsync(SortKey, ct),
-        int.TryParse(await repository.GetAsync(SendStepsKey, ct), out var seen) ? Math.Clamp(seen, 0, SendStepsShown) : 0);
+        int.TryParse(await repository.GetAsync(SendStepsKey, ct), out var seen) ? Math.Clamp(seen, 0, SendStepsShown) : 0,
+        await repository.GetAsync(StartWithWindowsKey, ct) == "true");
 
     /// <summary>
     /// Stores every choice at once, as the UI sends them all; null means the default. The UI
     /// decides which languages it has words for; anything that is not a choice it offers is refused
     /// and nothing changes.
     /// </summary>
-    public async Task<Result> SetAsync(string? language, string? view, string? sort, int sendStepsSeen = 0, CancellationToken ct = default)
+    public async Task<Result> SetAsync(string? language, string? view, string? sort, int sendStepsSeen = 0, bool startWithWindows = false, CancellationToken ct = default)
     {
         if (language is not null && (language.Length > 35 || !LanguageTag().IsMatch(language)))
             return Result.Fail(ErrorKind.SettingsInvalid);
@@ -53,6 +57,7 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
         await repository.SetAsync(ViewKey, view, ct);
         await repository.SetAsync(SortKey, sort, ct);
         await repository.SetAsync(SendStepsKey, sendStepsSeen == 0 ? null : sendStepsSeen.ToString(System.Globalization.CultureInfo.InvariantCulture), ct);
+        await repository.SetAsync(StartWithWindowsKey, startWithWindows ? "true" : null, ct);
         Changed?.Invoke();
         return Result.Success;
     }
