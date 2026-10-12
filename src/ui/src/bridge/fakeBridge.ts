@@ -1,5 +1,6 @@
 import type { Bridge } from './bridge.ts'
 import type {
+  ActivityDto,
   CommandResult,
   ConnectionHealthDto,
   ErrorCode,
@@ -8,10 +9,14 @@ import type {
   IdArgs,
   InvitePreviewDto,
   ReceiveArgs,
+  SetActivityArgs,
   SetSettingsArgs,
   SettingsDto,
+  ShareDetailsDto,
   ShareDto,
+  TransferDetailsDto,
   TransferDto,
+  TransferSourceDto,
 } from './contract.generated.ts'
 
 export interface PickedFile {
@@ -32,6 +37,8 @@ export interface FakeBridgeOptions {
   language?: string | null
   /** How well others can reach this computer; good when left out. */
   connection?: ConnectionHealthDto
+  /** Sending or receiving already stopped from the speed bar, as the app remembers it. */
+  stopped?: Partial<SetActivityArgs>
 }
 
 export interface FakeBridge extends Bridge {
@@ -56,6 +63,10 @@ export interface FakeBridge extends Bridge {
   setShares(shares: ShareDto[]): void
   setTransfers(transfers: TransferDto[]): void
 }
+
+/** Roughly what one ready share sends while someone is getting it, in the moving fake. */
+export const fakeSendingPerShare = 180_000
+const addedLongAgo = '2026-10-10T14:05:00.000Z'
 
 // The fake's invites look like the app's ComParta links (AD-16) but carry the share id in the clear.
 const invitePrefix = 'comparta://receive/v1/'
@@ -84,8 +95,30 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   const listeners = new Set<(event: EventEnvelope) => void>()
 
   const emit = (event: EventEnvelope) => listeners.forEach((listener) => listener(event))
-  const emitShares = () => emit({ event: 'shares.changed', payload: [...shares] })
-  const emitTransfers = () => emit({ event: 'transfers.changed', payload: [...transfers] })
+  let stopped: SetActivityArgs = { sendingStopped: false, receivingStopped: false, ...options.stopped }
+  // What the app knows about each item beyond the list: when it was added and where it came from.
+  const addedAt = new Map<string, string>()
+  const sources = new Map<string, TransferSourceDto>()
+
+  const activity = (): ActivityDto => ({
+    ...stopped,
+    receivingBytesPerSecond: stopped.receivingStopped
+      ? 0
+      : transfers.filter((t) => t.state === 'receiving').reduce((sum, t) => sum + t.bytesPerSecond, 0),
+    sendingBytesPerSecond:
+      stopped.sendingStopped || stepMs === 0
+        ? 0
+        : shares.filter((s) => s.status === 'ready').length * fakeSendingPerShare,
+  })
+  const emitActivity = () => emit({ event: 'activity.changed', payload: activity() })
+  const emitShares = () => {
+    emit({ event: 'shares.changed', payload: [...shares] })
+    emitActivity()
+  }
+  const emitTransfers = () => {
+    emit({ event: 'transfers.changed', payload: [...transfers] })
+    emitActivity()
+  }
   const newId = () => `fake-${nextId++}`
 
   const updateTransfer = (id: string, change: Partial<TransferDto>) => {
@@ -107,7 +140,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
           clearInterval(timer)
           return
         }
-        if (current.state === 'paused') return
+        if (current.state === 'paused' || stopped.receivingStopped) return
         received = Math.min(total, received + step)
         if (received >= total) {
           clearInterval(timer)
@@ -124,8 +157,16 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     }, stepMs * 2)
   }
 
-  const startTransfer = (id: string, name: string, total: number, known: Partial<TransferDto> = {}) => {
+  const startTransfer = (
+    id: string,
+    name: string,
+    total: number,
+    source: TransferSourceDto,
+    known: Partial<TransferDto> = {},
+  ) => {
     if (transfers.some((t) => t.id === id && t.state !== 'done')) return fail('transfer.duplicate')
+    addedAt.set(id, new Date().toISOString())
+    sources.set(id, source)
     const transfer: TransferDto = {
       id,
       name: null,
@@ -187,6 +228,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
 
       const share: ShareDto = { id: newId(), ...pick, status: stepMs === 0 ? 'ready' : 'preparing' }
       shares = [...shares, share]
+      addedAt.set(share.id, new Date().toISOString())
       emitShares()
       if (stepMs > 0) {
         setTimeout(() => {
@@ -228,7 +270,13 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       const { name, sizeBytes, isInvite } = found.preview
       if (sizeBytes !== null && freeBytes !== null && sizeBytes > freeBytes) return fail('disk.full')
       // Names from an invite are hints only; the name appears once the file's details arrive.
-      return startTransfer(found.key, name ?? 'File', sizeBytes ?? 250_000_000, isInvite ? {} : { name })
+      return startTransfer(
+        found.key,
+        name ?? 'File',
+        sizeBytes ?? 250_000_000,
+        isInvite ? 'invite' : 'downloadLink',
+        isInvite ? {} : { name },
+      )
     },
 
     'clipboard.findInvite': () => {
@@ -240,7 +288,10 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       const file = fake.nextDownloadFile
       if (file === null) return ok(null)
       if (file === 'invalid') return fail('download.invalidFile')
-      return startTransfer(`file-${file.name}`, file.name, file.sizeBytes, { name: file.name, sizeBytes: file.sizeBytes })
+      return startTransfer(`file-${file.name}`, file.name, file.sizeBytes, 'downloadFile', {
+        name: file.name,
+        sizeBytes: file.sizeBytes,
+      })
     },
 
     'transfers.pause': (args) => setPaused((args as IdArgs).id, true),
@@ -264,6 +315,51 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     },
 
     'connection.get': () => ok({ health: connection }),
+
+    'activity.get': () => ok(activity()),
+
+    'activity.set': (args) => {
+      const { sendingStopped, receivingStopped } = args as SetActivityArgs
+      stopped = { sendingStopped, receivingStopped }
+      emitActivity()
+      return ok(null)
+    },
+
+    'shares.details': (args) => {
+      const share = shares.find((s) => s.id === (args as IdArgs).id)
+      if (!share) return fail('share.notFound')
+      const sending = share.status === 'ready' && !stopped.sendingStopped && stepMs > 0
+      const details: ShareDetailsDto = {
+        ...share,
+        folder: 'C:\\Users\\Ana\\Videos',
+        addedAt: addedAt.get(share.id) ?? addedLongAgo,
+        sendingBytesPerSecond: sending ? fakeSendingPerShare : 0,
+        connections: sending ? 1 : 0,
+        bytesSent: share.status === 'ready' ? Math.round(share.sizeBytes / 3) : 0,
+      }
+      return ok(details)
+    },
+
+    'transfers.details': (args) => {
+      const transfer = transfers.find((t) => t.id === (args as IdArgs).id)
+      if (!transfer) return fail('transfer.notFound')
+      const moving = transfer.state === 'receiving' && !stopped.receivingStopped
+      const details: TransferDetailsDto = {
+        id: transfer.id,
+        name: transfer.name,
+        sizeBytes: transfer.sizeBytes,
+        receivedBytes: transfer.receivedBytes,
+        state: transfer.state,
+        source: sources.get(transfer.id) ?? 'invite',
+        addedAt: addedAt.get(transfer.id) ?? addedLongAgo,
+        receivingBytesPerSecond: moving ? transfer.bytesPerSecond : 0,
+        sendingBytesPerSecond: moving ? Math.round(transfer.bytesPerSecond / 10) : 0,
+        secondsLeft: moving ? transfer.secondsLeft : null,
+        connections: moving ? 3 : 0,
+        bytesSent: Math.round(transfer.receivedBytes / 10),
+      }
+      return ok(details)
+    },
 
     'connection.openSettings': () => {
       fake.openedConnectionSettings++

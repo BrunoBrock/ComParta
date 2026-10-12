@@ -18,7 +18,7 @@ A vision to realize, answering a pain. Sharing large personal files (family vide
 
 ## Capabilities
 
-Capabilities marked **[MVP]** form the first build (Windows desktop: add or remove a shared file, and send it to another person's computer with an invite). CAP-6, CAP-7 and a first form of CAP-8 were pulled into the first build on 2026-10-08. Each later capability names its release: **[R1]** family pilot on Windows, **[R2]** albums and Android, **[R3]** people I share with (see the roadmap companion). CAP-13 to CAP-24 were added on 2026-10-10 when the rest of the product was planned.
+Capabilities marked **[MVP]** form the first build (Windows desktop: add or remove a shared file, and send it to another person's computer with an invite). CAP-6, CAP-7 and a first form of CAP-8 were pulled into the first build on 2026-10-08. Each later capability names its release: **[R1]** family pilot on Windows, **[R2]** albums and Android, **[R3]** people I share with (see the roadmap companion). CAP-13 to CAP-24 were added on 2026-10-10 when the rest of the product was planned; CAP-26 and CAP-27 on 2026-10-12.
 
 - **CAP-1 [MVP] Add a share**
   - **intent:** A person picks a file on their PC and it joins the list of things they share.
@@ -93,6 +93,12 @@ Capabilities marked **[MVP]** form the first build (Windows desktop: add or remo
 - **CAP-25 [R1] Download from any link**
   - **intent:** A person downloads things published on the internet the way they would with qBittorrent, without learning its vocabulary.
   - **success:** Pasting a download link from a website, or opening a download file a website gave them, adds it to Received next to files from people; it shows progress, speed and time left; the person can pause and continue it; the file lands in the Received folder under the same safety rules (CAP-9). Advanced controls (choosing which files of a download to get, speed limits, how long to keep sharing after it finishes) sit under "More options", never on the main screen. Added 2026-10-10 after Bruno chose "Both" (roadmap decision P-10).
+- **CAP-26 [R1] Details of any file**
+  - **intent:** A person, or the relative helping them, can see everything ComParta knows about one file without it crowding the main screen.
+  - **success:** Every shared and received file shows an information button. It opens a details window with the name, size, where the file is on this computer, its state, when it was added, how fast it is sending and receiving now, how many other computers are connected for it, and how much has gone each way. The numbers update while the window is open. No technical file-sharing word appears (AD-5). Added 2026-10-12 at Bruno's request (roadmap decision P-11).
+- **CAP-27 [R1] See and stop all the traffic at once**
+  - **intent:** A person sees at a glance how fast ComParta is using their internet and can stop it in one click, for example before a video call.
+  - **success:** A bar along the top of the window always shows the total speed of everything being received and everything being sent. Next to it, a Stop button stops both at once; its menu also offers stopping only sending or only receiving. While something is stopped, the bar says so and the button becomes Continue. The choice is remembered after a restart. Stopping never cancels a transfer or removes a share. Added 2026-10-12 at Bruno's request (roadmap decision P-11).
 - **CAP-24 [R3] People I share with**
   - **intent:** After the first invite, a person sends to the same person again without copying anything, and only the people a share was sent to can get it.
   - **success:** Accepting an invite can also add the sender to "My people"; later shares sent to someone in "My people" appear in their "Shared with me" view when both devices are on; the content's fingerprint is no longer announced in the clear on the public lookup network. The design is settled by the spike in epic 13 before stories are written.

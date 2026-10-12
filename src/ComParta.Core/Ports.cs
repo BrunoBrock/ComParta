@@ -49,6 +49,26 @@ public sealed record ReachabilityFacts(
     public static ReachabilityFacts Unknown { get; } = new(false, false, null, false, null);
 }
 
+/// <summary>What one share or transfer is doing now (AD-22).</summary>
+/// <param name="Connections">How many other computers are connected for it.</param>
+/// <param name="BytesReceived">Bytes received for it since the app started.</param>
+/// <param name="BytesSent">Bytes sent for it since the app started.</param>
+public sealed record ItemActivity(
+    long ReceivingBytesPerSecond, long SendingBytesPerSecond, int Connections, long BytesReceived, long BytesSent)
+{
+    public static ItemActivity None { get; } = new(0, 0, 0, 0, 0);
+}
+
+/// <summary>Everything the engine is moving now, in total and per item (AD-22).</summary>
+public sealed record EngineActivity(
+    long ReceivingBytesPerSecond,
+    long SendingBytesPerSecond,
+    IReadOnlyDictionary<ShareId, ItemActivity> Shares,
+    IReadOnlyDictionary<TransferId, ItemActivity> Transfers)
+{
+    public static EngineActivity None { get; } = new(0, 0, new Dictionary<ShareId, ItemActivity>(), new Dictionary<TransferId, ItemActivity>());
+}
+
 public sealed record ReceiveProgress(
     TransferId Id, string? Name, long? SizeBytes, long ReceivedBytes, bool Done, bool Failed = false, long BytesPerSecond = 0);
 
@@ -64,6 +84,18 @@ public interface ITransferEngine
 
     /// <summary>What the engine knows now about being reachable (AD-15).</summary>
     ReachabilityFacts GetReachability();
+
+    /// <summary>Raised about once a second while running, so speeds can be shown (AD-22).</summary>
+    event Action? ActivityChanged;
+
+    /// <summary>The speeds, connections and bytes moved now (AD-22).</summary>
+    EngineActivity GetActivity();
+
+    /// <summary>
+    /// Stops or starts all sending and all receiving (AD-22). A transfer the person paused on its
+    /// own stays paused when receiving starts again.
+    /// </summary>
+    Task SetStoppedAsync(bool sending, bool receiving, CancellationToken ct = default);
 
     Task StartAsync(SharingPolicy policy, CancellationToken ct = default);
     Task StopAsync();

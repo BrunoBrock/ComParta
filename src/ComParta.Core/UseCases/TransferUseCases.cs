@@ -105,7 +105,8 @@ public sealed class TransferUseCases
         var key = _engine.ReadInviteKey(invite.EngineText);
         if (key is null)
             return Result<TransferView>.Fail(ErrorKind.InviteInvalid);
-        return await StartAsync(key, id => _engine.ReceiveAsync(id, invite.EngineText, ct), ErrorKind.InviteInvalid, ct);
+        var source = invite.IsLink ? TransferSource.Invite : TransferSource.DownloadLink;
+        return await StartAsync(key, id => _engine.ReceiveAsync(id, invite.EngineText, ct), ErrorKind.InviteInvalid, source, ct);
     }
 
     /// <summary>
@@ -151,12 +152,13 @@ public sealed class TransferUseCases
         var key = _engine.ReadDownloadFileKey(content);
         if (key is null)
             return Result<TransferView?>.Fail(ErrorKind.DownloadFileInvalid);
-        var started = await StartAsync(key, id => _engine.ReceiveFromFileAsync(id, content, ct), ErrorKind.DownloadFileInvalid, ct);
+        var started = await StartAsync(
+            key, id => _engine.ReceiveFromFileAsync(id, content, ct), ErrorKind.DownloadFileInvalid, TransferSource.DownloadFile, ct);
         return started.Ok ? Result<TransferView?>.Success(started.Value) : Result<TransferView?>.Fail(started.Error!.Value);
     }
 
     private async Task<Result<TransferView>> StartAsync(
-        string key, Func<TransferId, Task<bool>> receive, ErrorKind refused, CancellationToken ct)
+        string key, Func<TransferId, Task<bool>> receive, ErrorKind refused, TransferSource source, CancellationToken ct)
     {
         TransferView view;
         await _gate.WaitAsync(ct);
@@ -166,7 +168,7 @@ public sealed class TransferUseCases
             if (running.Any(id => _engine.GetReceiveKey(id) == key))
                 return Result<TransferView>.Fail(ErrorKind.TransferDuplicate);
 
-            var transfer = new Transfer(TransferId.New(), null, null, false, _clock.GetUtcNow());
+            var transfer = new Transfer(TransferId.New(), null, null, false, _clock.GetUtcNow(), Source: source);
             if (!await receive(transfer.Id))
                 return Result<TransferView>.Fail(refused);
             await _repository.AddAsync(transfer, ct);

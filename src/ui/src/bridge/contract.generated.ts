@@ -6,6 +6,8 @@ export type TransferStateDto = "connecting" | "receiving" | "paused" | "done" | 
 
 export type ConnectionHealthDto = "good" | "limited" | "blocked";
 
+export type TransferSourceDto = "invite" | "downloadLink" | "downloadFile";
+
 export interface ShareDto {
   id: string;
   name: string;
@@ -58,6 +60,45 @@ export interface ConnectionDto {
   health: ConnectionHealthDto;
 }
 
+export interface ActivityDto {
+  receivingBytesPerSecond: number;
+  sendingBytesPerSecond: number;
+  sendingStopped: boolean;
+  receivingStopped: boolean;
+}
+
+export interface SetActivityArgs {
+  sendingStopped: boolean;
+  receivingStopped: boolean;
+}
+
+export interface ShareDetailsDto {
+  id: string;
+  name: string;
+  sizeBytes: number;
+  status: ShareStatusDto;
+  folder: string;
+  addedAt: string;
+  sendingBytesPerSecond: number;
+  connections: number;
+  bytesSent: number;
+}
+
+export interface TransferDetailsDto {
+  id: string;
+  name: string | null;
+  sizeBytes: number | null;
+  receivedBytes: number;
+  state: TransferStateDto;
+  source: TransferSourceDto;
+  addedAt: string;
+  receivingBytesPerSecond: number;
+  sendingBytesPerSecond: number;
+  secondsLeft: number | null;
+  connections: number;
+  bytesSent: number;
+}
+
 export const errorCodes = [
   "share.duplicate",
   "share.notFound",
@@ -94,6 +135,10 @@ export interface Commands {
   "connection.get": { args: undefined; result: ConnectionDto };
   "connection.openSettings": { args: undefined; result: null };
   "invites.takeOpened": { args: undefined; result: string | null };
+  "activity.get": { args: undefined; result: ActivityDto };
+  "activity.set": { args: SetActivityArgs; result: null };
+  "shares.details": { args: IdArgs; result: ShareDetailsDto };
+  "transfers.details": { args: IdArgs; result: TransferDetailsDto };
 }
 
 export interface Events {
@@ -102,6 +147,7 @@ export interface Events {
   "settings.changed": SettingsDto;
   "connection.changed": ConnectionDto;
   "invites.changed": boolean;
+  "activity.changed": ActivityDto;
 }
 
 export type CommandResult<T> = { ok: true; value: T } | { ok: false; error: { code: ErrorCode } };

@@ -1,0 +1,45 @@
+# Stories of epic-speed-bar-and-details, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Engine reports speeds, connections and bytes moved"
+description = "Adds `EngineActivity` to `ITransferEngine` (AD-22): total receiving and sending speed, and for each share and transfer its speeds, the number of other computers connected, and the bytes sent and received since start. Core's `ActivityUseCases` turns it into totals and raises a change at most once a second; the contract gets `activity.get` and the `activity.changed` event; the fake bridge simulates both."
+verify = "Engine test: after a transfer between two engines, the sender reports bytes sent and the receiver bytes received for that item. Core tests for the totals and the once-a-second limit. Router test for the command and the event."
+covers = ["CAP-27", "CAP-26"]
+after = []
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Stop sending, receiving or both, remembered"
+description = "Core keeps two flags, sending stopped and receiving stopped, in the settings store, applies them at start and on `activity.set`, and tells the engine with one call. The engine pauses every offer while sending is stopped and every transfer while receiving is stopped, including ones added while stopped, and a transfer's own pause survives a global continue."
+verify = "Engine test: with sending stopped, a receiver gets no bytes; after continue the file arrives. Core tests: flags stored and applied at start; a transfer paused on its own stays paused after continue. Router test for `activity.set`."
+covers = ["CAP-27"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Speed bar with the Stop menu"
+description = "A bar under the header (UX design, Speed bar) shows both totals, a Stop button that stops both, and a menu with 'Stop sending and receiving', 'Stop sending only' and 'Stop receiving only'. While stopped it says which side is stopped and the button reads Continue. Stopped items show the chip 'Stopped' and hide their own pause buttons. Words in both catalogs."
+verify = "UI tests against the fake bridge: totals render and follow events; Stop, each menu item and Continue send the right command; stopped items read 'Stopped'; the menu works by keyboard and Escape closes it; the plain-language guard passes."
+covers = ["CAP-27"]
+after = [2]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Information button and details window"
+description = "Every card and row gets an information button. It opens a details window (UX design, Details window) filled by `shares.details` or `transfers.details`, asked again every second while open. Shares show where the file is, state, added, sending speed, connected computers and bytes sent; transfers also show received bytes, receiving speed, time left and where the file came from."
+verify = "Router tests for both commands, including an unknown id. UI tests: the button opens the window for a share and for a transfer, the rows show the fake's numbers and update, Escape closes it and focus returns to the button; the plain-language guard passes."
+covers = ["CAP-26"]
+after = [1]
+hitl = false
+risk = "low"

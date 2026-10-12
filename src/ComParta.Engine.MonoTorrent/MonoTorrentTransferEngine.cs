@@ -26,6 +26,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
     private static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan HintRetryInterval = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan ReachabilityInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ActivityInterval = TimeSpan.FromSeconds(1);
 
     // The magnet-link parameter for "a peer address to try directly" (BEP 9).
     private const string AddressHint = "x.pe";
@@ -48,6 +49,9 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
     private SharingPolicy _policy = SharingPolicy.Closed;
     private Timer? _progressTimer;
     private Timer? _reachabilityTimer;
+    private Timer? _activityTimer;
+    private volatile bool _sendingStopped;
+    private volatile bool _receivingStopped;
     private int _reporting;
     private long _lastIncomingTicks;
 
@@ -69,6 +73,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
     public event Action<ShareId, OfferState>? OfferChanged;
     public event Action<ReceiveProgress>? ReceiveProgressed;
     public event Action? ReachabilityChanged;
+    public event Action? ActivityChanged;
 
     /// <summary>The endpoint this engine was told to accept connections on. For tests.</summary>
     internal IPEndPoint? ListenEndPoint => _engine?.Settings.ListenEndPoints.Values.FirstOrDefault();
@@ -102,6 +107,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
         _engine = new ClientEngine(ToEngineSettings(_policy, _cacheFolder, AcceptIncoming), factories);
         _progressTimer = new Timer(_ => ReportProgress(), null, ProgressInterval, ProgressInterval);
         _reachabilityTimer = new Timer(_ => RaiseReachabilityChanged(), null, ReachabilityInterval, ReachabilityInterval);
+        _activityTimer = new Timer(_ => RaiseActivityChanged(), null, ActivityInterval, ActivityInterval);
         NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
         return Task.CompletedTask;
     }
@@ -185,6 +191,11 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
             _reachabilityTimer = null;
             await reachabilityTimer.DisposeAsync();
         }
+        if (_activityTimer is { } activityTimer)
+        {
+            _activityTimer = null;
+            await activityTimer.DisposeAsync();
+        }
         foreach (var offer in _offers.Values)
             offer.Cancel.Cancel();
         if (_engine is { } engine)
@@ -246,7 +257,9 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
                 if (manager.Complete)
                 {
                     // Complete means every piece matched, so the engine only ever reads the original.
-                    await manager.StartAsync();
+                    // While sending is stopped the offer waits, ready, until Continue starts it.
+                    if (!_sendingStopped)
+                        await manager.StartAsync();
                     offer.Invite = new MagnetLink(torrent.InfoHashes, torrent.Name, size: torrent.Size).ToV1String();
                     OfferChanged?.Invoke(offer.Id, OfferState.Ready);
                     return;
@@ -367,6 +380,89 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
         return (bytes[0] & 0xE0) == 0x20;
     }
 
+    // ---- Activity (AD-22) -----------------------------------------------------------------
+
+    public EngineActivity GetActivity()
+    {
+        if (_engine is not { } engine)
+            return EngineActivity.None;
+        var shares = new Dictionary<ShareId, ItemActivity>();
+        foreach (var offer in _offers.Values)
+        {
+            if (offer.Manager is { } manager)
+                shares[offer.Id] = ActivityOf(manager);
+        }
+        var transfers = new Dictionary<TransferId, ItemActivity>();
+        foreach (var incoming in _incoming.Values)
+            transfers[incoming.Id] = ActivityOf(incoming.Manager);
+        return new EngineActivity(engine.TotalDownloadRate, engine.TotalUploadRate, shares, transfers);
+    }
+
+    private static ItemActivity ActivityOf(TorrentManager manager) => new(
+        manager.Monitor.DownloadRate,
+        manager.Monitor.UploadRate,
+        manager.OpenConnections,
+        manager.Monitor.DataBytesReceived,
+        manager.Monitor.DataBytesSent);
+
+    public async Task SetStoppedAsync(bool sending, bool receiving, CancellationToken ct = default)
+    {
+        _sendingStopped = sending;
+        _receivingStopped = receiving;
+        foreach (var offer in _offers.Values)
+        {
+            if (offer.Manager is not { } manager || offer.Invite is null)
+                continue;
+            try
+            {
+                // Stopping, not pausing: a paused offer still answers the computers already connected.
+                if (sending)
+                    await StopFullyAsync(manager);
+                else if (!sending && manager.State == TorrentState.Stopped)
+                    await manager.StartAsync();
+            }
+            catch (Exception) { /* the next change tries again */ }
+        }
+        foreach (var incoming in _incoming.Values)
+        {
+            if (incoming.Finishing)
+                continue;
+            try
+            {
+                // Stopping, not pausing: a transfer still fetching the file's details cannot pause.
+                if (receiving)
+                    await StopFullyAsync(incoming.Manager);
+                else if (!receiving && !incoming.Paused)
+                {
+                    // A transfer the person paused on its own stays paused.
+                    await incoming.Manager.StartAsync();
+                    await TryHintsAsync(incoming);
+                }
+            }
+            catch (Exception) { /* the next change tries again */ }
+        }
+        RaiseActivityChanged();
+    }
+
+    /// <summary>
+    /// Stops a manager and makes sure it stayed stopped. MonoTorrent's stop can throw while a
+    /// stop it started is still running and leave the manager going, so it is asked again.
+    /// </summary>
+    private static async Task StopFullyAsync(TorrentManager manager)
+    {
+        for (var attempt = 0; attempt < 5 && manager.State != TorrentState.Stopped; attempt++)
+        {
+            try { await manager.StopAsync(); }
+            catch (ObjectDisposedException) { await Task.Delay(100); }
+        }
+    }
+
+    private void RaiseActivityChanged()
+    {
+        try { ActivityChanged?.Invoke(); }
+        catch (Exception) { /* a listener's problem must not stop the engine */ }
+    }
+
     // ---- Reachability ---------------------------------------------------------------------
 
     public ReachabilityFacts GetReachability()
@@ -481,6 +577,9 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
         if (_incoming.TryGetValue(id, out var incoming))
         {
             incoming.Paused = false;
+            // While everything is stopped it stays still; the global continue starts it.
+            if (_receivingStopped)
+                return;
             await incoming.Manager.StartAsync();
             await TryHintsAsync(incoming);
         }
@@ -524,8 +623,12 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
             var incoming = new Incoming(id, manager, folder, hints);
             _incoming[id] = incoming;
             manager.TorrentStateChanged += (_, _) => CheckContained(incoming);
-            await manager.StartAsync();
-            await TryHintsAsync(incoming);
+            // While receiving is stopped a new transfer waits, unstarted, for the global continue.
+            if (!_receivingStopped)
+            {
+                await manager.StartAsync();
+                await TryHintsAsync(incoming);
+            }
             return true;
         }
         catch (Exception)
@@ -546,6 +649,9 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
         DeleteQuietly(InvitePath(id));
         DeleteQuietly(DownloadFilePath(id));
     }
+
+    /// <summary>For tests: the engine's state for a transfer.</summary>
+    internal TorrentState StateOf(TransferId id) => _incoming[id].Manager.State;
 
     /// <summary>For tests: connect a transfer straight to another engine instead of discovering it.</summary>
     internal Task ConnectAsync(TransferId id, IPEndPoint other) => _incoming[id].Manager.AddPeerAsync(ToPeerInfo(other));
@@ -578,7 +684,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
         {
             foreach (var incoming in _incoming.Values)
             {
-                if (incoming.Finishing || incoming.Paused)
+                if (incoming.Finishing || incoming.Paused || _receivingStopped)
                     continue;
                 var manager = incoming.Manager;
                 if (!CheckContained(incoming) || manager.State == TorrentState.Error)
