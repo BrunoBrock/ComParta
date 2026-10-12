@@ -495,7 +495,9 @@ public sealed class TwoDevicesTests : IAsyncLifetime
         Assert.Equal(0, sender.GetActivity().Shares[shareId].BytesSent);
 
         await sender.SetStoppedAsync(sending: false, receiving: false);
-        await receiver.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        // The receiver's refused attempt waits out the engine's retry delay, so the sender, started
+        // again, connects out, as it does when the lookup network tells it where the receiver is.
+        await sender.ConnectOfferAsync(shareId, new IPEndPoint(IPAddress.Loopback, receiver.ListenEndPoint!.Port));
 
         Assert.True((await done.Task.WaitAsync(Timeout)).Done);
         Assert.Equal(Checksum(original), Checksum(Path.Combine(receiverPaths.ReceivedRoot, "paused.bin")));
@@ -519,7 +521,9 @@ public sealed class TwoDevicesTests : IAsyncLifetime
         Assert.False(done.Task.IsCompleted);
 
         await sender.SetStoppedAsync(sending: false, receiving: false);
-        await receiver.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        // The receiver's refused attempt waits out the engine's retry delay, so the sender, started
+        // again, connects out, as it does when the lookup network tells it where the receiver is.
+        await sender.ConnectOfferAsync(shareId, new IPEndPoint(IPAddress.Loopback, receiver.ListenEndPoint!.Port));
 
         Assert.True((await done.Task.WaitAsync(Timeout)).Done);
         Assert.Equal(Checksum(original), Checksum(Path.Combine(receiverPaths.ReceivedRoot, "later.bin")));

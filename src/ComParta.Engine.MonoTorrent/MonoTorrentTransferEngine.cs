@@ -416,8 +416,8 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
             try
             {
                 // Stopping, not pausing: a paused offer still answers the computers already connected.
-                if (sending && manager.State != TorrentState.Stopped)
-                    await manager.StopAsync();
+                if (sending)
+                    await StopFullyAsync(manager);
                 else if (!sending && manager.State == TorrentState.Stopped)
                     await manager.StartAsync();
             }
@@ -430,8 +430,8 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
             try
             {
                 // Stopping, not pausing: a transfer still fetching the file's details cannot pause.
-                if (receiving && incoming.Manager.State != TorrentState.Stopped)
-                    await incoming.Manager.StopAsync();
+                if (receiving)
+                    await StopFullyAsync(incoming.Manager);
                 else if (!receiving && !incoming.Paused)
                 {
                     // A transfer the person paused on its own stays paused.
@@ -442,6 +442,19 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
             catch (Exception) { /* the next change tries again */ }
         }
         RaiseActivityChanged();
+    }
+
+    /// <summary>
+    /// Stops a manager and makes sure it stayed stopped. MonoTorrent's stop can throw while a
+    /// stop it started is still running and leave the manager going, so it is asked again.
+    /// </summary>
+    private static async Task StopFullyAsync(TorrentManager manager)
+    {
+        for (var attempt = 0; attempt < 5 && manager.State != TorrentState.Stopped; attempt++)
+        {
+            try { await manager.StopAsync(); }
+            catch (ObjectDisposedException) { await Task.Delay(100); }
+        }
     }
 
     private void RaiseActivityChanged()
