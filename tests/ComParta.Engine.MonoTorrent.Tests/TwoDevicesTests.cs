@@ -553,6 +553,46 @@ public sealed class TwoDevicesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_transfer_continued_in_a_new_run_reports_what_it_already_has_at_once()
+    {
+        var original = CreateFile("long film.mp4", 4 * 1024 * 1024);
+        var (sender, _) = await StartDeviceAsync("sender", sendRateLimit: 1024 * 1024);
+        var shareId = ShareId.New();
+        await OfferAndWaitAsync(sender, shareId, original);
+        var paths = new Paths(Path.Combine(_folder, "receiver"));
+        var first = new MonoTorrentTransferEngine(paths);
+        await first.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var halfWay = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        first.ReceiveProgressed += progress =>
+        {
+            if (progress.SizeBytes is { } size && progress.ReceivedBytes > size / 2)
+                halfWay.TrySetResult();
+        };
+        var transferId = TransferId.New();
+        await first.ReceiveAsync(transferId, (await sender.GetInviteAsync(shareId))!);
+        await first.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        await halfWay.Task.WaitAsync(Timeout);
+        await first.StopAsync();
+
+        // The next run, with the sender gone: whatever it reports comes from what is on disk.
+        await sender.StopOfferingAsync(shareId);
+        var second = new MonoTorrentTransferEngine(paths);
+        _engines.Add(second);
+        await second.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var firstReport = new TaskCompletionSource<ReceiveProgress>(TaskCreationOptions.RunContinuationsAsynchronously);
+        second.ReceiveProgressed += progress =>
+        {
+            if (progress.Id == transferId)
+                firstReport.TrySetResult(progress);
+        };
+        Assert.True(await second.ResumeReceivingAsync(transferId));
+
+        var report = await firstReport.Task.WaitAsync(Timeout);
+        Assert.Equal(4 * 1024 * 1024, report.SizeBytes);
+        Assert.True(report.ReceivedBytes > report.SizeBytes * 0.4, $"first report {report.ReceivedBytes}");
+    }
+
+    [Fact]
     public async Task While_sending_is_stopped_nothing_arrives_and_after_continue_the_file_does()
     {
         var original = CreateFile("paused.bin", 400_000);
