@@ -63,7 +63,7 @@ public sealed class BridgeRouter
         _sending.Changed += RaiseShares;
         _transfers.Changed += () => Raise(Events.TransfersChanged, _transfers.List().Select(ToDto).ToArray());
         _settings.Changed += () => _ = RaiseSettingsAsync();
-        _connection.Changed += health => Raise(Events.ConnectionChanged, ToDto(health));
+        _connection.Changed += () => Raise(Events.ConnectionChanged, ToDto(_connection.Current()));
         _opened.Opened += () => Raise(Events.InvitesChanged, true);
         _activity.Changed += activityNow => Raise(Events.ActivityChanged, ToDto(activityNow));
     }
@@ -371,13 +371,6 @@ public sealed class BridgeRouter
             dto.BytesPerSecond, activity.SendingBytesPerSecond, dto.SecondsLeft, activity.Connections, activity.BytesSent);
     }
 
-    public static ConnectionDto ToDto(ConnectionHealth health) => new(health switch
-    {
-        ConnectionHealth.Good => ConnectionHealthDto.Good,
-        ConnectionHealth.Blocked => ConnectionHealthDto.Blocked,
-        _ => ConnectionHealthDto.Limited,
-    });
-
     public static InvitePreviewDto ToDto(InvitePreview preview) => new(
         preview.Hints.SenderName,
         preview.Hints.Name,
@@ -385,6 +378,14 @@ public sealed class BridgeRouter
         preview.Hints.ItemCount,
         preview.IsInvite,
         preview.FreeBytes);
+
+    public static ConnectionDto ToDto(ConnectionHealth? health) => new(health switch
+    {
+        ConnectionHealth.Good => ConnectionHealthDto.Good,
+        ConnectionHealth.Limited => ConnectionHealthDto.Limited,
+        ConnectionHealth.Blocked => ConnectionHealthDto.Blocked,
+        _ => null,
+    });
 
     public static string ToCode(ErrorKind error) => error switch
     {

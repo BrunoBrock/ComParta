@@ -2,6 +2,7 @@ import type { Bridge } from './bridge.ts'
 import type {
   ActivityDto,
   CommandResult,
+  ConnectionDto,
   ConnectionHealthDto,
   DetailsTargetDto,
   ErrorCode,
@@ -32,6 +33,8 @@ export interface PickedFile {
 export interface FakeBridgeOptions {
   shares?: ShareDto[]
   transfers?: TransferDto[]
+  /** Whether another device can reach this computer; good when left out, null while nothing is shared or received. */
+  connection?: ConnectionHealthDto | null
   /** Milliseconds a new share stays "preparing" and between steps of a transfer. 0 means never advance on its own. */
   stepMs?: number
   /** Room left for received files; null when it cannot be told. */
@@ -40,8 +43,6 @@ export interface FakeBridgeOptions {
   systemLanguage?: string
   /** A language the person chose earlier. */
   language?: string | null
-  /** How well others can reach this computer; good when left out. */
-  connection?: ConnectionHealthDto
   /** Sending or receiving already stopped from the speed bar, as the app remembers it. */
   stopped?: Partial<SetActivityArgs>
   /** How files were shown and ordered last time, as the app stored it. */
@@ -74,8 +75,6 @@ export interface FakeBridge extends Bridge {
   quits: number
   /** The person chose Quit on the notification-area icon while files were moving. */
   quitFromIcon(): void
-  /** Change the connection health, as the app does when the network changes. */
-  setConnection(health: ConnectionHealthDto): void
   /** An invite link clicked outside the app, as the app reports it. */
   openInvite(text: string): void
   /** Change state from outside, as the app does when something happens on its own. */
@@ -85,6 +84,11 @@ export interface FakeBridge extends Bridge {
   /** Another device gets a share, a quarter at a time each step, then it reads as sent. */
   sendTo(shareId: string): void
   setTransfers(transfers: TransferDto[]): void
+  /**
+   * Change the connection health, as the app does when it learns more; null means it cannot be told.
+   * Setting the value it already has raises no event, as in the app.
+   */
+  setConnection(health: ConnectionHealthDto | null): void
 }
 
 /** What a share reports while nobody is getting it. */
@@ -134,6 +138,7 @@ const samplePicks: PickedFile[] = [
 export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   let shares = [...(options.shares ?? [])]
   let transfers = [...(options.transfers ?? [])]
+  let connection: ConnectionHealthDto | null = options.connection === undefined ? 'good' : options.connection
   let nextId = 1
   let nextSample = 0
   const stepMs = options.stepMs ?? 0
@@ -164,6 +169,8 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     emit({ event: 'transfers.changed', payload: [...transfers] })
     emitActivity()
   }
+  const connectionDto = (): ConnectionDto => ({ health: connection })
+  const emitConnection = () => emit({ event: 'connection.changed', payload: connectionDto() })
   const newId = () => `fake-${nextId++}`
 
   const updateTransfer = (id: string, change: Partial<TransferDto>) => {
@@ -254,7 +261,6 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     return ok(null)
   }
 
-  let connection: ConnectionHealthDto = options.connection ?? 'good'
   let openedInvite: string | null = null
   let settings: SettingsDto = {
     language: options.language ?? null,
@@ -425,7 +431,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       return ok(null)
     },
 
-    'connection.get': () => ok({ health: connection }),
+    'connection.get': () => ok(connectionDto()),
 
     'activity.get': () => ok(activity()),
 
@@ -528,11 +534,6 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     openedConnectionSettings: 0,
     quits: 0,
 
-    setConnection(health: ConnectionHealthDto) {
-      connection = health
-      emit({ event: 'connection.changed', payload: { health } })
-    },
-
     openInvite(text: string) {
       openedInvite = text
       emit({ event: 'invites.changed', payload: true })
@@ -600,6 +601,12 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     setTransfers(next: TransferDto[]) {
       transfers = [...next]
       emitTransfers()
+    },
+
+    setConnection(health: ConnectionHealthDto | null) {
+      if (health === connection) return
+      connection = health
+      emitConnection()
     },
   }
 

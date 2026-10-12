@@ -77,7 +77,7 @@ export interface SetSettingsArgs {
 }
 
 export interface ConnectionDto {
-  health: ConnectionHealthDto;
+  health: ConnectionHealthDto | null;
 }
 
 export interface ActivityDto {

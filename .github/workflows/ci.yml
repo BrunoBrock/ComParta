@@ -25,4 +25,4 @@ jobs:
 
       - name: Build and test
         shell: pwsh
-        run: ./build.ps1
+        run: ./build.ps1 Check

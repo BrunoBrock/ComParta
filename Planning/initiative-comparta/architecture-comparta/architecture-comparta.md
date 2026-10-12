@@ -7,7 +7,7 @@ paradigm: 'hexagonal (ports and adapters), web-view UI as a driving adapter'
 scope: 'ComParta whole product: Windows (R1), folders and Android (R2), people I share with (R3)'
 status: final
 created: '2026-10-08'
-updated: '2026-10-10'
+updated: '2026-10-12'
 binds: []
 sources:
   - '../../ReadMe.md'
@@ -95,7 +95,9 @@ An arrow means "may depend on". `ComParta.Core` depends on no other project and 
 - **Prevents:** a story switching on wider discovery and exposing family files; inconsistent network settings per share.
 - **Rule:** All discovery, encryption and port settings come from one `SharingPolicy` object in core, applied only by the engine adapter. The policy (decided 2026-10-08) allows three ways for two devices to meet, all keyed by the invite: the sender's own network address carried inside the invite, local-network discovery, and the public BitTorrent lookup network (DHT). Peer exchange and trackers stay off, addresses of servers found in a pasted invite are dropped, and connections are encrypted. No other code sets engine network options.
 - **Amended 2026-10-10 (CAP-25):** a *download link* or *download file* the person brings from elsewhere is public content, not an invite. For those only, and only when `SharingPolicy.AllowServersInDownloadLinks` is on, the servers named in the link or file are kept and exchanging addresses with other devices is allowed for that transfer. Invites made by ComParta keep the closed rules above. The engine adapter decides which is which; core never sees the difference.
+- **Rule (decided 2026-10-12):** A share is reachable from the whole internet, not only the local network. How reachability is improved and explained to the person is AD-15.
 - **Accepted trade-off:** the content's fingerprint is announced on the public lookup network, so a share is unlisted, not secret: only someone holding the invite can ask for it, but the fingerprint is not hidden from that network. A stronger model (per-person keys) stays in Deferred.
+- **Accepted trade-off (2026-10-12), for family and friends:** the invite is a bearer key, so anyone holding it can download, it never expires, and removing the share is the only revocation. The sender's public address is visible to anyone who asks for the fingerprint or connects. The encryption hides traffic from casual inspection but is not confidentiality. Uploads are not limited.
 
 ### AD-9 — No hosted services, no accounts, no telemetry
 
@@ -265,6 +267,7 @@ Operational envelope: the product is an installed desktop app with no servers an
 | Item | Why it can wait | Revisit when |
 | --- | --- | --- |
 | Stronger privacy model: per-person keys so that only chosen people can download, and no fingerprint on the public lookup network | The first release uses the invite-as-secret model in AD-8. A design spike (epic 13 story 1) comes first; one candidate is announcing a value derived from a secret in the invite instead of the content fingerprint. | R3, or before the app is offered outside the maintainer's circle, whichever is first. |
+| Hardening considered and not decided: an upload rate limit and connection cap, invites that expire, an option to turn the public lookup network off | The AD-8 trade-off is accepted for family and friends (2026-10-12). | Before the app is offered outside the maintainer's circle. |
 | A relay for two devices that cannot reach each other | AD-15 covers IPv6, port mapping and either-side-reachable first. Any relay must be opt-in and run by someone the person chooses (decision D-3). | After the epic 9 field test measures how often homes fail to connect. |
 | Another engine with uTP and hole punching | AD-2 keeps a swap cheap; MonoTorrent works on the same network and when one side is reachable. | Only if the field test shows failures a different engine would fix. |
 | Open source license | Does not affect code structure; MonoTorrent's MIT license fits MIT, Apache-2.0 and GPL-3.0. Decision D-1. | Before the repository is made public. |

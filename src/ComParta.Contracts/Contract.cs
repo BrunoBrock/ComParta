@@ -93,6 +93,7 @@ public sealed record DetailsTargetDto(ItemKindDto Kind, string Id, string Name);
 /// <param name="Size">The picture's longest side in pixels; the app keeps it between 32 and 512.</param>
 public sealed record ThumbnailArgs(ThumbnailKindDto Kind, string Id, int Size);
 
+/// <summary>Whether another device can reach this computer. The words for it live in the UI (AD-11).</summary>
 public enum ConnectionHealthDto { Good, Limited, Blocked }
 
 public enum TransferSourceDto { Invite, DownloadLink, DownloadFile }
@@ -156,8 +157,8 @@ public sealed record QuitArgs(bool Force);
 /// <summary>Whether the app is quitting, or the names of the files that would stop moving (AD-14).</summary>
 public sealed record QuitAnswerDto(bool Quitting, string[] Moving);
 
-/// <param name="Health">How well others can reach this computer (AD-15).</param>
-public sealed record ConnectionDto(ConnectionHealthDto Health);
+/// <param name="Health">Null while nothing is shared or received, or the router has not answered yet.</param>
+public sealed record ConnectionDto(ConnectionHealthDto? Health);
 
 /// <summary>The speed bar: total speeds and the two Stop flags (CAP-27, AD-22).</summary>
 public sealed record ActivityDto(long ReceivingBytesPerSecond, long SendingBytesPerSecond, bool SendingStopped, bool ReceivingStopped);

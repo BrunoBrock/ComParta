@@ -376,26 +376,13 @@ public sealed class TwoDevicesTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task An_idle_engine_reports_listening_and_no_router_mapping_under_the_closed_policy()
-    {
-        var (engine, _) = await StartDeviceAsync("idle");
-
-        var facts = await WaitForAsync(engine, f => f.Listening);
-
-        Assert.True(facts.Listening);
-        Assert.False(facts.PortMapped);
-        Assert.Null(facts.MappedPort);
-        Assert.Null(facts.LastIncomingAt);
-    }
-
-    [Fact]
     public async Task A_sender_nobody_can_reach_still_delivers_by_connecting_out_to_the_receiver()
     {
         var original = CreateFile("holiday.mp4", 700_000);
         var (sender, _) = await StartDeviceAsync("sender", acceptIncoming: false);
         var (receiver, receiverPaths) = await StartDeviceAsync("receiver");
         Assert.Null(sender.ListenEndPoint);
-        Assert.False(sender.GetReachability().Listening);
+        Assert.False(sender.ReadReachability().Listening);
 
         var shareId = ShareId.New();
         Assert.Equal(OfferState.Ready, await OfferAndWaitAsync(sender, shareId, original));
@@ -407,9 +394,10 @@ public sealed class TwoDevicesTests : IAsyncLifetime
 
         Assert.True(result.Done);
         Assert.Equal(Checksum(original), Checksum(Path.Combine(receiverPaths.ReceivedRoot, "holiday.mp4")));
-        // The receiver saw someone connect in, which is what makes its connection "good".
-        Assert.NotNull(receiver.GetReachability().LastIncomingAt);
-        Assert.Null(sender.GetReachability().LastIncomingAt);
+        // Both devices are on this computer, and a device in the same place proves nothing about the
+        // internet, so neither counts the other's connection as proof that outsiders can get in.
+        Assert.False(receiver.ReadReachability().IncomingConnectionSeenRecently);
+        Assert.False(sender.ReadReachability().IncomingConnectionSeenRecently);
     }
 
     [Fact]
@@ -684,19 +672,6 @@ public sealed class TwoDevicesTests : IAsyncLifetime
 
         await receiver.SetStoppedAsync(sending: false, receiving: false);
         Assert.NotEqual(global::MonoTorrent.Client.TorrentState.Stopped, receiver.StateOf(id));
-    }
-
-    private static async Task<ReachabilityFacts> WaitForAsync(MonoTorrentTransferEngine engine, Func<ReachabilityFacts, bool> condition)
-    {
-        var until = DateTime.UtcNow + Timeout;
-        while (DateTime.UtcNow < until)
-        {
-            var facts = engine.GetReachability();
-            if (condition(facts))
-                return facts;
-            await Task.Delay(100);
-        }
-        return engine.GetReachability();
     }
 
     private static bool CanUseIPv6Loopback()

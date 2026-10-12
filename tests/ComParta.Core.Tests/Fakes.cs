@@ -33,17 +33,7 @@ internal sealed class FakeEngine : ITransferEngine
 
     public event Action<ShareId, OfferState>? OfferChanged;
     public event Action<ReceiveProgress>? ReceiveProgressed;
-    public event Action? ReachabilityChanged;
-
-    public ReachabilityFacts Reachability { get; set; } = ReachabilityFacts.Unknown with { Listening = true };
-    public ReachabilityFacts GetReachability() => Reachability;
-
-    /// <summary>Sets new facts and tells whoever listens, as the real engine does.</summary>
-    public void Reach(ReachabilityFacts facts)
-    {
-        Reachability = facts;
-        ReachabilityChanged?.Invoke();
-    }
+    public event Action<ReachabilityFacts>? ReachabilityChanged;
 
     public event Action? ActivityChanged;
 
@@ -144,6 +134,8 @@ internal sealed class FakeEngine : ITransferEngine
     }
 
     public void Report(ReceiveProgress progress) => ReceiveProgressed?.Invoke(progress);
+
+    public void Report(ReachabilityFacts facts) => ReachabilityChanged?.Invoke(facts);
 }
 
 internal sealed class FakeFilePicker : IFilePicker

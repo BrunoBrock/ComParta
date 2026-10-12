@@ -22,7 +22,7 @@ For parents, grandparents, relatives and friends: two people in different homes 
 
 1. A person who has never used a torrent program adds and removes a share on Windows without help, and the original file is untouched (spec MVP signal).
 2. Two people in different homes transfer a large file directly between their devices, started from an invite sent by email or chat.
-3. A network capture during normal use shows no connection to any hosted service, and the app has no sign-in.
+3. A network capture during normal use shows no connection to any hosted service, apart from the public lookup network's well-known entry nodes (AD-8), and the app has no sign-in.
 4. No screen or message uses a torrent term (CAP-4).
 5. The same flows work on an Android phone.
 6. A non-technical person installs the app from one download.
@@ -50,3 +50,6 @@ Tracer path: a file picked in the Windows dialog appears in the list, survives a
 - Plan 2026-10-10: every epic has stories except epic 13, whose stories after its spike carry `refine = true`. Six epics were added (8 to 13) and CAP-13 to CAP-24 added to the spec; AD-13 to AD-20 added to the architecture.
 - OQ-1 answered for R1 by AD-8; the stronger model is epic 13. OQ-2 answered by AD-13. OQ-5 answered: epic 11.
 - Open: OQ-3 license (decision D-1), OQ-4 channel (decision D-2), OQ-6 target success rate between homes (epic 9).
+- Decision 2026-10-12 (maintainer): shared files are reachable from the whole internet, with the limits stated in AD-8; epic 9 builds and explains the reachability.
+- Decision 2026-10-12 (maintainer): Done when 3 allows the public lookup network's well-known entry nodes (`router.bittorrent.com` is in the MonoTorrent DHT library).
+- Parked: edge cases and small items set aside on 2026-10-12 are listed in `todo-later.md` in this folder.

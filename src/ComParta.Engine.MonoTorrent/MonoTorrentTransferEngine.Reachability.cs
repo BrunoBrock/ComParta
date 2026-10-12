@@ -1,48 +1,41 @@
-using System.Net.Sockets;
+using ComParta.Core;
 using ComParta.Core.Ports;
-using MonoTorrent;
 using MonoTorrent.Client;
-using MonoTorrent.Connections;
 
 namespace ComParta.Engine.MonoTorrent;
 
 // Reachability of the engine; the class is split by area, see MonoTorrentTransferEngine.cs.
 public sealed partial class MonoTorrentTransferEngine
 {
-    public ReachabilityFacts GetReachability()
+    /// <summary>The facts about being reachable as they are right now. For tests and the report loop.</summary>
+    internal ReachabilityFacts ReadReachability() => _probe.Read(_policy, _engine, _portMapper?.ExternalAddress);
+
+    /// <summary>Raises <see cref="ReachabilityChanged"/> when the facts differ from the last report.</summary>
+    internal void ReportReachability()
     {
-        // MonoTorrent opens its listeners only while something is shared or received, so an idle
-        // engine counts as listening unless every listener it opened found its port taken.
-        bool listening;
-        lock (_listeners)
+        // One report at a time, so reports reach listeners in order and a direct call always reports.
+        lock (_reachabilityGate)
         {
-            listening = _engine is { } engine && engine.Settings.ListenEndPoints.Count > 0
-                && (_listeners.Count == 0 || _listeners.Any(l => l.Status != ListenerStatus.PortNotFree));
+            try
+            {
+                var facts = ReadReachability();
+                if (facts == _lastReachability)
+                    return;
+                _lastReachability = facts;
+                ReachabilityChanged?.Invoke(facts);
+            }
+            catch (Exception)
+            {
+                // A report must never take the timer down. The facts are stored before the event is
+                // raised and an unchanged answer is not raised again, so a delivery that failed is
+                // dropped, not retried: the bridge's connection.get always has the current answer.
+            }
         }
-        var mappedPort = _portMapper?.MappedPort(_policy.ListenPort);
-        var lastIncoming = Interlocked.Read(ref _lastIncomingTicks);
-        return new ReachabilityFacts(
-            Listening: listening,
-            PortMapped: mappedPort is not null,
-            MappedPort: mappedPort,
-            GlobalIPv6: AcceptIncoming && Socket.OSSupportsIPv6 && GlobalIPv6Addresses().Any(),
-            LastIncomingAt: lastIncoming == 0 ? null : new DateTimeOffset(lastIncoming, TimeSpan.Zero));
     }
 
+    /// <summary>Tells the probe about connections other devices make to this manager's transfer.</summary>
     private void WatchIncoming(TorrentManager manager) =>
-        manager.PeerConnected += (_, e) =>
-        {
-            if (e.Direction != Direction.Incoming)
-                return;
-            Interlocked.Exchange(ref _lastIncomingTicks, DateTimeOffset.UtcNow.UtcTicks);
-            RaiseReachabilityChanged();
-        };
+        manager.PeerConnected += (_, args) => _probe.NoteConnection(args.Direction, args.Peer.Uri);
 
-    private void OnNetworkAddressChanged(object? sender, EventArgs e) => RaiseReachabilityChanged();
-
-    private void RaiseReachabilityChanged()
-    {
-        try { ReachabilityChanged?.Invoke(); }
-        catch (Exception) { /* a listener's problem must not stop the engine */ }
-    }
+    private void OnNetworkAddressChanged(object? sender, EventArgs e) => ReportReachability();
 }

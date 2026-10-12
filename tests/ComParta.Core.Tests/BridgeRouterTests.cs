@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using ComParta.Contracts;
 using ComParta.Core.Ports;
@@ -245,6 +246,51 @@ public sealed class BridgeRouterTests
     }
 
     [Fact]
+    public async Task The_connection_health_is_null_while_nothing_is_shared_or_received()
+    {
+        var result = await InvokeAsync(Commands.ConnectionGet);
+
+        Assert.True(result.GetProperty("ok").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("value").GetProperty("health").ValueKind);
+    }
+
+    [Theory]
+    [InlineData(PortMappingState.Obtained, null, "good")]
+    [InlineData(PortMappingState.Obtained, "192.168.1.1", "limited")]
+    [InlineData(PortMappingState.Refused, null, "blocked")]
+    public async Task The_connection_health_is_asked_for_and_pushed_as_the_engine_learns_more(
+        PortMappingState mapping, string? externalAddress, string expected)
+    {
+        _engine.Report(new ReachabilityFacts(
+            true, false, mapping, null, externalAddress is null ? null : IPAddress.Parse(externalAddress), false, false, false));
+
+        var asked = await InvokeAsync(Commands.ConnectionGet);
+        Assert.Equal(expected, asked.GetProperty("value").GetProperty("health").GetString());
+
+        var pushed = Assert.Single(_events, e => e.GetProperty("event").GetString() == Events.ConnectionChanged);
+        Assert.Equal(expected, pushed.GetProperty("payload").GetProperty("health").GetString());
+    }
+
+    [Fact]
+    public void Connection_events_are_sent_only_when_the_health_changes_and_when_it_becomes_unknown()
+    {
+        var blocked = new ReachabilityFacts(true, false, PortMappingState.Refused, null, null, false, false, false);
+        var idle = blocked with { Listening = false };
+
+        _engine.Report(blocked);
+        _engine.Report(blocked with { ExternalPort = 1234 });
+        _engine.Report(idle);
+
+        var payloads = _events
+            .Where(e => e.GetProperty("event").GetString() == Events.ConnectionChanged)
+            .Select(e => e.GetProperty("payload").GetProperty("health"))
+            .ToList();
+        Assert.Equal(2, payloads.Count);
+        Assert.Equal("blocked", payloads[0].GetString());
+        Assert.Equal(JsonValueKind.Null, payloads[1].ValueKind);
+    }
+
+    [Fact]
     public void Every_declared_command_and_event_is_named_area_dot_verb()
     {
         Assert.All(Contract.CommandSpecs, spec => Assert.Matches(@"^[a-z]+\.[a-z][A-Za-z]+$", spec.Name));
@@ -352,19 +398,20 @@ public sealed class BridgeRouterTests
     }
 
     [Fact]
-    public async Task Connection_health_is_read_and_reported_when_it_changes()
+    public async Task The_firewall_is_asked_again_whenever_the_connection_is_read()
     {
-        _engine.Reachability = ReachabilityFacts.Unknown with { Listening = true };
+        _engine.Report(new ReachabilityFacts(true, false, PortMappingState.Obtained, 40_000, null, false, false, false));
         var first = await InvokeAsync(Commands.ConnectionGet);
-        Assert.Equal("limited", first.GetProperty("value").GetProperty("health").GetString());
-
-        _engine.Reach(_engine.Reachability with { PortMapped = true, MappedPort = 40_000 });
-
-        var changed = Assert.Single(_events, e => e.GetProperty("event").GetString() == Events.ConnectionChanged);
-        Assert.Equal("good", changed.GetProperty("payload").GetProperty("health").GetString());
+        Assert.Equal("good", first.GetProperty("value").GetProperty("health").GetString());
 
         _firewall.Allows = false;
-        Assert.Equal("blocked", (await InvokeAsync(Commands.ConnectionGet)).GetProperty("value").GetProperty("health").GetString());
+        var second = await InvokeAsync(Commands.ConnectionGet);
+        Assert.Equal("blocked", second.GetProperty("value").GetProperty("health").GetString());
+
+        var pushed = _events
+            .Where(e => e.GetProperty("event").GetString() == Events.ConnectionChanged)
+            .Select(e => e.GetProperty("payload").GetProperty("health").GetString());
+        Assert.Equal(["good", "blocked"], pushed);
     }
 
     [Fact]

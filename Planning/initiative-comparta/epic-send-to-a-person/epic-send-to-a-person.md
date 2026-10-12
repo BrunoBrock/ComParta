@@ -32,7 +32,7 @@ The spec is the source; stories cite its ids. Story 1 is the first version alrea
 2. The receiver opens the invite and the file arrives in the Received folder, identical to the original.
 3. The transfer works between two homes on ordinary home routers. Moved to epic 9 (connect between homes), which measures and improves it.
 4. Someone without the invite cannot obtain the file.
-5. A network capture shows no connection to a hosted service during the transfer.
+5. A network capture shows no connection to a hosted service during the transfer, apart from the public lookup network's well-known entry nodes (AD-8).
 6. Both people run a release build on their own Windows PCs.
 
 ## Boundaries
@@ -53,4 +53,7 @@ Invite and receive on Windows. Not transfer progress beyond done or not done (ep
 - OQ-1 was answered for this release by AD-8. What remains is in the architecture's Deferred table.
 - Unknown: whether MonoTorrent connects reliably through home routers without uTP. Moved to epic 9, which starts with a field test.
 - Plan 2026-10-10: invites become `comparta://` links (AD-16); the receive step always confirms first; story 6 also brings the single running copy that epic 10 builds on. The epic is done when stories 2 to 7 are built and Done when 1, 2, 4, 5 and 6 are checked.
+- Decision 2026-10-12 (maintainer): Done when 5 allows the public lookup network's well-known entry nodes; `router.bittorrent.com` is in the MonoTorrent DHT library, so a capture shows it.
+- Decision 2026-10-12 (maintainer): shared files are reachable from the whole internet, with the limits in AD-8. Reachability is epic 9; edge cases set aside are in `todo-later.md`.
+- Assumption: the friendly invite message (story 3) and the copy action say that the link is for the chosen person only, because anyone holding it can download the file (spec, Constraints, 2026-10-12).
 - Waits on epic-share-a-file because: it provides the running app, the bridge contract and the engine port.

@@ -50,6 +50,9 @@ Reachability between two devices running ComParta. Not a relay unless decision D
 - Assumption: Mono.Nat (shipped with MonoTorrent) handles UPnP and NAT-PMP; PCP is a bonus if it does.
 - Unknown: whether MonoTorrent 3.0.2 listens and announces on IPv6 (lookup network over IPv6, BEP 32); story 5 finds out.
 - Risk: in Brazil, mobile networks and some fibre providers use carrier-grade NAT for IPv4; IPv6 is the main hope there.
+- Fact 2026-10-12 (checked in the shipped DLLs): Mono.Nat exposes `GetExternalIPAsync`, the router's external address; MonoTorrent's own port forwarder reports only `Mappings` and `MappingsChanged`. Story 6 reads the external address through Mono.Nat. The address the lookup network reports, as a fallback, is not verified.
+- Assumption: an external address in a private or shared range (10/8, 172.16/12, 192.168/16, 100.64/10) means carrier-grade NAT, so health is not 'good' even when the mapping succeeded (stories 2 and 6). A receiver keeps at most six address hints from an invite, so the public address goes first.
+- Decision 2026-10-12 (maintainer): shared files are reachable from the whole internet, with the limits in AD-8; edge cases set aside are in `todo-later.md`.
 - Waits on epic-send-to-a-person because: it provides the receive path being measured.
 - Built 2026-10-11: stories 2, 3, 5, 6 and 7, and the code half of story 4.
   - Health: core decides `blocked` (not accepting connections, or a Windows Firewall rule blocks the app), `good` (the router opened a port, or someone connected in the last hour), else `limited`. An IPv6 address alone counts as `limited`, because many home routers refuse incoming IPv6.

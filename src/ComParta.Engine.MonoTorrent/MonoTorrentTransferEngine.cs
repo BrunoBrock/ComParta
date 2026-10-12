@@ -27,7 +27,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
 {
     private static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan HintRetryInterval = TimeSpan.FromSeconds(20);
-    private static readonly TimeSpan ReachabilityInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ReachabilityInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan ActivityInterval = TimeSpan.FromSeconds(1);
 
     // The magnet-link parameter for "a peer address to try directly" (BEP 9).
@@ -44,8 +44,11 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
     private readonly string _inProgressRoot;
     private readonly ConcurrentDictionary<ShareId, Offer> _offers = new();
     private readonly ConcurrentDictionary<TransferId, Incoming> _incoming = new();
-    private readonly List<IPeerConnectionListener> _listeners = [];
-    private readonly INatDiscovery _natDiscovery;
+    private readonly INatDiscovery? _natDiscovery;
+    private readonly Factories _baseFactories;
+    private readonly ReachabilityProbe _probe;
+    private readonly object _reachabilityGate = new();
+    private ReachabilityFacts? _lastReachability;
     private ClientEngine? _engine;
     private PortMapper? _portMapper;
     private SharingPolicy _policy = SharingPolicy.Closed;
@@ -55,15 +58,35 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
     private volatile bool _sendingStopped;
     private volatile bool _receivingStopped;
     private int _reporting;
-    private long _lastIncomingTicks;
 
     public MonoTorrentTransferEngine(IAppPaths paths) : this(paths, new MonoNatDiscovery())
     {
     }
 
     internal MonoTorrentTransferEngine(IAppPaths paths, INatDiscovery natDiscovery)
+        : this(paths, natDiscovery, Factories.Default, TimeProvider.System)
+    {
+    }
+
+    /// <summary>For tests: builds the engine from <paramref name="factories"/>, so a fake router can stand in for the real one.</summary>
+    /// <param name="factories">What the engine builds its parts from. Its port forwarder is used as it is.</param>
+    /// <param name="clock">Times the one-hour window of an incoming connection from outside.</param>
+    /// <param name="isOutsideLocalNetwork">Which addresses count as outside the local network; the usual rule when null.</param>
+    /// <param name="localAddresses">The addresses of this computer; the ones of the network connections that are up when null.</param>
+    internal MonoTorrentTransferEngine(
+        IAppPaths paths, Factories factories, TimeProvider clock, Func<IPAddress, bool>? isOutsideLocalNetwork = null,
+        Func<IEnumerable<IPAddress>>? localAddresses = null)
+        : this(paths, null, factories, clock, isOutsideLocalNetwork, localAddresses)
+    {
+    }
+
+    private MonoTorrentTransferEngine(
+        IAppPaths paths, INatDiscovery? natDiscovery, Factories factories, TimeProvider clock,
+        Func<IPAddress, bool>? isOutsideLocalNetwork = null, Func<IEnumerable<IPAddress>>? localAddresses = null)
     {
         _natDiscovery = natDiscovery;
+        _baseFactories = factories;
+        _probe = new ReachabilityProbe(clock, isOutsideLocalNetwork, localAddresses);
         _sharesFolder = Path.Combine(paths.EngineRoot, "shares");
         _transfersFolder = Path.Combine(paths.EngineRoot, "transfers");
         _cacheFolder = Path.Combine(paths.EngineRoot, "cache");
@@ -74,7 +97,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
 
     public event Action<ShareId, OfferState>? OfferChanged;
     public event Action<ReceiveProgress>? ReceiveProgressed;
-    public event Action? ReachabilityChanged;
+    public event Action<ReachabilityFacts>? ReachabilityChanged;
     public event Action? ActivityChanged;
 
     /// <summary>The endpoint this engine was told to accept connections on. For tests.</summary>
@@ -97,22 +120,29 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
 
         // A port of 0 means "choose one and keep it", so invites given out earlier stay good.
         _policy = policy.ListenPort == 0 ? policy with { ListenPort = LoadOrChoosePort() } : policy;
-        _portMapper = new PortMapper(_natDiscovery, _policy.AllowPortForwarding);
-        _portMapper.MappingsChanged += (_, _) => RaiseReachabilityChanged();
-        var factories = Factories.Default
-            .WithPortForwarderCreator(() => _portMapper)
-            .WithPieceWriterCreator(maxOpenFiles => WrapWriter(Factories.Default.CreatePieceWriter(maxOpenFiles)))
+        _probe.Reset();
+        lock (_reachabilityGate)
+            _lastReachability = null;
+        var factories = _baseFactories;
+        _portMapper = null;
+        if (_natDiscovery is { } discovery)
+        {
+            var mapper = _portMapper = new PortMapper(discovery, _policy.AllowPortForwarding);
+            mapper.MappingsChanged += (_, _) => ReportReachability();
+            factories = factories.WithPortForwarderCreator(() => mapper);
+        }
+        factories = factories
+            .WithPieceWriterCreator(maxOpenFiles => WrapWriter(_baseFactories.CreatePieceWriter(maxOpenFiles)))
+            // Every listener the engine creates is remembered so its status can be read (AD-15).
             .WithPeerConnectionListenerCreator(endPoint =>
             {
-                var listener = Factories.Default.CreatePeerConnectionListener(endPoint);
-                listener.StatusChanged += (_, _) => RaiseReachabilityChanged();
-                lock (_listeners)
-                    _listeners.Add(listener);
-                return listener;
+                var listener = _baseFactories.CreatePeerConnectionListener(endPoint);
+                listener.StatusChanged += (_, _) => ReportReachability();
+                return _probe.Track(endPoint, listener);
             });
         _engine = new ClientEngine(ToEngineSettings(_policy, _cacheFolder, AcceptIncoming), factories);
         _progressTimer = new Timer(_ => ReportProgress(), null, ProgressInterval, ProgressInterval);
-        _reachabilityTimer = new Timer(_ => RaiseReachabilityChanged(), null, ReachabilityInterval, ReachabilityInterval);
+        _reachabilityTimer = new Timer(_ => ReportReachability(), null, ReachabilityInterval, ReachabilityInterval);
         _activityTimer = new Timer(_ => _ = TickActivityAsync(), null, ActivityInterval, ActivityInterval);
         NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
         return Task.CompletedTask;
@@ -221,8 +251,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
             portMapper.Dispose();
             _portMapper = null;
         }
-        lock (_listeners)
-            _listeners.Clear();
+        _probe.Reset();
         _offers.Clear();
         _incoming.Clear();
     }

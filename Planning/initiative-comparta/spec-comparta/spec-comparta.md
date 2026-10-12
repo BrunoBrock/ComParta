@@ -108,7 +108,7 @@ Capabilities marked **[MVP]** form the first build (Windows desktop: add or remo
 - AD-1 to AD-12 in the architecture companion are binding.
 - No account, no cloud, no hosted service, no telemetry (AD-9).
 - The target user can use a smartphone and email but nothing more complex; any step needing networking or torrent knowledge is a defect.
-- Private by default: content reaches only people who hold its invite; nothing is listed or searchable. The limits of this are stated in AD-8.
+- Private by default: content reaches only people who hold its invite; nothing is listed or searchable. The invite itself is the secret: anyone holding it can download, so the app never presents it as safe to post publicly. The limits of this are stated in AD-8.
 - Sharing never copies, moves, changes or deletes the original file (AD-6).
 - The MVP is Windows desktop only; nothing in it may block the Android shell (AD-1).
 - Open source. qBittorrent and other clients are reference only; no code is copied from them.
@@ -145,7 +145,7 @@ Capabilities marked **[MVP]** form the first build (Windows desktop: add or remo
 
 ## Open Questions
 
-- OQ-1: Answered for the first release by AD-8 (invite carries the sender's address, plus local discovery and the public lookup network). The stronger model where only chosen people can download is CAP-24, settled by the epic 13 spike. Reliable connection when both people are behind strict routers is CAP-18; whether a chosen relay is allowed is decision D-3 in the roadmap.
+- OQ-1: Answered for the first release by AD-8 (invite carries the sender's address, plus local discovery and the public lookup network). On 2026-10-12 the maintainer accepted that shared files are reachable from the whole internet, with the limits stated in AD-8. The stronger model where only chosen people can download is CAP-24, settled by the epic 13 spike. Reliable connection when both people are behind strict routers is CAP-18; whether a chosen relay is allowed is decision D-3 in the roadmap.
 - OQ-2: Answered 2026-10-10 by AD-13: no AppContainer; received files carry the Windows internet mark and go through the attachment services API, which runs the installed antivirus; programs and scripts ask before opening.
 - OQ-3: Which open source license? Recommendation Apache-2.0; decision D-1 in the roadmap. Needed before the repository goes public and before epic 5 story 1.
 - OQ-4: Answered in part by AD-17: no in-app update check; updates come from the store. The channel (Microsoft Store recommended, or paid code signing) is decision D-2 in the roadmap.

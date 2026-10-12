@@ -3,60 +3,92 @@ using ComParta.Core.Ports;
 namespace ComParta.Core.UseCases;
 
 /// <summary>
-/// This computer's connection health, from the engine's facts and the firewall's answer (AD-15).
+/// Turns what the engine observes about being reachable, and what the firewall says, into one
+/// answer: can another device reach this computer (AD-15)? These rules are the only place that
+/// decides what the facts mean.
 /// </summary>
 public sealed class ConnectionUseCases
 {
-    /// <summary>An incoming connection this recent proves others can reach this computer.</summary>
-    public static readonly TimeSpan RecentIncoming = TimeSpan.FromHours(1);
-
-    private readonly ITransferEngine _engine;
     private readonly IFirewall? _firewall;
-    private readonly TimeProvider _clock;
-    private readonly object _lock = new();
-    private ConnectionHealth? _last;
+    private readonly object _gate = new();
+    private ReachabilityFacts? _facts;
+    private ConnectionHealth? _health;
 
-    public ConnectionUseCases(ITransferEngine engine, IFirewall? firewall = null, TimeProvider? clock = null)
+    public ConnectionUseCases(ITransferEngine engine, IFirewall? firewall = null)
     {
-        _engine = engine;
         _firewall = firewall;
-        _clock = clock ?? TimeProvider.System;
-        _engine.ReachabilityChanged += () => Refresh();
+        engine.ReachabilityChanged += OnReachabilityChanged;
     }
 
-    /// <summary>Raised with the new health when it changes.</summary>
-    public event Action<ConnectionHealth>? Changed;
+    /// <summary>Raised whenever the health really changes, including when it becomes unknown.</summary>
+    public event Action? Changed;
 
-    /// <summary>The health now. Raises <see cref="Changed"/> when it differs from the last one reported.</summary>
-    public ConnectionHealth Refresh()
+    /// <summary>The health as last worked out, or null while nothing can be measured.</summary>
+    public ConnectionHealth? Current()
     {
-        var health = Decide(_engine.GetReachability(), AskFirewall(), _clock.GetUtcNow());
-        bool changed;
-        lock (_lock)
-        {
-            changed = _last is not null && _last != health;
-            _last = health;
-        }
-        if (changed)
-            Changed?.Invoke(health);
-        return health;
+        lock (_gate)
+            return _health;
+    }
+
+    /// <summary>
+    /// Works the health out again from the last facts and what the firewall says now, because the
+    /// person can change the firewall without the engine noticing. Raises <see cref="Changed"/> when
+    /// it differs from the last answer.
+    /// </summary>
+    public ConnectionHealth? Refresh()
+    {
+        ReachabilityFacts? facts;
+        lock (_gate)
+            facts = _facts;
+        return facts is null ? Current() : Update(facts);
     }
 
     public Task OpenSettingsAsync(CancellationToken ct = default) =>
         _firewall is null ? Task.CompletedTask : _firewall.OpenSettingsAsync(ct);
 
     /// <summary>
-    /// Blocked when the app cannot accept connections at all; good when the router opened a way in or
-    /// someone connected in the last hour; limited otherwise. An address on the newer internet
-    /// protocol alone is not enough, because many home routers still refuse connections to it.
+    /// The rules, in order; the first that applies wins. Null means nothing can be told yet: nothing
+    /// is shared or received, or the router has not answered. A firewall that refuses incoming
+    /// connections (<paramref name="firewallAllows"/> false) makes it blocked whatever the router says.
     /// </summary>
-    public static ConnectionHealth Decide(ReachabilityFacts facts, bool? firewallAllows, DateTimeOffset now)
+    public static ConnectionHealth? Reduce(ReachabilityFacts facts, bool? firewallAllows = null)
     {
-        if (!facts.Listening || firewallAllows == false)
+        if (!facts.Listening && !facts.ListenPortBusy)
+            return null;
+        if (facts.ListenPortBusy || firewallAllows == false)
             return ConnectionHealth.Blocked;
-        if (facts.LastIncomingAt is { } seen && now - seen <= RecentIncoming)
+        if (facts.IncomingConnectionSeenRecently)
             return ConnectionHealth.Good;
-        return facts.PortMapped ? ConnectionHealth.Good : ConnectionHealth.Limited;
+
+        var mapped = facts.PortMapping == PortMappingState.Obtained;
+        if ((mapped && (facts.ExternalAddress is null || NetworkAddresses.IsPublic(facts.ExternalAddress)))
+            || (facts.GlobalIPv6Present && facts.ListeningOnIPv6))
+            return ConnectionHealth.Good;
+        if (facts.PortMapping == PortMappingState.Pending)
+            return null;
+        if (mapped)
+            return ConnectionHealth.Limited;
+        return ConnectionHealth.Blocked;
+    }
+
+    private void OnReachabilityChanged(ReachabilityFacts facts)
+    {
+        lock (_gate)
+            _facts = facts;
+        Update(facts);
+    }
+
+    private ConnectionHealth? Update(ReachabilityFacts facts)
+    {
+        var health = Reduce(facts, AskFirewall());
+        lock (_gate)
+        {
+            if (_health == health)
+                return health;
+            _health = health;
+        }
+        Changed?.Invoke();
+        return health;
     }
 
     private bool? AskFirewall()

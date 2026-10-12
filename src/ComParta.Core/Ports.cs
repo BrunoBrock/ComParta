@@ -34,21 +34,6 @@ public enum OfferState { Preparing, Ready, Failed }
 /// <summary>What the engine can tell from invite text alone: the name and size it announces.</summary>
 public sealed record InviteSummary(string? Name, long? SizeBytes);
 
-/// <summary>
-/// Neutral facts about whether other devices can reach this one (AD-15). The engine reports them;
-/// core turns them into <see cref="ConnectionHealth"/>. No code contacts a service to learn them.
-/// </summary>
-/// <param name="Listening">The app accepts incoming connections on its port.</param>
-/// <param name="PortMapped">The home router agreed to pass incoming connections to this computer.</param>
-/// <param name="MappedPort">The port the router opened, when it did.</param>
-/// <param name="GlobalIPv6">This computer has an address on the newer internet protocol that others can use directly.</param>
-/// <param name="LastIncomingAt">When another device last connected to this one, or null.</param>
-public sealed record ReachabilityFacts(
-    bool Listening, bool PortMapped, int? MappedPort, bool GlobalIPv6, DateTimeOffset? LastIncomingAt)
-{
-    public static ReachabilityFacts Unknown { get; } = new(false, false, null, false, null);
-}
-
 /// <summary>What one share or transfer is doing now (AD-22).</summary>
 /// <param name="Connections">How many other computers are connected for it.</param>
 /// <param name="BytesReceived">Bytes received for it since the app started.</param>
@@ -91,23 +76,23 @@ public interface ITransferEngine
 {
     event Action<ShareId, OfferState>? OfferChanged;
     event Action<ReceiveProgress>? ReceiveProgressed;
-    /// <summary>Raised when the reachability facts may have changed, and now and then while running.</summary>
-    event Action? ReachabilityChanged;
-
-    /// <summary>What the engine knows now about being reachable (AD-15).</summary>
-    ReachabilityFacts GetReachability();
-
-    /// <summary>Raised about once a second while running, so speeds can be shown (AD-22).</summary>
-    event Action? ActivityChanged;
-
-    /// <summary>The speeds, connections and bytes moved now (AD-22).</summary>
-    EngineActivity GetActivity();
-
     /// <summary>
-    /// Stops or starts all sending and all receiving (AD-22). A transfer the person paused on its
-    /// own stays paused when receiving starts again.
+    /// The engine's current observations about being reachable, raised whenever they differ from the
+    /// last report. Facts only: core decides what they mean (AD-15).
     /// </summary>
-    Task SetStoppedAsync(bool sending, bool receiving, CancellationToken ct = default);
+    event Action<ReachabilityFacts>? ReachabilityChanged;
+
+    /// <summary>Raised about once a second while running, so speeds can be shown (AD-22).</summary>
+    event Action? ActivityChanged;
+
+    /// <summary>The speeds, connections and bytes moved now (AD-22).</summary>
+    EngineActivity GetActivity();
+
+    /// <summary>
+    /// Stops or starts all sending and all receiving (AD-22). A transfer the person paused on its
+    /// own stays paused when receiving starts again.
+    /// </summary>
+    Task SetStoppedAsync(bool sending, bool receiving, CancellationToken ct = default);
 
     Task StartAsync(SharingPolicy policy, CancellationToken ct = default);
     Task StopAsync();
