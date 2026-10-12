@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { TransferDto } from './bridge/contract.generated.ts'
 import { en } from './i18n/en.ts'
@@ -104,5 +104,27 @@ describe('using what was received', () => {
     await user.click(await button('Open Recipe.pdf'))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(en['error.received.openFailed'])
+  })
+})
+
+describe('pictures of received files', () => {
+  it('shows a thumbnail for an arrived video and the icon for others', async () => {
+    const video: TransferDto = {
+      id: 't3',
+      name: 'Holiday.mp4',
+      sizeBytes: 2048,
+      receivedBytes: 2048,
+      state: 'done',
+      bytesPerSecond: 0,
+      secondsLeft: null,
+    }
+    const zip: TransferDto = { ...video, id: 't4', name: 'Photos.zip' }
+    const { user } = setup({ transfers: [video, zip] })
+    await goToReceived(user)
+
+    const card = (name: string) =>
+      within(transfersSection()).getByText(name, { selector: '.visually-hidden, .name-start' }).closest('li')!
+    await waitFor(() => expect(card('Holiday.mp4').querySelector('img')).not.toBeNull())
+    expect(card('Photos.zip').querySelector('img')).toBeNull()
   })
 })

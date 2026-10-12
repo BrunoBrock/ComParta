@@ -171,6 +171,15 @@ public interface IContentOpener
     Task RevealAsync(string path, CancellationToken ct = default);
 }
 
+/// <summary>A small picture of a file, as the operating system draws it.</summary>
+public sealed record Thumbnail(string ContentType, byte[] Bytes);
+
+/// <summary>Thumbnails for photos and videos (AD-18). Null when the system has none for the file.</summary>
+public interface IThumbnailProvider
+{
+    Task<Thumbnail?> GetAsync(string path, int size, CancellationToken ct = default);
+}
+
 public interface IFileSystem
 {
     bool FileExists(string path);

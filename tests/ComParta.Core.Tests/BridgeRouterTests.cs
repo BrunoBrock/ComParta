@@ -18,6 +18,7 @@ public sealed class BridgeRouterTests
     private readonly FakeSettingsRepository _settings = new();
     private readonly FakeFirewall _firewall = new();
     private readonly OpenedInvites _opened = new();
+    private readonly FakeThumbnails _thumbnails = new();
     private readonly List<JsonElement> _events = [];
     private readonly BridgeRouter _router;
 
@@ -29,7 +30,8 @@ public sealed class BridgeRouterTests
         var connection = new ConnectionUseCases(_engine, _firewall);
         var activity = new ActivityUseCases(_engine, _settings);
         var received = new ReceivedUseCases(transfers, new FakePaths(Path.GetTempPath()), _shell, _files);
-        _router = new BridgeRouter(shares, transfers, settings, connection, _opened, activity, received, _shell, _shell);
+        var thumbnails = new ThumbnailUseCases(shares, received, _thumbnails);
+        _router = new BridgeRouter(shares, transfers, settings, connection, _opened, activity, received, _shell, _shell, thumbnails);
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
         _picker.NextPick = Video;
@@ -269,6 +271,19 @@ public sealed class BridgeRouterTests
 
         Assert.True((await InvokeAsync(Commands.SettingsSet, new { language = "en" })).GetProperty("ok").GetBoolean());
         Assert.Equal(JsonValueKind.Null, (await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("view").ValueKind);
+    }
+
+    [Fact]
+    public async Task A_shared_video_has_a_thumbnail_as_a_data_url_and_no_path_crosses_the_bridge()
+    {
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
+
+        var picture = await InvokeAsync(Commands.ThumbnailsGet, new { kind = "share", id, size = 96 });
+
+        Assert.Equal("data:image/png;base64,AQID", picture.GetProperty("value").GetString());
+        Assert.Equal([(Video, 96)], _thumbnails.Asked);
+        Assert.Equal(ErrorCodes.ShareNotFound, ErrorCode(await InvokeAsync(Commands.ThumbnailsGet, new { kind = "share", id = "nope", size = 96 })));
+        Assert.Equal(ErrorCodes.TransferNotFound, ErrorCode(await InvokeAsync(Commands.ThumbnailsGet, new { kind = "transfer", id = TransferId.New().ToString(), size = 96 })));
     }
 
     [Fact]

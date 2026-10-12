@@ -8,6 +8,8 @@ export type ConnectionHealthDto = "good" | "limited" | "blocked";
 
 export type TransferSourceDto = "invite" | "downloadLink" | "downloadFile";
 
+export type ThumbnailKindDto = "share" | "transfer";
+
 export interface ShareDto {
   id: string;
   name: string;
@@ -105,6 +107,12 @@ export interface TransferDetailsDto {
   bytesSent: number;
 }
 
+export interface ThumbnailArgs {
+  kind: ThumbnailKindDto;
+  id: string;
+  size: number;
+}
+
 export const errorCodes = [
   "share.duplicate",
   "share.notFound",
@@ -150,6 +158,7 @@ export interface Commands {
   "activity.set": { args: SetActivityArgs; result: null };
   "shares.details": { args: IdArgs; result: ShareDetailsDto };
   "transfers.details": { args: IdArgs; result: TransferDetailsDto };
+  "thumbnails.get": { args: ThumbnailArgs; result: string | null };
 }
 
 export interface Events {

@@ -14,10 +14,12 @@ import type {
   SettingsDto,
   ShareDetailsDto,
   ShareDto,
+  ThumbnailArgs,
   TransferDetailsDto,
   TransferDto,
   TransferSourceDto,
 } from './contract.generated.ts'
+import { isPicture } from '../fileNames.ts'
 
 export interface PickedFile {
   name: string
@@ -81,6 +83,18 @@ const invitePrefix = 'comparta://receive/v1/'
 const invitePattern = /comparta:\/\/receive\/v1\/([A-Za-z0-9_-]+)/i
 const downloadLinkPrefix = 'https://example.org/download/'
 const demoInvite = { senderName: 'Paulo', name: 'Birthday party.mp4', sizeBytes: 250_000_000 }
+/** A made-up picture for a photo or video, coloured from its name, so the browser preview shows thumbnails. */
+export function fakePicture(name: string): string {
+  const hue = [...name].reduce((sum, c) => (sum + c.charCodeAt(0) * 7) % 360, 0)
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160">` +
+    `<defs><linearGradient id="g" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue} 60% 70%)"/>` +
+    `<stop offset="1" stop-color="hsl(${(hue + 60) % 360} 50% 45%)"/></linearGradient></defs>` +
+    `<rect width="240" height="160" fill="url(#g)"/><circle cx="180" cy="48" r="20" fill="hsl(50 90% 85%)"/>` +
+    `<path d="M0 160 L80 80 L140 130 L180 100 L240 160 Z" fill="hsl(${hue} 40% 30%)"/></svg>`
+  return `data:image/svg+xml;base64,${btoa(svg)}`
+}
+
 const ok = <T>(value: T): CommandResult<T> => ({ ok: true, value })
 const fail = (code: ErrorCode): CommandResult<never> => ({ ok: false, error: { code } })
 
@@ -359,6 +373,17 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       stopped = { sendingStopped, receivingStopped }
       emitActivity()
       return ok(null)
+    },
+
+    'thumbnails.get': (args) => {
+      const { kind, id } = args as ThumbnailArgs
+      const name =
+        kind === 'share'
+          ? shares.find((s) => s.id === id && s.status !== 'unavailable')?.name
+          : transfers.find((t) => t.id === id && t.state === 'done')?.name ?? undefined
+      if (!name)
+        return kind === 'share' && !shares.some((s) => s.id === id) ? fail('share.notFound') : ok(null)
+      return ok(isPicture(name) ? fakePicture(name) : null)
     },
 
     'shares.details': (args) => {

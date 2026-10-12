@@ -21,6 +21,7 @@ public sealed class BridgeRouter
     private readonly ReceivedUseCases _received;
     private readonly IClipboard _clipboard;
     private readonly IContentOpener _opener;
+    private readonly ThumbnailUseCases _thumbnails;
 
     public BridgeRouter(
         ShareUseCases shares,
@@ -31,8 +32,10 @@ public sealed class BridgeRouter
         ActivityUseCases activity,
         ReceivedUseCases received,
         IClipboard clipboard,
-        IContentOpener opener)
+        IContentOpener opener,
+        ThumbnailUseCases thumbnails)
     {
+        _thumbnails = thumbnails;
         _shares = shares;
         _transfers = transfers;
         _settings = settings;
@@ -203,6 +206,29 @@ public sealed class BridgeRouter
                 return transfer is null
                     ? CommandResult.Failure(ErrorCodes.TransferNotFound)
                     : CommandResult.Success(ToDetails(transfer, _activity.For(transfer.Transfer.Id)));
+            }
+
+            case Commands.ThumbnailsGet:
+            {
+                var args = Args<ThumbnailArgs>(argsJson);
+                Result<Thumbnail?> found;
+                if (args?.Kind == ThumbnailKindDto.Share)
+                {
+                    if (!ShareId.TryParse(args.Id, out var pictureShareId))
+                        return CommandResult.Failure(ErrorCodes.ShareNotFound);
+                    found = await _thumbnails.ForShareAsync(pictureShareId, args.Size);
+                }
+                else
+                {
+                    if (!TransferId.TryParse(args?.Id, out var pictureTransferId))
+                        return CommandResult.Failure(ErrorCodes.TransferNotFound);
+                    found = await _thumbnails.ForTransferAsync(pictureTransferId, args!.Size);
+                }
+                if (!found.Ok)
+                    return Failure(found.Error);
+                return CommandResult.Success(found.Value is { } picture
+                    ? $"data:{picture.ContentType};base64,{Convert.ToBase64String(picture.Bytes)}"
+                    : null);
             }
 
             default:

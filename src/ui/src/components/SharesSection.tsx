@@ -6,6 +6,7 @@ import { formatSize, t } from '../i18n/index.ts'
 import { inOrder, type SortOrder } from '../order.ts'
 import { matches } from '../search.ts'
 import type { DetailsOf } from './DetailsWindow.tsx'
+import Thumbnail from './ui/Thumbnail.tsx'
 import { moveBetweenItems } from './itemKeys.ts'
 import ItemView, { type ViewMode } from './ItemView.tsx'
 import type { ChipTone } from './ui/StatusChip.tsx'
@@ -147,6 +148,15 @@ export default function SharesSection(props: SharesSectionProps) {
                 onDetails={() => onDetails({ kind: 'share', id: share.id, name: share.name })}
                 onMain={share.status === 'ready' ? () => copyInvite(share) : undefined}
                 onRemove={() => setRemoving(share)}
+                picture={
+                  <Thumbnail
+                    bridge={bridge}
+                    kind="share"
+                    id={share.id}
+                    name={share.name}
+                    ready={share.status !== 'unavailable'}
+                  />
+                }
                 actions={
                   <>
                     {share.status === 'ready' && (

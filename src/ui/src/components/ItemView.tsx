@@ -23,6 +23,8 @@ interface ItemViewProps {
   onMain?: () => void
   /** Asks to stop sharing or remove it, on the Delete key. */
   onRemove: () => void
+  /** The file's own picture; the file icon when not given. */
+  picture?: ReactNode
 }
 
 /**
@@ -40,6 +42,7 @@ export default function ItemView({
   onDetails,
   onMain,
   onRemove,
+  picture,
 }: ItemViewProps) {
   // The ellipsis goes in the middle so the end of the name, with its extension, stays visible.
   const [start, end] = splitName(name)
@@ -63,9 +66,7 @@ export default function ItemView({
         if (!(event.target as HTMLElement).closest('button')) onMain?.()
       }}
     >
-      <div className="item-picture">
-        <FileIcon name={name} />
-      </div>
+      <div className="item-picture">{picture ?? <FileIcon name={name} />}</div>
       <div className="item-text">
         {start === '' ? (
           <span className="item-name" title={name}>

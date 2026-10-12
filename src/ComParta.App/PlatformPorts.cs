@@ -111,6 +111,29 @@ public sealed class ReceivedFolderOpener(Ports.IAppPaths paths) : Ports.IContent
 	}
 }
 
+/// <summary>
+/// Thumbnails drawn by Windows itself, from its own thumbnail cache (AD-18). Only real pictures
+/// come back; when Windows would show an icon, the UI shows its own file icon instead.
+/// </summary>
+public sealed class WindowsThumbnails : Ports.IThumbnailProvider
+{
+	public async Task<Ports.Thumbnail?> GetAsync(string path, int size, CancellationToken ct = default)
+	{
+		var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path).AsTask(ct);
+		using var thumbnail = await file.GetThumbnailAsync(
+			Windows.Storage.FileProperties.ThumbnailMode.SingleItem,
+			(uint)size,
+			Windows.Storage.FileProperties.ThumbnailOptions.ResizeThumbnail).AsTask(ct);
+		if (thumbnail is null || thumbnail.Type != Windows.Storage.FileProperties.ThumbnailType.Image)
+			return null;
+		using var picture = thumbnail.AsStreamForRead();
+		using var copy = new MemoryStream();
+		await picture.CopyToAsync(copy, ct);
+		var type = string.IsNullOrEmpty(thumbnail.ContentType) ? "image/jpeg" : thumbnail.ContentType;
+		return new Ports.Thumbnail(type, copy.ToArray());
+	}
+}
+
 public sealed class LocalFileSystem : Ports.IFileSystem
 {
 	public bool FileExists(string path) => File.Exists(path);

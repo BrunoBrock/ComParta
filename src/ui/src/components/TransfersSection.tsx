@@ -17,6 +17,7 @@ import { inOrder, type SortOrder } from '../order.ts'
 import { matches } from '../search.ts'
 import DeleteReceivedDialog from './DeleteReceivedDialog.tsx'
 import type { DetailsOf } from './DetailsWindow.tsx'
+import Thumbnail from './ui/Thumbnail.tsx'
 import { moveBetweenItems } from './itemKeys.ts'
 import ItemView, { type ViewMode } from './ItemView.tsx'
 import SectionHead from './SectionHead.tsx'
@@ -218,6 +219,7 @@ export default function TransfersSection(props: TransfersSectionProps) {
                   note={stoppedHere ? t('stopped.note') : describe(transfer)}
                   progress={shownProgress}
                   onDetails={() => onDetails({ kind: 'transfer', id: transfer.id, name })}
+                  picture={<Thumbnail bridge={bridge} kind="transfer" id={transfer.id} name={name} ready={finished} />}
                   onMain={finished ? () => runOnReceived('received.open', transfer) : undefined}
                   // A running file is only cancelled with its own button; Delete never stops it by accident.
                   onRemove={() => {

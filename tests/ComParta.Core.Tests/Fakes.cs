@@ -195,6 +195,21 @@ internal sealed class FakeOpener : IContentOpener
     public Task RevealAsync(string path, CancellationToken ct = default) { Revealed.Add(path); return Task.CompletedTask; }
 }
 
+internal sealed class FakeThumbnails : IThumbnailProvider
+{
+    public List<(string Path, int Size)> Asked { get; } = [];
+    public Thumbnail? Next { get; set; } = new("image/png", [1, 2, 3]);
+    public bool Throws { get; set; }
+
+    public Task<Thumbnail?> GetAsync(string path, int size, CancellationToken ct = default)
+    {
+        Asked.Add((path, size));
+        if (Throws)
+            throw new IOException("The system could not draw it.");
+        return Task.FromResult(Next);
+    }
+}
+
 internal sealed class FakeStorage : IStorageInfo
 {
     public long? FreeBytes { get; set; }

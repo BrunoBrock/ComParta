@@ -33,6 +33,7 @@ public static class Commands
     public const string ActivitySet = "activity.set";
     public const string SharesDetails = "shares.details";
     public const string TransfersDetails = "transfers.details";
+    public const string ThumbnailsGet = "thumbnails.get";
 }
 
 public static class Events
@@ -75,6 +76,11 @@ public static class ErrorCodes
 public enum ShareStatusDto { Preparing, Ready, Unavailable }
 
 public enum TransferStateDto { Connecting, Receiving, Paused, Done, Failed }
+
+public enum ThumbnailKindDto { Share, Transfer }
+
+/// <param name="Size">The picture's longest side in pixels; the app keeps it between 32 and 512.</param>
+public sealed record ThumbnailArgs(ThumbnailKindDto Kind, string Id, int Size);
 
 public enum ConnectionHealthDto { Good, Limited, Blocked }
 
@@ -189,6 +195,8 @@ public static class Contract
         new(Commands.ActivitySet, typeof(SetActivityArgs), null),
         new(Commands.SharesDetails, typeof(IdArgs), typeof(ShareDetailsDto)),
         new(Commands.TransfersDetails, typeof(IdArgs), typeof(TransferDetailsDto)),
+        // A data: URL, or null when the file has no picture (AD-18: no path crosses the bridge).
+        new(Commands.ThumbnailsGet, typeof(ThumbnailArgs), typeof(string), ResultMayBeNull: true),
     ];
 
     public static IReadOnlyList<EventSpec> EventSpecs { get; } =
