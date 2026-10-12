@@ -257,9 +257,9 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
                 if (manager.Complete)
                 {
                     // Complete means every piece matched, so the engine only ever reads the original.
-                    await manager.StartAsync();
-                    if (_sendingStopped)
-                        await manager.PauseAsync();
+                    // While sending is stopped the offer waits, ready, until Continue starts it.
+                    if (!_sendingStopped)
+                        await manager.StartAsync();
                     offer.Invite = new MagnetLink(torrent.InfoHashes, torrent.Name, size: torrent.Size).ToV1String();
                     OfferChanged?.Invoke(offer.Id, OfferState.Ready);
                     return;
@@ -415,9 +415,10 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
                 continue;
             try
             {
-                if (sending && manager.State != TorrentState.Paused)
-                    await manager.PauseAsync();
-                else if (!sending && manager.State == TorrentState.Paused)
+                // Stopping, not pausing: a paused offer still answers the computers already connected.
+                if (sending && manager.State != TorrentState.Stopped)
+                    await manager.StopAsync();
+                else if (!sending && manager.State == TorrentState.Stopped)
                     await manager.StartAsync();
             }
             catch (Exception) { /* the next change tries again */ }
