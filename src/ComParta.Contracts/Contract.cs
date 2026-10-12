@@ -35,6 +35,7 @@ public static class Commands
     public const string TransfersDetails = "transfers.details";
     public const string ThumbnailsGet = "thumbnails.get";
     public const string SharesAddDropped = "shares.addDropped";
+    public const string AppQuit = "app.quit";
 }
 
 public static class Events
@@ -48,6 +49,8 @@ public static class Events
     public const string ActivityChanged = "activity.changed";
     /// <summary>The item whose details should show, after the person clicked a system notification (CAP-20).</summary>
     public const string DetailsChanged = "details.changed";
+    /// <summary>Quitting from the notification-area icon found files moving; the screen asks first (AD-14).</summary>
+    public const string QuitChanged = "quit.changed";
 }
 
 /// <summary>Stable codes; the words for them live in the UI's translation catalog (AD-11).</summary>
@@ -140,11 +143,18 @@ public sealed record InvitePreviewDto(
 /// <param name="SystemLanguage">The language the operating system shows, as a tag like "pt-BR".</param>
 /// <param name="View">"grid" or "list", or null for the default.</param>
 /// <param name="Sort">"added", "name" or "size", or null for the default.</param>
-public sealed record SettingsDto(string? Language, string SystemLanguage, string? View, string? Sort, int SendStepsSeen);
+/// <param name="StartWithWindows">Start hidden in the notification area when the person signs in.</param>
+public sealed record SettingsDto(string? Language, string SystemLanguage, string? View, string? Sort, int SendStepsSeen, bool StartWithWindows);
 
 /// <summary>Every choice at once; the UI sends what it has, with the one it changed.</summary>
 /// <param name="Language">A language tag, or null to follow the system again.</param>
-public sealed record SetSettingsArgs(string? Language, string? View, string? Sort, int? SendStepsSeen);
+public sealed record SetSettingsArgs(string? Language, string? View, string? Sort, int? SendStepsSeen, bool? StartWithWindows);
+
+/// <param name="Force">True once the person confirmed quitting although files are moving.</param>
+public sealed record QuitArgs(bool Force);
+
+/// <summary>Whether the app is quitting, or the names of the files that would stop moving (AD-14).</summary>
+public sealed record QuitAnswerDto(bool Quitting, string[] Moving);
 
 /// <param name="Health">How well others can reach this computer (AD-15).</param>
 public sealed record ConnectionDto(ConnectionHealthDto Health);
@@ -222,6 +232,7 @@ public static class Contract
         // A data: URL, or null when the file has no picture (AD-18: no path crosses the bridge).
         new(Commands.SharesAddDropped, typeof(DropArgs), typeof(DropResultDto)),
         new(Commands.ThumbnailsGet, typeof(ThumbnailArgs), typeof(string), ResultMayBeNull: true),
+        new(Commands.AppQuit, typeof(QuitArgs), typeof(QuitAnswerDto)),
     ];
 
     public static IReadOnlyList<EventSpec> EventSpecs { get; } =
@@ -233,6 +244,7 @@ public static class Contract
         new(Events.InvitesChanged, typeof(bool)),
         new(Events.ActivityChanged, typeof(ActivityDto)),
         new(Events.DetailsChanged, typeof(DetailsTargetDto)),
+        new(Events.QuitChanged, typeof(QuitAnswerDto)),
     ];
 
     /// <summary>camelCase JSON with enums as camelCase strings, as the conventions require.</summary>

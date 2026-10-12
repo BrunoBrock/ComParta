@@ -1084,6 +1084,26 @@ dialog textarea {
   min-height: var(--target);
 }
 
+.settings-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+  min-height: var(--target);
+  margin-block-start: calc(var(--space) * 2);
+}
+
+.settings-check input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-primary);
+}
+
+.quit-moving {
+  margin: 0 0 calc(var(--space) * 2);
+  padding-inline-start: calc(var(--space) * 3);
+  overflow-wrap: anywhere;
+}
+
 /* Base components (src/components/ui), one block each. */
 .card {
   padding: calc(var(--space) * 2);

@@ -13,6 +13,8 @@ public sealed class AppServices
 	private readonly AppPaths _paths = new();
 	private MonoTorrentTransferEngine? _engine;
 	private WindowsNotifier? _notifier;
+	private WindowsPresence? _presence;
+	private int _stopped;
 
 	private AppServices()
 	{
@@ -31,6 +33,15 @@ public sealed class AppServices
 
 	/// <summary>Raised when the person clicked a notification, so the window comes to the front.</summary>
 	public event Action? NotificationClicked;
+
+	/// <summary>Raised when the icon, or quitting from it, needs the window shown. Any thread.</summary>
+	public event Action? ShowWindowRequested;
+
+	/// <summary>Raised when the app should end now. Any thread.</summary>
+	public event Action? QuitRequested;
+
+	/// <summary>Whether there is work, and quitting, once the app has started (AD-14).</summary>
+	public BackgroundUseCases? Background { get; private set; }
 
 	public static AppServices Start() => new();
 
@@ -61,9 +72,11 @@ public sealed class AppServices
 				},
 				Log);
 			notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, _notifier, Focus);
+			_presence = new WindowsPresence(executable, () => QuitRequested?.Invoke(), Log);
+			var background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, _presence);
 			var router = new BridgeRouter(
 				shares, transfers, settings, connection, Opened, activity, received, new NativeClipboard(), opener, thumbnails, Dropped,
-				sending, notifications);
+				sending, notifications, background);
 
 			// Written at every start so a clicked link finds the app even after its folder moved.
 			LinkScheme.Register(executable);
@@ -74,6 +87,17 @@ public sealed class AppServices
 			await shares.StartAsync();
 			await transfers.StartAsync();
 			await notifications.StartAsync();
+			await background.StartAsync();
+			_presence.ShowIcon(
+				() => (notifications.Text("notify.menuOpen"), notifications.Text("notify.menuQuit")),
+				() => ShowWindowRequested?.Invoke(),
+				() =>
+				{
+					// Files moving: the window shows and asks the person first.
+					if (!background.QuitFromOutside())
+						ShowWindowRequested?.Invoke();
+				});
+			Background = background;
 			return router;
 		}
 		catch (Exception e)
@@ -83,10 +107,14 @@ public sealed class AppServices
 		}
 	}
 
+	/// <summary>Saves where transfers got to and lets go of the icon. Safe to call more than once.</summary>
 	public void Stop()
 	{
+		if (Interlocked.Exchange(ref _stopped, 1) == 1)
+			return;
 		try
 		{
+			_presence?.Dispose();
 			// Lets the engine save where each transfer got to before the process ends.
 			_engine?.StopAsync().Wait(TimeSpan.FromSeconds(5));
 			_notifier?.Stop();

@@ -13,6 +13,10 @@ public static partial class NotificationTexts
             ["notify.finished.body"] = "Someone finished getting “{name}”.",
             ["notify.waiting.title"] = "A file is still waiting",
             ["notify.waiting.body"] = "“{name}” has waited over an hour. Ask the other person to open ComParta.",
+            ["notify.background.title"] = "ComParta is still running",
+            ["notify.background.body"] = "People can keep getting your files. Find ComParta next to the clock to open or quit it.",
+            ["notify.menuOpen"] = "Open ComParta",
+            ["notify.menuQuit"] = "Quit",
         },
         ["pt-BR"] = new()
         {
@@ -22,6 +26,10 @@ public static partial class NotificationTexts
             ["notify.finished.body"] = "Alguém terminou de receber “{name}”.",
             ["notify.waiting.title"] = "Um arquivo ainda está esperando",
             ["notify.waiting.body"] = "“{name}” está esperando há mais de uma hora. Peça para a outra pessoa abrir o ComParta.",
+            ["notify.background.title"] = "O ComParta continua aberto",
+            ["notify.background.body"] = "As pessoas continuam recebendo seus arquivos. O ComParta fica perto do relógio para abrir ou sair.",
+            ["notify.menuOpen"] = "Abrir o ComParta",
+            ["notify.menuQuit"] = "Sair",
         },
     };
 }

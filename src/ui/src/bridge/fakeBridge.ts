@@ -11,6 +11,7 @@ import type {
   InvitePreviewDto,
   ReceiveArgs,
   SetActivityArgs,
+  QuitArgs,
   SetSettingsArgs,
   SettingsDto,
   ShareDetailsDto,
@@ -48,6 +49,8 @@ export interface FakeBridgeOptions {
   sort?: string | null
   /** How many guided sends the person has been through; 3 means the steps no longer show. */
   sendStepsSeen?: number
+  /** Whether the person chose to start with Windows. */
+  startWithWindows?: boolean
 }
 
 export interface FakeBridge extends Bridge {
@@ -67,6 +70,10 @@ export interface FakeBridge extends Bridge {
   revealedReceived: string[]
   /** How many times the firewall settings were opened. */
   openedConnectionSettings: number
+  /** How many times the app quit. */
+  quits: number
+  /** The person chose Quit on the notification-area icon while files were moving. */
+  quitFromIcon(): void
   /** Change the connection health, as the app does when the network changes. */
   setConnection(health: ConnectionHealthDto): void
   /** An invite link clicked outside the app, as the app reports it. */
@@ -255,7 +262,13 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     view: options.view ?? null,
     sort: options.sort ?? null,
     sendStepsSeen: options.sendStepsSeen ?? 0,
+    startWithWindows: options.startWithWindows ?? false,
   }
+  // What quitting would stop: shares someone is getting and files arriving, as the app counts them.
+  const moving = () => [
+    ...shares.filter((s) => s.activity === 'sending').map((s) => s.name),
+    ...transfers.filter((t) => t.state === 'receiving').map((t) => t.name ?? ''),
+  ]
   const freeBytes = options.freeBytes === undefined ? 120 * 1024 ** 3 : options.freeBytes
 
   /** Reads text the way the app's invite codec and engine do, or null when it is neither. */
@@ -406,7 +419,8 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
         sendStepsSeen > 3
       )
         return fail('settings.invalid')
-      settings = { ...settings, language, view, sort, sendStepsSeen }
+      const startWithWindows = (args as SetSettingsArgs).startWithWindows ?? false
+      settings = { ...settings, language, view, sort, sendStepsSeen, startWithWindows }
       emit({ event: 'settings.changed', payload: { ...settings } })
       return ok(null)
     },
@@ -420,6 +434,13 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       stopped = { sendingStopped, receivingStopped }
       emitActivity()
       return ok(null)
+    },
+
+    'app.quit': (args) => {
+      const names = moving()
+      if (!(args as QuitArgs).force && names.length > 0) return ok({ quitting: false, moving: names })
+      fake.quits++
+      return ok({ quitting: true, moving: [] })
     },
 
     'thumbnails.get': (args) => {
@@ -505,6 +526,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     clipboardText: null as string | null,
     openedFolder: 0,
     openedConnectionSettings: 0,
+    quits: 0,
 
     setConnection(health: ConnectionHealthDto) {
       connection = health
@@ -536,6 +558,10 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     subscribe(listener: (event: EventEnvelope) => void) {
       listeners.add(listener)
       return () => listeners.delete(listener)
+    },
+
+    quitFromIcon() {
+      emit({ event: 'quit.changed', payload: { quitting: false, moving: moving() } })
     },
 
     clickNotification(target: DetailsTargetDto) {

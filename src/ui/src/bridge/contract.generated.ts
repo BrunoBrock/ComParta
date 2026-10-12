@@ -65,6 +65,7 @@ export interface SettingsDto {
   view: string | null;
   sort: string | null;
   sendStepsSeen: number;
+  startWithWindows: boolean;
 }
 
 export interface SetSettingsArgs {
@@ -72,6 +73,7 @@ export interface SetSettingsArgs {
   view: string | null;
   sort: string | null;
   sendStepsSeen: number | null;
+  startWithWindows: boolean | null;
 }
 
 export interface ConnectionDto {
@@ -132,6 +134,15 @@ export interface ThumbnailArgs {
   size: number;
 }
 
+export interface QuitArgs {
+  force: boolean;
+}
+
+export interface QuitAnswerDto {
+  quitting: boolean;
+  moving: string[];
+}
+
 export interface DetailsTargetDto {
   kind: ItemKindDto;
   id: string;
@@ -186,6 +197,7 @@ export interface Commands {
   "transfers.details": { args: IdArgs; result: TransferDetailsDto };
   "shares.addDropped": { args: DropArgs; result: DropResultDto };
   "thumbnails.get": { args: ThumbnailArgs; result: string | null };
+  "app.quit": { args: QuitArgs; result: QuitAnswerDto };
 }
 
 export interface Events {
@@ -196,6 +208,7 @@ export interface Events {
   "invites.changed": boolean;
   "activity.changed": ActivityDto;
   "details.changed": DetailsTargetDto;
+  "quit.changed": QuitAnswerDto;
 }
 
 export type CommandResult<T> = { ok: true; value: T } | { ok: false; error: { code: ErrorCode } };

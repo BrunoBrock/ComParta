@@ -187,8 +187,9 @@ public interface IContentOpener
 public enum NotifiedItem { Share, Transfer }
 
 /// <summary>A system notification (CAP-20), already in the person's language.</summary>
+/// <param name="Kind">The item a click opens, or null when a click only opens the window.</param>
 /// <param name="Name">The item's name, so the screen can title its details at once.</param>
-public sealed record Notification(string Title, string Body, NotifiedItem Kind, string Id, string Name);
+public sealed record Notification(string Title, string Body, NotifiedItem? Kind = null, string Id = "", string Name = "");
 
 /// <summary>Shows notifications the operating system's way (AD-11).</summary>
 public interface INotifier
@@ -201,6 +202,20 @@ public interface IWindowState
 {
     /// <summary>True while the window is open, not minimised, and the one in front.</summary>
     bool IsInFront { get; }
+}
+
+/// <summary>
+/// What the platform does so the app keeps working while its window is closed (AD-14): on Windows,
+/// the notification-area icon, start with Windows and staying awake.
+/// </summary>
+public interface IBackgroundPresence
+{
+    /// <summary>Asks the system not to sleep while bytes are moving (the display may still turn off), or lets it sleep again.</summary>
+    void KeepAwake(bool awake);
+    /// <summary>Registers the app to start hidden when the person signs in, or removes that.</summary>
+    void StartWithSystem(bool on);
+    /// <summary>Ends the app, window and icon included.</summary>
+    void Quit();
 }
 
 /// <summary>A small picture of a file, as the operating system draws it.</summary>

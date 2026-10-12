@@ -24,6 +24,7 @@ public sealed class BridgeRouter
     private readonly ThumbnailUseCases _thumbnails;
     private readonly DroppedFiles _dropped;
     private readonly SendingUseCases _sending;
+    private readonly BackgroundUseCases _background;
 
     public BridgeRouter(
         ShareUseCases shares,
@@ -38,8 +39,11 @@ public sealed class BridgeRouter
         ThumbnailUseCases thumbnails,
         DroppedFiles dropped,
         SendingUseCases sending,
-        NotificationUseCases notifications)
+        NotificationUseCases notifications,
+        BackgroundUseCases background)
     {
+        _background = background;
+        _background.QuitAsked += answer => Raise(Events.QuitChanged, ToDto(answer));
         notifications.OpenRequested += (kind, id, name) => Raise(
             Events.DetailsChanged,
             new DetailsTargetDto(kind == NotifiedItem.Share ? ItemKindDto.Share : ItemKindDto.Transfer, id, name));
@@ -170,13 +174,16 @@ public sealed class BridgeRouter
                     ? ToResult(await _received.DeleteAsync(deleteId))
                     : CommandResult.Failure(ErrorCodes.TransferNotFound);
 
+            case Commands.AppQuit:
+                return CommandResult.Success(ToDto(_background.Quit(Args<QuitArgs>(argsJson)?.Force ?? false)));
+
             case Commands.SettingsGet:
                 return CommandResult.Success(ToDto(await _settings.GetAsync()));
 
             case Commands.SettingsSet:
             {
                 var args = Args<SetSettingsArgs>(argsJson);
-                return ToResult(await _settings.SetAsync(args?.Language, args?.View, args?.Sort, args?.SendStepsSeen ?? 0));
+                return ToResult(await _settings.SetAsync(args?.Language, args?.View, args?.Sort, args?.SendStepsSeen ?? 0, args?.StartWithWindows ?? false));
             }
 
             case Commands.ConnectionGet:
@@ -332,7 +339,9 @@ public sealed class BridgeRouter
         view.NeededBytes);
 
     public static SettingsDto ToDto(Settings settings) =>
-        new(settings.Language, settings.SystemLanguage, settings.View, settings.Sort, settings.SendStepsSeen);
+        new(settings.Language, settings.SystemLanguage, settings.View, settings.Sort, settings.SendStepsSeen, settings.StartWithWindows);
+
+    public static QuitAnswerDto ToDto(QuitAnswer answer) => new(answer.Quitting, [.. answer.Moving]);
 
     public static ActivityDto ToDto(Activity activity) => new(
         activity.ReceivingBytesPerSecond, activity.SendingBytesPerSecond, activity.SendingStopped, activity.ReceivingStopped);
