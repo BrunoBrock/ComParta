@@ -143,7 +143,7 @@ can be built and checked on their own, and every story's blocker is named.
 | Every epic in R1 and R2 has stories with a `verify` | Yes. |
 | Stories that need a person (`hitl`) are marked | Yes: second-PC check, field tests, store submissions, usability sessions, translation review. |
 | Stories blocked on a decision | Marked with `unknown`; see D-1 to D-4. |
-| Epic 1 story 13 (refactor sweep) | Not run yet; run it before epic 8 starts changing the UI. |
+| Epic 1 story 13 (refactor sweep) | Done 2026-10-12, before epic 8 changes the UI. |
 
 ## Risks
 
