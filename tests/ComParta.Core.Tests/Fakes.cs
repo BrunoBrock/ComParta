@@ -45,6 +45,27 @@ internal sealed class FakeEngine : ITransferEngine
         ReachabilityChanged?.Invoke();
     }
 
+    public event Action? ActivityChanged;
+
+    public EngineActivity Activity { get; set; } = EngineActivity.None;
+    public EngineActivity GetActivity() => Activity;
+    public (bool Sending, bool Receiving) StoppedFlags { get; private set; }
+    public int StopCalls { get; private set; }
+
+    public Task SetStoppedAsync(bool sending, bool receiving, CancellationToken ct = default)
+    {
+        StoppedFlags = (sending, receiving);
+        StopCalls++;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Sets new activity and tells whoever listens, as the real engine does every second.</summary>
+    public void Move(EngineActivity activity)
+    {
+        Activity = activity;
+        ActivityChanged?.Invoke();
+    }
+
     public SharingPolicy? Policy { get; private set; }
     public Dictionary<ShareId, string> Offered { get; } = [];
     public Dictionary<TransferId, string> Receiving { get; } = [];

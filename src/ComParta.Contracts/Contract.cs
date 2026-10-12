@@ -26,6 +26,10 @@ public static class Commands
     public const string ConnectionGet = "connection.get";
     public const string ConnectionOpenSettings = "connection.openSettings";
     public const string InvitesTakeOpened = "invites.takeOpened";
+    public const string ActivityGet = "activity.get";
+    public const string ActivitySet = "activity.set";
+    public const string SharesDetails = "shares.details";
+    public const string TransfersDetails = "transfers.details";
 }
 
 public static class Events
@@ -36,6 +40,7 @@ public static class Events
     public const string ConnectionChanged = "connection.changed";
     /// <summary>True when an invite opened from outside the app waits; the UI takes it with <c>invites.takeOpened</c>.</summary>
     public const string InvitesChanged = "invites.changed";
+    public const string ActivityChanged = "activity.changed";
 }
 
 /// <summary>Stable codes; the words for them live in the UI's translation catalog (AD-11).</summary>
@@ -66,6 +71,8 @@ public enum ShareStatusDto { Preparing, Ready, Unavailable }
 public enum TransferStateDto { Connecting, Receiving, Paused, Done, Failed }
 
 public enum ConnectionHealthDto { Good, Limited, Blocked }
+
+public enum TransferSourceDto { Invite, DownloadLink, DownloadFile }
 
 public sealed record ShareDto(string Id, string Name, long SizeBytes, ShareStatusDto Status);
 
@@ -102,6 +109,26 @@ public sealed record SetSettingsArgs(string? Language);
 
 /// <param name="Health">How well others can reach this computer (AD-15).</param>
 public sealed record ConnectionDto(ConnectionHealthDto Health);
+
+/// <summary>The speed bar: total speeds and the two Stop flags (CAP-27, AD-22).</summary>
+public sealed record ActivityDto(long ReceivingBytesPerSecond, long SendingBytesPerSecond, bool SendingStopped, bool ReceivingStopped);
+
+public sealed record SetActivityArgs(bool SendingStopped, bool ReceivingStopped);
+
+/// <summary>The details window of a shared file (CAP-26).</summary>
+/// <param name="Folder">The folder the file sits in on this computer.</param>
+/// <param name="AddedAt">When it was shared, as an ISO 8601 time.</param>
+/// <param name="BytesSent">Sent since the app started.</param>
+public sealed record ShareDetailsDto(
+    string Id, string Name, long SizeBytes, ShareStatusDto Status, string Folder, string AddedAt,
+    long SendingBytesPerSecond, int Connections, long BytesSent);
+
+/// <summary>The details window of a received file (CAP-26).</summary>
+/// <param name="AddedAt">When receiving started, as an ISO 8601 time.</param>
+/// <param name="BytesSent">Sent to others since the app started, for public downloads that share back.</param>
+public sealed record TransferDetailsDto(
+    string Id, string? Name, long? SizeBytes, long ReceivedBytes, TransferStateDto State, TransferSourceDto Source,
+    string AddedAt, long ReceivingBytesPerSecond, long SendingBytesPerSecond, long? SecondsLeft, int Connections, long BytesSent);
 
 public sealed record ErrorDto(string Code);
 
@@ -146,6 +173,10 @@ public static class Contract
         new(Commands.ConnectionGet, null, typeof(ConnectionDto)),
         new(Commands.ConnectionOpenSettings, null, null),
         new(Commands.InvitesTakeOpened, null, typeof(string), ResultMayBeNull: true),
+        new(Commands.ActivityGet, null, typeof(ActivityDto)),
+        new(Commands.ActivitySet, typeof(SetActivityArgs), null),
+        new(Commands.SharesDetails, typeof(IdArgs), typeof(ShareDetailsDto)),
+        new(Commands.TransfersDetails, typeof(IdArgs), typeof(TransferDetailsDto)),
     ];
 
     public static IReadOnlyList<EventSpec> EventSpecs { get; } =
@@ -155,6 +186,7 @@ public static class Contract
         new(Events.SettingsChanged, typeof(SettingsDto)),
         new(Events.ConnectionChanged, typeof(ConnectionDto)),
         new(Events.InvitesChanged, typeof(bool)),
+        new(Events.ActivityChanged, typeof(ActivityDto)),
     ];
 
     /// <summary>camelCase JSON with enums as camelCase strings, as the conventions require.</summary>

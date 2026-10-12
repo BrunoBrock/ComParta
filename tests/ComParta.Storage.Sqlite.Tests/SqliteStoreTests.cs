@@ -124,7 +124,7 @@ public sealed class SqliteStoreTests : IDisposable
         {
             await connection.OpenAsync();
             var command = connection.CreateCommand();
-            command.CommandText = "DROP TABLE settings; PRAGMA user_version = 2;";
+            command.CommandText = "DROP TABLE settings; ALTER TABLE transfers DROP COLUMN source; PRAGMA user_version = 2;";
             await command.ExecuteNonQueryAsync();
         }
 
@@ -133,5 +133,38 @@ public sealed class SqliteStoreTests : IDisposable
         Assert.Equal([transfer], await ((ITransferRepository)store).GetAllAsync());
         await ((ISettingsRepository)store).SetAsync("language", "pt-BR");
         Assert.Equal("pt-BR", await ((ISettingsRepository)store).GetAsync("language"));
+    }
+
+    [Fact]
+    public async Task Where_a_transfer_came_from_is_read_back()
+    {
+        var link = new Transfer(TransferId.New(), "film.mkv", 10, false, DateTimeOffset.UtcNow, Source: TransferSource.DownloadLink);
+        var file = new Transfer(TransferId.New(), "album.zip", 20, true, DateTimeOffset.UtcNow.AddMinutes(1), Source: TransferSource.DownloadFile);
+        ITransferRepository store = await SqliteStore.OpenAsync(DatabasePath);
+        await store.AddAsync(link);
+        await store.AddAsync(file);
+
+        ITransferRepository reopened = await SqliteStore.OpenAsync(DatabasePath);
+
+        Assert.Equal([link, file], await reopened.GetAllAsync());
+    }
+
+    [Fact]
+    public async Task Transfers_from_the_third_version_count_as_invites()
+    {
+        var transfer = new Transfer(TransferId.New(), "film.mkv", 10, false, DateTimeOffset.UtcNow, Source: TransferSource.DownloadFile);
+        ITransferRepository first = await SqliteStore.OpenAsync(DatabasePath);
+        await first.AddAsync(transfer);
+        await using (var connection = new SqliteConnection($"Data Source={DatabasePath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            var command = connection.CreateCommand();
+            command.CommandText = "ALTER TABLE transfers DROP COLUMN source; PRAGMA user_version = 3;";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        ITransferRepository store = await SqliteStore.OpenAsync(DatabasePath);
+
+        Assert.Equal(TransferSource.Invite, Assert.Single(await store.GetAllAsync()).Source);
     }
 }

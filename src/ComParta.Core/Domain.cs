@@ -43,7 +43,20 @@ public sealed record ShareView(Share Share, ShareStatus Status);
 /// A file on its way into the Received folder, from another person's device or from a public
 /// download link or download file (AD-21).
 /// </summary>
-public sealed record Transfer(TransferId Id, string? Name, long? SizeBytes, bool Done, DateTimeOffset AddedAt, bool Paused = false);
+public sealed record Transfer(
+    TransferId Id, string? Name, long? SizeBytes, bool Done, DateTimeOffset AddedAt, bool Paused = false,
+    TransferSource Source = TransferSource.Invite);
+
+/// <summary>Where a transfer came from, for the details window (CAP-26).</summary>
+public enum TransferSource
+{
+    /// <summary>A ComParta invite from a person.</summary>
+    Invite,
+    /// <summary>A public download link the person pasted.</summary>
+    DownloadLink,
+    /// <summary>A download file the person opened.</summary>
+    DownloadFile,
+}
 
 public enum TransferState
 {

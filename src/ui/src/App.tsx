@@ -1,12 +1,19 @@
 import { Search, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Bridge, ConnectionHealthDto, ErrorCode, InvitePreviewDto, ShareDto, TransferDto } from './bridge/index.ts'
+import type {
+  ActivityDto,
+  Bridge,
+  ConnectionHealthDto,
+  SetActivityArgs,
+  ErrorCode, InvitePreviewDto, ShareDto, TransferDto } from './bridge/index.ts'
 import ConnectionHelp from './components/ConnectionHelp.tsx'
+import DetailsWindow, { type DetailsOf } from './components/DetailsWindow.tsx'
 import type { ViewMode } from './components/ItemView.tsx'
 import Notice, { type NoticeContent } from './components/Notice.tsx'
 import Rail, { type Section } from './components/Rail.tsx'
 import ReceiveDialog from './components/ReceiveDialog.tsx'
 import SharesSection from './components/SharesSection.tsx'
+import SpeedBar from './components/SpeedBar.tsx'
 import TransfersSection from './components/TransfersSection.tsx'
 import LanguageMenu from './components/LanguageMenu.tsx'
 import { errorMessage, getLanguage, type Language, pickLanguage, setLanguage, t } from './i18n/index.ts'
@@ -44,6 +51,8 @@ export default function App({ bridge }: AppProps) {
   const [language, setShownLanguage] = useState<Language>(getLanguage)
   const [connection, setConnection] = useState<ConnectionHealthDto | null>(null)
   const [helping, setHelping] = useState(false)
+  const [activity, setActivity] = useState<ActivityDto | null>(null)
+  const [details, setDetails] = useState<DetailsOf | null>(null)
   const [stuck, setStuck] = useState<ReadonlySet<string>>(() => new Set())
   // When this screen first saw each transfer waiting for the other computer.
   const waitingSince = useRef(new Map<string, number>())
@@ -66,6 +75,11 @@ export default function App({ bridge }: AppProps) {
       else if (event.event === 'transfers.changed') setTransfers(event.payload)
       else if (event.event === 'settings.changed') applySettings(event.payload)
       else if (event.event === 'connection.changed') setConnection(event.payload.health)
+      else if (event.event === 'activity.changed') setActivity(event.payload)
+    })
+
+    void bridge.invoke('activity.get').then((result) => {
+      if (active && result.ok) setActivity((current) => current ?? result.value)
     })
 
     void bridge.invoke('connection.get').then((result) => {
@@ -164,6 +178,11 @@ export default function App({ bridge }: AppProps) {
     if (!result.ok) showError(result.error.code)
   }
 
+  async function setStopped(stopped: SetActivityArgs) {
+    const result = await bridge.invoke('activity.set', stopped)
+    if (!result.ok) showError(result.error.code)
+  }
+
   async function chooseLanguage(next: Language) {
     const result = await bridge.invoke('settings.set', { language: next })
     if (!result.ok) showError(result.error.code)
@@ -209,6 +228,8 @@ export default function App({ bridge }: AppProps) {
       onInfo={showInfo}
       onStart={clearNotice}
       onClearSearch={clearSearch}
+      stopped={activity?.sendingStopped ?? false}
+      onDetails={setDetails}
     />
   )
   const received = (
@@ -223,6 +244,8 @@ export default function App({ bridge }: AppProps) {
       onClearSearch={clearSearch}
       stuck={stuck}
       onHelp={() => setHelping(true)}
+      stopped={activity?.receivingStopped ?? false}
+      onDetails={setDetails}
     />
   )
 
@@ -251,6 +274,8 @@ export default function App({ bridge }: AppProps) {
         <LanguageMenu language={language} onChange={chooseLanguage} />
       </header>
 
+      <SpeedBar activity={activity} onSet={setStopped} />
+
       <Rail
         section={section}
         sharedCount={shares?.length ?? null}
@@ -267,6 +292,15 @@ export default function App({ bridge }: AppProps) {
         {notice && <Notice notice={notice} onDismiss={clearNotice} />}
         {section === 'shared' ? shared : received}
       </main>
+
+      {details && (
+        <DetailsWindow
+          bridge={bridge}
+          item={details}
+          stopped={(details.kind === 'share' ? activity?.sendingStopped : activity?.receivingStopped) ?? false}
+          onClose={() => setDetails(null)}
+        />
+      )}
 
       {helping && (
         <ConnectionHelp health={connection} onOpenSettings={openConnectionSettings} onClose={() => setHelping(false)} />

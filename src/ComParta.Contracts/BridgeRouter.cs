@@ -17,6 +17,7 @@ public sealed class BridgeRouter
     private readonly SettingsUseCases _settings;
     private readonly ConnectionUseCases _connection;
     private readonly OpenedInvites _opened;
+    private readonly ActivityUseCases _activity;
     private readonly IClipboard _clipboard;
     private readonly IContentOpener _opener;
 
@@ -26,6 +27,7 @@ public sealed class BridgeRouter
         SettingsUseCases settings,
         ConnectionUseCases connection,
         OpenedInvites opened,
+        ActivityUseCases activity,
         IClipboard clipboard,
         IContentOpener opener)
     {
@@ -34,6 +36,7 @@ public sealed class BridgeRouter
         _settings = settings;
         _connection = connection;
         _opened = opened;
+        _activity = activity;
         _clipboard = clipboard;
         _opener = opener;
         _shares.Changed += () => Raise(Events.SharesChanged, _shares.Current().Select(ToDto).ToArray());
@@ -41,6 +44,7 @@ public sealed class BridgeRouter
         _settings.Changed += () => _ = RaiseSettingsAsync();
         _connection.Changed += health => Raise(Events.ConnectionChanged, ToDto(health));
         _opened.Opened += () => Raise(Events.InvitesChanged, true);
+        _activity.Changed += activityNow => Raise(Events.ActivityChanged, ToDto(activityNow));
     }
 
     /// <summary>An event envelope as JSON, ready to be sent to the UI.</summary>
@@ -150,6 +154,36 @@ public sealed class BridgeRouter
             case Commands.InvitesTakeOpened:
                 return CommandResult.Success(_opened.Take());
 
+            case Commands.ActivityGet:
+                return CommandResult.Success(ToDto(_activity.Current()));
+
+            case Commands.ActivitySet:
+            {
+                var args = Args<SetActivityArgs>(argsJson);
+                await _activity.SetStoppedAsync(args?.SendingStopped ?? false, args?.ReceivingStopped ?? false);
+                return CommandResult.Success(null);
+            }
+
+            case Commands.SharesDetails:
+            {
+                var share = ShareId.TryParse(Args<IdArgs>(argsJson)?.Id, out var detailsId)
+                    ? _shares.Current().FirstOrDefault(v => v.Share.Id == detailsId)
+                    : null;
+                return share is null
+                    ? CommandResult.Failure(ErrorCodes.ShareNotFound)
+                    : CommandResult.Success(ToDetails(share, _activity.For(share.Share.Id)));
+            }
+
+            case Commands.TransfersDetails:
+            {
+                var transfer = TransferId.TryParse(Args<IdArgs>(argsJson)?.Id, out var detailsId)
+                    ? _transfers.List().FirstOrDefault(v => v.Transfer.Id == detailsId)
+                    : null;
+                return transfer is null
+                    ? CommandResult.Failure(ErrorCodes.TransferNotFound)
+                    : CommandResult.Success(ToDetails(transfer, _activity.For(transfer.Transfer.Id)));
+            }
+
             default:
                 return CommandResult.Failure(ErrorCodes.Unexpected);
         }
@@ -211,6 +245,34 @@ public sealed class BridgeRouter
         view.SecondsLeft);
 
     public static SettingsDto ToDto(Settings settings) => new(settings.Language, settings.SystemLanguage);
+
+    public static ActivityDto ToDto(Activity activity) => new(
+        activity.ReceivingBytesPerSecond, activity.SendingBytesPerSecond, activity.SendingStopped, activity.ReceivingStopped);
+
+    public static ShareDetailsDto ToDetails(ShareView view, ItemActivity activity)
+    {
+        var dto = ToDto(view);
+        return new ShareDetailsDto(
+            dto.Id, dto.Name, dto.SizeBytes, dto.Status,
+            Path.GetDirectoryName(view.Share.FilePath) ?? "",
+            view.Share.AddedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+            activity.SendingBytesPerSecond, activity.Connections, activity.BytesSent);
+    }
+
+    public static TransferDetailsDto ToDetails(TransferView view, ItemActivity activity)
+    {
+        var dto = ToDto(view);
+        return new TransferDetailsDto(
+            dto.Id, dto.Name, dto.SizeBytes, dto.ReceivedBytes, dto.State,
+            view.Transfer.Source switch
+            {
+                TransferSource.DownloadLink => TransferSourceDto.DownloadLink,
+                TransferSource.DownloadFile => TransferSourceDto.DownloadFile,
+                _ => TransferSourceDto.Invite,
+            },
+            view.Transfer.AddedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+            dto.BytesPerSecond, activity.SendingBytesPerSecond, dto.SecondsLeft, activity.Connections, activity.BytesSent);
+    }
 
     public static ConnectionDto ToDto(ConnectionHealth health) => new(health switch
     {

@@ -443,6 +443,101 @@ public sealed class TwoDevicesTests : IAsyncLifetime
         Assert.True(await receiver.ReceiveAsync(TransferId.New(), magnet + "&x.pe=0.0.0.0:80&x.pe=239.1.2.3:80&x.pe=[ff02::1]:80"));
     }
 
+    [Fact]
+    public async Task Both_sides_report_the_bytes_moved_for_the_item()
+    {
+        var original = CreateFile("concert.mp4", 600_000);
+        var (sender, _) = await StartDeviceAsync("sender");
+        var (receiver, _) = await StartDeviceAsync("receiver");
+        var shareId = ShareId.New();
+        await OfferAndWaitAsync(sender, shareId, original);
+        var transferId = TransferId.New();
+        var activityRaised = 0;
+        sender.ActivityChanged += () => Interlocked.Increment(ref activityRaised);
+
+        await receiver.ReceiveAsync(transferId, (await sender.GetInviteAsync(shareId))!);
+        // Read just before the transfer finishes and leaves the engine.
+        ItemActivity? received = null;
+        receiver.ReceiveProgressed += progress =>
+        {
+            if (progress.Id == transferId && !progress.Done && progress.ReceivedBytes > 0)
+                received = receiver.GetActivity().Transfers.GetValueOrDefault(transferId) ?? received;
+        };
+        var done = WhenFinished(receiver);
+        await receiver.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        Assert.True((await done.Task.WaitAsync(Timeout)).Done);
+
+        var sent = sender.GetActivity().Shares[shareId];
+        Assert.True(sent.BytesSent >= 600_000, $"sent {sent.BytesSent}");
+        Assert.Equal(0, sent.BytesReceived);
+        Assert.Empty(sender.GetActivity().Transfers);
+        Assert.True(activityRaised > 0);
+        if (received is not null)
+            Assert.True(received.BytesReceived > 0);
+    }
+
+    [Fact]
+    public async Task While_sending_is_stopped_nothing_arrives_and_after_continue_the_file_does()
+    {
+        var original = CreateFile("paused.bin", 400_000);
+        var (sender, _) = await StartDeviceAsync("sender");
+        var (receiver, receiverPaths) = await StartDeviceAsync("receiver");
+        var shareId = ShareId.New();
+        await OfferAndWaitAsync(sender, shareId, original);
+        await sender.SetStoppedAsync(sending: true, receiving: false);
+
+        var transferId = TransferId.New();
+        var done = WhenFinished(receiver);
+        await receiver.ReceiveAsync(transferId, (await sender.GetInviteAsync(shareId))!);
+        await receiver.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        await Task.Delay(TimeSpan.FromSeconds(3));
+        Assert.False(done.Task.IsCompleted);
+        Assert.Equal(0, sender.GetActivity().Shares[shareId].BytesSent);
+
+        await sender.SetStoppedAsync(sending: false, receiving: false);
+        await receiver.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+
+        Assert.True((await done.Task.WaitAsync(Timeout)).Done);
+        Assert.Equal(Checksum(original), Checksum(Path.Combine(receiverPaths.ReceivedRoot, "paused.bin")));
+    }
+
+    [Fact]
+    public async Task A_transfer_paused_on_its_own_stays_paused_after_receiving_continues()
+    {
+        var (receiver, _) = await StartDeviceAsync("receiver");
+        var mine = TransferId.New();
+        var other = TransferId.New();
+        Assert.True(await receiver.ReceiveAsync(mine, "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"));
+        Assert.True(await receiver.ReceiveAsync(other, "magnet:?xt=urn:btih:1123456789abcdef0123456789abcdef01234567"));
+        await receiver.PauseReceivingAsync(mine);
+
+        await receiver.SetStoppedAsync(sending: false, receiving: true);
+        // Continuing one transfer while everything is stopped does not start it.
+        await receiver.ContinueReceivingAsync(other);
+        Assert.Equal(global::MonoTorrent.Client.TorrentState.Stopped, receiver.StateOf(other));
+        await receiver.PauseReceivingAsync(other);
+        await receiver.ContinueReceivingAsync(other);
+
+        await receiver.SetStoppedAsync(sending: false, receiving: false);
+
+        Assert.Equal(global::MonoTorrent.Client.TorrentState.Stopped, receiver.StateOf(mine));
+        Assert.NotEqual(global::MonoTorrent.Client.TorrentState.Stopped, receiver.StateOf(other));
+    }
+
+    [Fact]
+    public async Task A_transfer_added_while_receiving_is_stopped_waits()
+    {
+        var (receiver, _) = await StartDeviceAsync("receiver");
+        await receiver.SetStoppedAsync(sending: false, receiving: true);
+        var id = TransferId.New();
+
+        Assert.True(await receiver.ReceiveAsync(id, "magnet:?xt=urn:btih:2123456789abcdef0123456789abcdef01234567"));
+        Assert.Equal(global::MonoTorrent.Client.TorrentState.Stopped, receiver.StateOf(id));
+
+        await receiver.SetStoppedAsync(sending: false, receiving: false);
+        Assert.NotEqual(global::MonoTorrent.Client.TorrentState.Stopped, receiver.StateOf(id));
+    }
+
     private static async Task<ReachabilityFacts> WaitForAsync(MonoTorrentTransferEngine engine, Func<ReachabilityFacts, bool> condition)
     {
         var until = DateTime.UtcNow + Timeout;

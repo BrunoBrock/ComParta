@@ -10,7 +10,7 @@ namespace ComParta.Storage.Sqlite;
 /// </summary>
 public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettingsRepository
 {
-    private const int SchemaVersion = 3;
+    private const int SchemaVersion = 4;
     private readonly string _connectionString;
 
     private SqliteStore(string databasePath)
@@ -61,6 +61,11 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
         {
             await Command(connection, "CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)", transaction).ExecuteNonQueryAsync(ct);
         }
+        if (version < 4)
+        {
+            // Where each transfer came from; older ones were all invites.
+            await Command(connection, "ALTER TABLE transfers ADD COLUMN source INTEGER NOT NULL DEFAULT 0", transaction).ExecuteNonQueryAsync(ct);
+        }
         await Command(connection, $"PRAGMA user_version = {SchemaVersion}", transaction).ExecuteNonQueryAsync(ct);
         await transaction.CommitAsync(ct);
     }
@@ -105,7 +110,7 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
     async Task<IReadOnlyList<Transfer>> ITransferRepository.GetAllAsync(CancellationToken ct)
     {
         await using var connection = await ConnectAsync(ct);
-        await using var reader = await Command(connection, "SELECT id, name, size_bytes, done, added_at, paused FROM transfers ORDER BY added_at").ExecuteReaderAsync(ct);
+        await using var reader = await Command(connection, "SELECT id, name, size_bytes, done, added_at, paused, source FROM transfers ORDER BY added_at").ExecuteReaderAsync(ct);
         var transfers = new List<Transfer>();
         while (await reader.ReadAsync(ct))
         {
@@ -115,7 +120,8 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
                 reader.IsDBNull(2) ? null : reader.GetInt64(2),
                 reader.GetInt64(3) != 0,
                 ParseTime(reader.GetString(4)),
-                reader.GetInt64(5) != 0));
+                reader.GetInt64(5) != 0,
+                Enum.IsDefined((TransferSource)reader.GetInt64(6)) ? (TransferSource)reader.GetInt64(6) : TransferSource.Invite));
         }
         return transfers;
     }
@@ -123,7 +129,7 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
     public async Task AddAsync(Transfer transfer, CancellationToken ct = default)
     {
         await using var connection = await ConnectAsync(ct);
-        var command = Command(connection, "INSERT INTO transfers (id, name, size_bytes, done, added_at, paused) VALUES ($id, $name, $size, $done, $added, $paused)");
+        var command = Command(connection, "INSERT INTO transfers (id, name, size_bytes, done, added_at, paused, source) VALUES ($id, $name, $size, $done, $added, $paused, $source)");
         Bind(command, transfer);
         await command.ExecuteNonQueryAsync(ct);
     }
@@ -131,7 +137,7 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
     public async Task UpdateAsync(Transfer transfer, CancellationToken ct = default)
     {
         await using var connection = await ConnectAsync(ct);
-        var command = Command(connection, "UPDATE transfers SET name = $name, size_bytes = $size, done = $done, added_at = $added, paused = $paused WHERE id = $id");
+        var command = Command(connection, "UPDATE transfers SET name = $name, size_bytes = $size, done = $done, added_at = $added, paused = $paused, source = $source WHERE id = $id");
         Bind(command, transfer);
         await command.ExecuteNonQueryAsync(ct);
     }
@@ -172,6 +178,7 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
         command.Parameters.AddWithValue("$done", transfer.Done ? 1 : 0);
         command.Parameters.AddWithValue("$paused", transfer.Paused ? 1 : 0);
         command.Parameters.AddWithValue("$added", FormatTime(transfer.AddedAt));
+        command.Parameters.AddWithValue("$source", (int)transfer.Source);
     }
 
     private async Task<SqliteConnection> ConnectAsync(CancellationToken ct)

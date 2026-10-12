@@ -2,6 +2,7 @@ import { CircleHelp, FolderOpen, Pause, Play, X } from 'lucide-react'
 import type { Bridge, ErrorCode, TransferDto } from '../bridge/index.ts'
 import { formatSize, formatTimeLeft, t } from '../i18n/index.ts'
 import { matches } from '../search.ts'
+import type { DetailsOf } from './DetailsWindow.tsx'
 import ItemView, { type ViewMode } from './ItemView.tsx'
 import SectionHead from './SectionHead.tsx'
 import type { ChipTone } from './StatusChip.tsx'
@@ -19,6 +20,9 @@ interface TransfersSectionProps {
   /** Transfers that have waited long enough to offer the connection help (UX design, "Stuck transfer"). */
   stuck: ReadonlySet<string>
   onHelp: () => void
+  /** Receiving is stopped from the speed bar, so every unfinished transfer reads "Stopped". */
+  stopped: boolean
+  onDetails: (item: DetailsOf) => void
 }
 
 const tones: Record<TransferDto['state'], ChipTone> = {
@@ -57,7 +61,7 @@ function describe(transfer: TransferDto): string {
 const order = (a: TransferDto, b: TransferDto) => Number(a.state === 'done') - Number(b.state === 'done')
 
 export default function TransfersSection(props: TransfersSectionProps) {
-  const { bridge, transfers, query, view, onViewChange, onError, onStart, onClearSearch, stuck, onHelp } = props
+  const { bridge, transfers, query, view, onViewChange, onError, onStart, onClearSearch, stuck, onHelp, stopped, onDetails } = props
 
   async function remove(transfer: TransferDto) {
     onStart()
@@ -105,24 +109,29 @@ export default function TransfersSection(props: TransfersSectionProps) {
             const finished = transfer.state === 'done'
             const canPause = transfer.state === 'connecting' || transfer.state === 'receiving'
             const paused = transfer.state === 'paused'
+            const stoppedHere = stopped && !finished && transfer.state !== 'failed'
+            const shownProgress = stoppedHere
+              ? transfer.sizeBytes
+                ? { value: transfer.receivedBytes, max: transfer.sizeBytes }
+                : undefined
+              : state === 'receiving' || (state === 'paused' && transfer.sizeBytes)
+                ? { value: transfer.receivedBytes, max: transfer.sizeBytes! }
+                : state === 'connecting'
+                  ? 'unknown'
+                  : undefined
             return (
               <ItemView
                 key={transfer.id}
                 name={name}
                 size={transfer.sizeBytes !== null ? formatSize(transfer.sizeBytes) : null}
-                tone={tones[state]}
-                chip={t(`transfers.chip.${state}`, { percent: percentOf(transfer) })}
-                note={describe(transfer)}
-                progress={
-                  state === 'receiving' || (state === 'paused' && transfer.sizeBytes)
-                    ? { value: transfer.receivedBytes, max: transfer.sizeBytes! }
-                    : state === 'connecting'
-                      ? 'unknown'
-                      : undefined
-                }
+                tone={stoppedHere ? 'paused' : tones[state]}
+                chip={stoppedHere ? t('stopped.chip') : t(`transfers.chip.${state}`, { percent: percentOf(transfer) })}
+                note={stoppedHere ? t('stopped.note') : describe(transfer)}
+                progress={shownProgress}
+                onDetails={() => onDetails({ kind: 'transfer', id: transfer.id, name })}
                 actions={
                   <>
-                    {state === 'connecting' && stuck.has(transfer.id) && (
+                    {!stoppedHere && state === 'connecting' && stuck.has(transfer.id) && (
                       <button
                         type="button"
                         className="quiet"
@@ -133,7 +142,7 @@ export default function TransfersSection(props: TransfersSectionProps) {
                         {t('transfers.help')}
                       </button>
                     )}
-                    {(canPause || paused) && (
+                    {!stoppedHere && (canPause || paused) && (
                       <button
                         type="button"
                         className="quiet"

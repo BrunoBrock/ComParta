@@ -27,7 +27,8 @@ public sealed class BridgeRouterTests
         var transfers = new TransferUseCases(new FakeTransferRepository(), _engine, picker: _picker, files: _files);
         var settings = new SettingsUseCases(_settings, new FakeSystem("pt-BR"));
         var connection = new ConnectionUseCases(_engine, _firewall);
-        _router = new BridgeRouter(shares, transfers, settings, connection, _opened, _shell, _shell);
+        var activity = new ActivityUseCases(_engine, _settings);
+        _router = new BridgeRouter(shares, transfers, settings, connection, _opened, activity, _shell, _shell);
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
         _picker.NextPick = Video;
@@ -283,5 +284,66 @@ public sealed class BridgeRouterTests
         Assert.Single(_events, e => e.GetProperty("event").GetString() == Events.InvitesChanged);
         Assert.Equal(link, (await InvokeAsync(Commands.InvitesTakeOpened)).GetProperty("value").GetString());
         Assert.False((await InvokeAsync(Commands.InvitesTakeOpened)).TryGetProperty("value", out _));
+    }
+
+    [Fact]
+    public async Task The_speed_bar_reads_totals_and_stops_sending_and_receiving()
+    {
+        _engine.Move(EngineActivity.None with { ReceivingBytesPerSecond = 2_000, SendingBytesPerSecond = 300 });
+        var activity = (await InvokeAsync(Commands.ActivityGet)).GetProperty("value");
+        Assert.Equal(2_000, activity.GetProperty("receivingBytesPerSecond").GetInt64());
+        Assert.Equal(300, activity.GetProperty("sendingBytesPerSecond").GetInt64());
+        Assert.False(activity.GetProperty("sendingStopped").GetBoolean());
+
+        Assert.True((await InvokeAsync(Commands.ActivitySet, new { sendingStopped = true, receivingStopped = true })).GetProperty("ok").GetBoolean());
+
+        Assert.Equal((true, true), _engine.StoppedFlags);
+        var changed = _events.Last(e => e.GetProperty("event").GetString() == Events.ActivityChanged).GetProperty("payload");
+        Assert.True(changed.GetProperty("sendingStopped").GetBoolean());
+        Assert.True(changed.GetProperty("receivingStopped").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_shared_file_has_details_with_its_folder_and_what_it_sends()
+    {
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString()!;
+        _engine.Activity = EngineActivity.None with
+        {
+            SendingBytesPerSecond = 900,
+            Shares = new Dictionary<ShareId, ItemActivity> { [ShareId.TryParse(id, out var shareId) ? shareId : default] = new(0, 900, 2, 0, 4_000) },
+        };
+
+        var details = (await InvokeAsync(Commands.SharesDetails, new { id })).GetProperty("value");
+
+        Assert.Equal("birthday.mp4", details.GetProperty("name").GetString());
+        Assert.Equal(Path.GetDirectoryName(Video), details.GetProperty("folder").GetString());
+        Assert.Equal("ready", details.GetProperty("status").GetString());
+        Assert.Equal(900, details.GetProperty("sendingBytesPerSecond").GetInt64());
+        Assert.Equal(2, details.GetProperty("connections").GetInt32());
+        Assert.Equal(4_000, details.GetProperty("bytesSent").GetInt64());
+        Assert.True(DateTimeOffset.TryParse(details.GetProperty("addedAt").GetString(), out _));
+    }
+
+    [Fact]
+    public async Task A_received_file_has_details_with_where_it_came_from()
+    {
+        var link = InviteCodec.Write(FakeEngine.InvitePrefix + "abc", InviteHints.None);
+        var id = (await InvokeAsync(Commands.TransfersReceive, new { invite = link })).GetProperty("value").GetProperty("id").GetString()!;
+
+        var details = (await InvokeAsync(Commands.TransfersDetails, new { id })).GetProperty("value");
+
+        Assert.Equal("invite", details.GetProperty("source").GetString());
+        Assert.Equal("connecting", details.GetProperty("state").GetString());
+        Assert.Equal(0, details.GetProperty("connections").GetInt32());
+
+        var download = (await InvokeAsync(Commands.TransfersReceive, new { invite = FakeEngine.InvitePrefix + "public" })).GetProperty("value").GetProperty("id").GetString()!;
+        Assert.Equal("downloadLink", (await InvokeAsync(Commands.TransfersDetails, new { id = download })).GetProperty("value").GetProperty("source").GetString());
+    }
+
+    [Fact]
+    public async Task Details_of_something_that_is_not_there_say_so()
+    {
+        Assert.Equal(ErrorCodes.ShareNotFound, ErrorCode(await InvokeAsync(Commands.SharesDetails, new { id = Guid.NewGuid().ToString() })));
+        Assert.Equal(ErrorCodes.TransferNotFound, ErrorCode(await InvokeAsync(Commands.TransfersDetails, new { id = "nope" })));
     }
 }

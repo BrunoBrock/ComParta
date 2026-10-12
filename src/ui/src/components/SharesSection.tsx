@@ -4,6 +4,7 @@ import { getComPartaUrl } from '../appLinks.ts'
 import type { Bridge, ErrorCode, ShareDto } from '../bridge/index.ts'
 import { formatSize, t } from '../i18n/index.ts'
 import { matches } from '../search.ts'
+import type { DetailsOf } from './DetailsWindow.tsx'
 import ItemView, { type ViewMode } from './ItemView.tsx'
 import type { ChipTone } from './StatusChip.tsx'
 import RemoveShareDialog from './RemoveShareDialog.tsx'
@@ -21,12 +22,15 @@ interface SharesSectionProps {
   /** Called when the person starts a new action, so an old message can go away. */
   onStart: () => void
   onClearSearch: () => void
+  /** Sending is stopped from the speed bar, so every ready share reads "Stopped". */
+  stopped: boolean
+  onDetails: (item: DetailsOf) => void
 }
 
 const tones: Record<ShareDto['status'], ChipTone> = { preparing: 'busy', ready: 'ok', unavailable: 'warn' }
 
 export default function SharesSection(props: SharesSectionProps) {
-  const { bridge, shares, query, view, onViewChange, onError, onInfo, onStart, onClearSearch } = props
+  const { bridge, shares, query, view, onViewChange, onError, onInfo, onStart, onClearSearch, stopped, onDetails } = props
   // View state only: which share the confirmation is open for.
   const [removing, setRemoving] = useState<ShareDto | null>(null)
   // The share whose button says "Copied" for a moment.
@@ -79,15 +83,20 @@ export default function SharesSection(props: SharesSectionProps) {
 
       {shown !== null && shown.length > 0 && (
         <ul className={`items items-${view}`}>
-          {shown.map((share) => (
+          {shown.map((share) => {
+            const stoppedHere = stopped && share.status === 'ready'
+            return (
             <ItemView
               key={share.id}
               name={share.name}
               size={formatSize(share.sizeBytes)}
-              tone={tones[share.status]}
-              chip={t(`shares.chip.${share.status}`)}
-              note={share.status === 'ready' ? undefined : t(`shares.status.${share.status}`)}
+              tone={stoppedHere ? 'paused' : tones[share.status]}
+              chip={stoppedHere ? t('stopped.chip') : t(`shares.chip.${share.status}`)}
+              note={
+                stoppedHere ? t('stopped.note') : share.status === 'ready' ? undefined : t(`shares.status.${share.status}`)
+              }
               progress={share.status === 'preparing' ? 'unknown' : undefined}
+              onDetails={() => onDetails({ kind: 'share', id: share.id, name: share.name })}
               actions={
                 <>
                   {share.status === 'ready' && (
@@ -113,7 +122,8 @@ export default function SharesSection(props: SharesSectionProps) {
                 </>
               }
             />
-          ))}
+            )
+          })}
         </ul>
       )}
 

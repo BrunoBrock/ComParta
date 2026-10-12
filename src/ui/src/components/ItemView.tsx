@@ -1,5 +1,7 @@
+import { Info } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { splitName } from '../fileNames.ts'
+import { t } from '../i18n/index.ts'
 import FileIcon from './FileIcon.tsx'
 import StatusChip, { type ChipTone } from './StatusChip.tsx'
 
@@ -15,13 +17,15 @@ interface ItemViewProps {
   note?: string
   progress?: { value: number; max: number } | 'unknown'
   actions: ReactNode
+  /** Opens the details window for this file (CAP-26). */
+  onDetails: () => void
 }
 
 /**
  * One shared or received file, as a card in grid view or a row in list view. Both views are
  * built from the same parts; CSS decides the shape.
  */
-export default function ItemView({ name, size, tone, chip, note, progress, actions }: ItemViewProps) {
+export default function ItemView({ name, size, tone, chip, note, progress, actions, onDetails }: ItemViewProps) {
   // The ellipsis goes in the middle so the end of the name, with its extension, stays visible.
   const [start, end] = splitName(name)
   return (
@@ -52,6 +56,15 @@ export default function ItemView({ name, size, tone, chip, note, progress, actio
         {progress && progress !== 'unknown' && <progress value={progress.value} max={progress.max} aria-label={name} />}
       </div>
       <div className="item-actions">{actions}</div>
+      <button
+        type="button"
+        className="quiet icon-only item-info"
+        onClick={onDetails}
+        aria-label={t('details.openFor', { name })}
+        title={t('details.open')}
+      >
+        <Info size={20} aria-hidden="true" />
+      </button>
     </li>
   )
 }
