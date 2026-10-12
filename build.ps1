@@ -21,6 +21,10 @@ if (-not $nodeOk) {
     throw "Node $nodeVersion is too old. The UI needs Node 20.19+ or 22.12+ (install the LTS from https://nodejs.org)."
 }
 
+if (-not ((& dotnet workload list) -match 'maui')) {
+    throw "The .NET MAUI workload is not installed. Run this in an administrator PowerShell: dotnet workload install maui-windows"
+}
+
 Push-Location (Join-Path $root 'src\ui')
 try {
     if (-not (Test-Path 'node_modules')) { Invoke-Step 'Install UI packages' { npm ci } }
