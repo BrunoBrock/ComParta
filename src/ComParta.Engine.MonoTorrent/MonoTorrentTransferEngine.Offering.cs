@@ -44,9 +44,9 @@ public sealed partial class MonoTorrentTransferEngine
                 if (manager.Complete)
                 {
                     // Complete means every piece matched, so the engine only ever reads the original.
-                    await manager.StartAsync();
-                    if (_sendingStopped)
-                        await manager.PauseAsync();
+                    // While sending is stopped the offer waits, ready, until Continue starts it.
+                    if (!_sendingStopped)
+                        await manager.StartAsync();
                     offer.Invite = new MagnetLink(torrent.InfoHashes, torrent.Name, size: torrent.Size).ToV1String();
                     OfferChanged?.Invoke(offer.Id, OfferState.Ready);
                     return;
