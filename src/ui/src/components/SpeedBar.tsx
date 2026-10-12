@@ -66,17 +66,27 @@ export default function SpeedBar({ activity, onSet }: SpeedBarProps) {
       <p className={receivingStopped ? 'speed speed-off' : 'speed'}>
         <ArrowDown size={18} aria-hidden="true" />
         <span>
-          {receivingStopped
-            ? t('speed.receivingStopped')
-            : t('speed.receiving', { speed: rate(activity?.receivingBytesPerSecond ?? 0) })}
+          {receivingStopped ? (
+            t('speed.receivingStopped')
+          ) : (
+            <>
+              <span className="speed-word">{t('speed.receiving')} </span>
+              {rate(activity?.receivingBytesPerSecond ?? 0)}
+            </>
+          )}
         </span>
       </p>
       <p className={sendingStopped ? 'speed speed-off' : 'speed'}>
         <ArrowUp size={18} aria-hidden="true" />
         <span>
-          {sendingStopped
-            ? t('speed.sendingStopped')
-            : t('speed.sending', { speed: rate(activity?.sendingBytesPerSecond ?? 0) })}
+          {sendingStopped ? (
+            t('speed.sendingStopped')
+          ) : (
+            <>
+              <span className="speed-word">{t('speed.sending')} </span>
+              {rate(activity?.sendingBytesPerSecond ?? 0)}
+            </>
+          )}
         </span>
       </p>
 

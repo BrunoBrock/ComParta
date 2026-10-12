@@ -121,8 +121,8 @@ export const ptBR: Catalog = {
   'transfers.helpFor': 'O que posso fazer sobre {name}?',
 
   'speed.label': 'Tudo o que está em andamento agora',
-  'speed.receiving': 'Recebendo {speed}',
-  'speed.sending': 'Enviando {speed}',
+  'speed.receiving': 'Recebendo',
+  'speed.sending': 'Enviando',
   'speed.receivingStopped': 'Recebimento parado',
   'speed.sendingStopped': 'Envio parado',
   'speed.rate': '{size}/s',

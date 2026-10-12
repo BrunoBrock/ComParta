@@ -115,8 +115,8 @@ export const en = {
   'transfers.helpFor': 'What can I do about {name}?',
 
   'speed.label': 'Everything moving right now',
-  'speed.receiving': 'Receiving {speed}',
-  'speed.sending': 'Sending {speed}',
+  'speed.receiving': 'Receiving',
+  'speed.sending': 'Sending',
   'speed.receivingStopped': 'Receiving stopped',
   'speed.sendingStopped': 'Sending stopped',
   'speed.rate': '{size}/s',

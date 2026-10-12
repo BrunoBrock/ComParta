@@ -99,9 +99,12 @@ export default function DetailsWindow({ bridge, item, stopped, onClose }: Detail
     }
   }, [bridge, item])
 
-  const rows = gone || details === null ? [] : details.kind === 'share'
-    ? shareRows(details.value, stopped)
-    : transferRows(details.value, stopped)
+  const rows =
+    gone || details === null
+      ? []
+      : details.kind === 'share'
+        ? shareRows(details.value, stopped)
+        : transferRows(details.value, stopped)
 
   return (
     <dialog

@@ -30,7 +30,8 @@ interface SharesSectionProps {
 const tones: Record<ShareDto['status'], ChipTone> = { preparing: 'busy', ready: 'ok', unavailable: 'warn' }
 
 export default function SharesSection(props: SharesSectionProps) {
-  const { bridge, shares, query, view, onViewChange, onError, onInfo, onStart, onClearSearch, stopped, onDetails } = props
+  const { bridge, shares, query, view, onViewChange, onError, onInfo, onStart, onClearSearch, stopped, onDetails } =
+    props
   // View state only: which share the confirmation is open for.
   const [removing, setRemoving] = useState<ShareDto | null>(null)
   // The share whose button says "Copied" for a moment.
@@ -86,42 +87,50 @@ export default function SharesSection(props: SharesSectionProps) {
           {shown.map((share) => {
             const stoppedHere = stopped && share.status === 'ready'
             return (
-            <ItemView
-              key={share.id}
-              name={share.name}
-              size={formatSize(share.sizeBytes)}
-              tone={stoppedHere ? 'paused' : tones[share.status]}
-              chip={stoppedHere ? t('stopped.chip') : t(`shares.chip.${share.status}`)}
-              note={
-                stoppedHere ? t('stopped.note') : share.status === 'ready' ? undefined : t(`shares.status.${share.status}`)
-              }
-              progress={share.status === 'preparing' ? 'unknown' : undefined}
-              onDetails={() => onDetails({ kind: 'share', id: share.id, name: share.name })}
-              actions={
-                <>
-                  {share.status === 'ready' && (
+              <ItemView
+                key={share.id}
+                name={share.name}
+                size={formatSize(share.sizeBytes)}
+                tone={stoppedHere ? 'paused' : tones[share.status]}
+                chip={stoppedHere ? t('stopped.chip') : t(`shares.chip.${share.status}`)}
+                note={
+                  stoppedHere
+                    ? t('stopped.note')
+                    : share.status === 'ready'
+                      ? undefined
+                      : t(`shares.status.${share.status}`)
+                }
+                progress={share.status === 'preparing' ? 'unknown' : undefined}
+                onDetails={() => onDetails({ kind: 'share', id: share.id, name: share.name })}
+                actions={
+                  <>
+                    {share.status === 'ready' && (
+                      <button
+                        type="button"
+                        className="primary"
+                        onClick={() => copyInvite(share)}
+                        aria-label={t('shares.copyInviteFor', { name: share.name })}
+                      >
+                        {copied === share.id ? (
+                          <Check size={18} aria-hidden="true" />
+                        ) : (
+                          <Copy size={18} aria-hidden="true" />
+                        )}
+                        {t(copied === share.id ? 'shares.copied' : 'shares.copyInvite')}
+                      </button>
+                    )}
                     <button
                       type="button"
-                      className="primary"
-                      onClick={() => copyInvite(share)}
-                      aria-label={t('shares.copyInviteFor', { name: share.name })}
+                      className="quiet"
+                      onClick={() => setRemoving(share)}
+                      aria-label={t('shares.removeFor', { name: share.name })}
                     >
-                      {copied === share.id ? <Check size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}
-                      {t(copied === share.id ? 'shares.copied' : 'shares.copyInvite')}
+                      <Trash2 size={18} aria-hidden="true" />
+                      {t('shares.remove')}
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="quiet"
-                    onClick={() => setRemoving(share)}
-                    aria-label={t('shares.removeFor', { name: share.name })}
-                  >
-                    <Trash2 size={18} aria-hidden="true" />
-                    {t('shares.remove')}
-                  </button>
-                </>
-              }
-            />
+                  </>
+                }
+              />
             )
           })}
         </ul>

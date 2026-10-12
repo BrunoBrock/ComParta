@@ -5,7 +5,11 @@ import type {
   Bridge,
   ConnectionHealthDto,
   SetActivityArgs,
-  ErrorCode, InvitePreviewDto, ShareDto, TransferDto } from './bridge/index.ts'
+  ErrorCode,
+  InvitePreviewDto,
+  ShareDto,
+  TransferDto,
+} from './bridge/index.ts'
 import ConnectionHelp from './components/ConnectionHelp.tsx'
 import DetailsWindow, { type DetailsOf } from './components/DetailsWindow.tsx'
 import type { ViewMode } from './components/ItemView.tsx'

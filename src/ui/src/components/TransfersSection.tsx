@@ -61,7 +61,20 @@ function describe(transfer: TransferDto): string {
 const order = (a: TransferDto, b: TransferDto) => Number(a.state === 'done') - Number(b.state === 'done')
 
 export default function TransfersSection(props: TransfersSectionProps) {
-  const { bridge, transfers, query, view, onViewChange, onError, onStart, onClearSearch, stuck, onHelp, stopped, onDetails } = props
+  const {
+    bridge,
+    transfers,
+    query,
+    view,
+    onViewChange,
+    onError,
+    onStart,
+    onClearSearch,
+    stuck,
+    onHelp,
+    stopped,
+    onDetails,
+  } = props
 
   async function remove(transfer: TransferDto) {
     onStart()

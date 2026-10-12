@@ -82,9 +82,10 @@ body {
 .app {
   display: grid;
   grid-template-columns: 260px 1fr;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
   grid-template-areas:
     'top top'
+    'speed speed'
     'rail content';
   min-height: 100vh;
 }
@@ -684,6 +685,103 @@ dialog textarea {
   margin-top: calc(var(--space) * 2);
 }
 
+/* Speed bar: totals on the left, Stop on the right (UX design, "Speed bar"). */
+.speed-bar {
+  grid-area: speed;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space) calc(var(--space) * 3);
+  padding: 4px calc(var(--space) * 3);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: var(--text-sm);
+}
+
+.speed-bar-stopped {
+  background: var(--color-warn-soft);
+}
+
+.speed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.speed-off {
+  color: var(--color-warn);
+  font-weight: 600;
+}
+
+.stop-control {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.stop-control > button {
+  min-height: 36px;
+}
+
+.stop-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  min-width: 240px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
+}
+
+.stop-menu button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+/* The ⓘ button: over the picture's corner on a card, at the end of a row in the list. */
+.items-grid .item {
+  position: relative;
+}
+
+.items-grid .item-info {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--color-surface);
+}
+
+/* Details window: label and value side by side, stacked on phones. */
+.details-rows {
+  margin: 0;
+}
+
+.details-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 40%) 1fr;
+  gap: var(--space);
+  padding: 6px 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.details-row dt {
+  color: var(--color-text-muted);
+}
+
+.details-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Medium windows: the rail keeps its buttons but drops the tagline. */
 @media (max-width: 900px) {
   .app {
@@ -703,9 +801,10 @@ dialog textarea {
 @media (max-width: 600px) {
   .app {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto auto 1fr auto;
     grid-template-areas:
       'top'
+      'speed'
       'content'
       'rail';
   }
@@ -784,6 +883,35 @@ dialog textarea {
 
   .section-head h2 {
     font-size: var(--text-lg);
+  }
+
+  .speed-bar {
+    gap: var(--space) calc(var(--space) * 2);
+    padding: 4px calc(var(--space) * 2);
+  }
+
+  /* Narrow windows keep the arrows and numbers and drop the words. */
+  .speed-word {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  dialog.details {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+  }
+
+  .details-row {
+    grid-template-columns: 1fr;
+    gap: 0;
   }
 }
 
