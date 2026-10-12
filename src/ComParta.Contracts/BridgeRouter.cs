@@ -22,6 +22,7 @@ public sealed class BridgeRouter
     private readonly IClipboard _clipboard;
     private readonly IContentOpener _opener;
     private readonly ThumbnailUseCases _thumbnails;
+    private readonly DroppedFiles _dropped;
 
     public BridgeRouter(
         ShareUseCases shares,
@@ -33,9 +34,11 @@ public sealed class BridgeRouter
         ReceivedUseCases received,
         IClipboard clipboard,
         IContentOpener opener,
-        ThumbnailUseCases thumbnails)
+        ThumbnailUseCases thumbnails,
+        DroppedFiles dropped)
     {
         _thumbnails = thumbnails;
+        _dropped = dropped;
         _shares = shares;
         _transfers = transfers;
         _settings = settings;
@@ -208,6 +211,17 @@ public sealed class BridgeRouter
                     : CommandResult.Success(ToDetails(transfer, _activity.For(transfer.Transfer.Id)));
             }
 
+            case Commands.SharesAddDropped:
+            {
+                if (!Guid.TryParse(Args<DropArgs>(argsJson)?.Token, out var token))
+                    return CommandResult.Failure(ErrorCodes.ShareDropFailed);
+                var paths = await _dropped.TakeAsync(token, DroppedFiles.Wait);
+                if (paths is null)
+                    return CommandResult.Failure(ErrorCodes.ShareDropFailed);
+                var (added, problem) = await _shares.AddDroppedAsync(paths);
+                return CommandResult.Success(new DropResultDto(added, problem is { } kind ? ToCode(kind) : null));
+            }
+
             case Commands.ThumbnailsGet:
             {
                 var args = Args<ThumbnailArgs>(argsJson);
@@ -352,6 +366,7 @@ public sealed class BridgeRouter
         ErrorKind.SettingsInvalid => ErrorCodes.SettingsInvalid,
         ErrorKind.ReceivedNotFound => ErrorCodes.ReceivedNotFound,
         ErrorKind.ReceivedOpenFailed => ErrorCodes.ReceivedOpenFailed,
+        ErrorKind.ShareDropFailed => ErrorCodes.ShareDropFailed,
         _ => ErrorCodes.Unexpected,
     };
 }

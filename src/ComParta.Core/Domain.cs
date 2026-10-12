@@ -152,6 +152,7 @@ public enum ErrorKind
     SettingsInvalid,
     ReceivedNotFound,
     ReceivedOpenFailed,
+    ShareDropFailed,
     Unexpected,
 }
 

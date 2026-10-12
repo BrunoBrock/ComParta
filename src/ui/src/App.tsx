@@ -1,5 +1,5 @@
 import { CircleHelp, Search, Settings, X } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { type DragEvent, useCallback, useEffect, useRef, useState } from 'react'
 import type {
   ActivityDto,
   Bridge,
@@ -69,6 +69,8 @@ export default function App({ bridge }: AppProps) {
   const [adding, setAdding] = useState(false)
   // The guided send is open (UX design, "Send a file, first time").
   const [guiding, setGuiding] = useState(false)
+  // Files are being dragged over the window (epic 8 story 6).
+  const [dragging, setDragging] = useState(false)
   // Mirrors the catalog's current language so the whole screen re-renders when it changes.
   const [language, setShownLanguage] = useState<Language>(getLanguage)
   const [connection, setConnection] = useState<ConnectionHealthDto | null>(null)
@@ -269,6 +271,36 @@ export default function App({ bridge }: AppProps) {
     }
   }
 
+  // Dropped files are shared as if picked. Folders wait for epic 11; the page never sees a path,
+  // it only hands the files to the window under a token (AD-7).
+  async function drop(data: DataTransfer) {
+    clearNotice()
+    const entries = [...data.items].map((item) => item.webkitGetAsEntry?.() ?? null)
+    const files = [...data.files].filter((_, i) => !entries[i]?.isDirectory)
+    const folders = files.length < data.files.length
+    if (files.length === 0) {
+      if (folders) setNotice(t('drop.folderNotYet'))
+      return
+    }
+    setSection('shared')
+    const token = crypto.randomUUID()
+    if (!bridge.handOverDrop(token, files)) {
+      showError('share.dropFailed')
+      return
+    }
+    const result = await bridge.invoke('shares.addDropped', { token })
+    if (!result.ok) {
+      showError(result.error.code)
+      return
+    }
+    const { added, problem } = result.value
+    if (problem) showError(problem as ErrorCode)
+    else if (folders) setNotice(t('drop.folderNotYet'))
+    if (added > 0) showInfo(added === 1 ? t('drop.sharedOne') : t('drop.sharedMany', { count: added }))
+  }
+
+  const isFileDrag = (event: DragEvent) => event.dataTransfer.types.includes('Files')
+
   function startReceiving() {
     clearNotice()
     setPasted(undefined)
@@ -321,7 +353,30 @@ export default function App({ bridge }: AppProps) {
   )
 
   return (
-    <div className="app">
+    <div
+      className="app"
+      onDragOver={(event) => {
+        if (!isFileDrag(event)) return
+        event.preventDefault()
+        event.dataTransfer.dropEffect = 'copy'
+        setDragging(true)
+      }}
+      onDragLeave={(event) => {
+        // Leaving one element for another inside the window is not leaving the window.
+        if (!event.relatedTarget) setDragging(false)
+      }}
+      onDrop={(event) => {
+        if (!isFileDrag(event)) return
+        event.preventDefault()
+        setDragging(false)
+        void drop(event.dataTransfer)
+      }}
+    >
+      {dragging && (
+        <div className="drop-overlay" aria-hidden="true">
+          <p>{t('drop.here')}</p>
+        </div>
+      )}
       <header className="topbar">
         <h1 className="brand">
           <span className="brand-mark" aria-hidden="true" />

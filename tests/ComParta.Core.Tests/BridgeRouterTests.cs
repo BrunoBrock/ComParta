@@ -19,6 +19,7 @@ public sealed class BridgeRouterTests
     private readonly FakeFirewall _firewall = new();
     private readonly OpenedInvites _opened = new();
     private readonly FakeThumbnails _thumbnails = new();
+    private readonly DroppedFiles _dropped = new();
     private readonly List<JsonElement> _events = [];
     private readonly BridgeRouter _router;
 
@@ -31,7 +32,7 @@ public sealed class BridgeRouterTests
         var activity = new ActivityUseCases(_engine, _settings);
         var received = new ReceivedUseCases(transfers, new FakePaths(Path.GetTempPath()), _shell, _files);
         var thumbnails = new ThumbnailUseCases(shares, received, _thumbnails);
-        _router = new BridgeRouter(shares, transfers, settings, connection, _opened, activity, received, _shell, _shell, thumbnails);
+        _router = new BridgeRouter(shares, transfers, settings, connection, _opened, activity, received, _shell, _shell, thumbnails, _dropped);
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
         _picker.NextPick = Video;
@@ -284,6 +285,22 @@ public sealed class BridgeRouterTests
         Assert.Equal([(Video, 96)], _thumbnails.Asked);
         Assert.Equal(ErrorCodes.ShareNotFound, ErrorCode(await InvokeAsync(Commands.ThumbnailsGet, new { kind = "share", id = "nope", size = 96 })));
         Assert.Equal(ErrorCodes.TransferNotFound, ErrorCode(await InvokeAsync(Commands.ThumbnailsGet, new { kind = "transfer", id = TransferId.New().ToString(), size = 96 })));
+    }
+
+    [Fact]
+    public async Task Dropped_files_are_shared_by_their_token_and_the_first_problem_is_reported()
+    {
+        var token = Guid.NewGuid();
+        var photo = Path.Combine(Path.GetTempPath(), "Pictures", "beach.jpg");
+        _files.Files[photo] = 3_000;
+        _dropped.Put(token, [Video, photo, Path.Combine(Path.GetTempPath(), "gone.txt")]);
+
+        var result = (await InvokeAsync(Commands.SharesAddDropped, new { token = token.ToString() })).GetProperty("value");
+
+        Assert.Equal(2, result.GetProperty("added").GetInt32());
+        Assert.Equal(ErrorCodes.FileUnreadable, result.GetProperty("problem").GetString());
+        Assert.Equal(2, (await InvokeAsync(Commands.SharesList)).GetProperty("value").GetArrayLength());
+        Assert.Equal(ErrorCodes.ShareDropFailed, ErrorCode(await InvokeAsync(Commands.SharesAddDropped, new { token = "not-a-token" })));
     }
 
     [Fact]

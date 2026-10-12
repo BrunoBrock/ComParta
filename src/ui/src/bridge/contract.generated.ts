@@ -107,6 +107,15 @@ export interface TransferDetailsDto {
   bytesSent: number;
 }
 
+export interface DropArgs {
+  token: string;
+}
+
+export interface DropResultDto {
+  added: number;
+  problem: string | null;
+}
+
 export interface ThumbnailArgs {
   kind: ThumbnailKindDto;
   id: string;
@@ -127,6 +136,7 @@ export const errorCodes = [
   "settings.invalid",
   "received.notFound",
   "received.openFailed",
+  "share.dropFailed",
   "unexpected",
 ] as const;
 
@@ -158,6 +168,7 @@ export interface Commands {
   "activity.set": { args: SetActivityArgs; result: null };
   "shares.details": { args: IdArgs; result: ShareDetailsDto };
   "transfers.details": { args: IdArgs; result: TransferDetailsDto };
+  "shares.addDropped": { args: DropArgs; result: DropResultDto };
   "thumbnails.get": { args: ThumbnailArgs; result: string | null };
 }
 

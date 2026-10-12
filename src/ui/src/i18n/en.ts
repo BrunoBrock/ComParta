@@ -55,6 +55,10 @@ export const en = {
   'shares.removeFor': 'Stop sharing {name}',
   'shares.removed': 'Stopped sharing “{name}”. The file is still on your computer.',
 
+  'drop.here': 'Drop files here to share them',
+  'drop.folderNotYet': 'Folders cannot be shared yet. Open the folder and drop the files inside it instead.',
+  'drop.sharedOne': 'Shared 1 file. Copy its invite to send it.',
+  'drop.sharedMany': 'Shared {count} files. Copy each invite to send them.',
   'steps.label': 'Send a file',
   'steps.count': 'Step {step} of 3',
   'steps.choose': 'Choose a file',
@@ -213,6 +217,7 @@ export const en = {
   'error.transfer.notFound': 'That file is no longer in your list.',
   'error.received.notFound': 'This file is no longer in your ComParta folder. It may have been moved or deleted.',
   'error.received.openFailed': 'ComParta could not open this file. Choose Show in folder to see it.',
+  'error.share.dropFailed': 'ComParta could not take those files. Choose “Share a file” to pick them instead.',
   'error.settings.invalid': 'That choice could not be saved. Try again.',
   'error.unexpected': 'Something went wrong. Close ComParta, open it again and try once more.',
 

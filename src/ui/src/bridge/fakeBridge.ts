@@ -14,6 +14,7 @@ import type {
   SettingsDto,
   ShareDetailsDto,
   ShareDto,
+  DropArgs,
   ThumbnailArgs,
   TransferDetailsDto,
   TransferDto,
@@ -253,6 +254,27 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     return null
   }
 
+  // Shares one picked or dropped file the way the app does: no duplicates, no empty files.
+  const shareFile = (pick: PickedFile): CommandResult<ShareDto> => {
+    if (shares.some((s) => s.name === pick.name)) return fail('share.duplicate')
+    if (pick.sizeBytes === 0) return fail('file.unreadable')
+
+    const share: ShareDto = { id: newId(), ...pick, status: stepMs === 0 ? 'ready' : 'preparing' }
+    shares = [...shares, share]
+    addedAt.set(share.id, new Date().toISOString())
+    emitShares()
+    if (stepMs > 0) {
+      setTimeout(() => {
+        shares = shares.map((s) => (s.id === share.id ? { ...s, status: 'ready' } : s))
+        emitShares()
+      }, stepMs * 2)
+    }
+    return ok(share)
+  }
+
+  // Files the page handed over with a drop, by token, as the window does in the app.
+  const dropped = new Map<string, PickedFile[]>()
+
   const handlers: Record<string, (args: unknown) => CommandResult<unknown>> = {
     'shares.list': () => ok([...shares]),
 
@@ -260,20 +282,22 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       const pick = fake.nextPick
       if (pick === null) return ok(null)
       fake.nextPick = samplePicks[++nextSample % samplePicks.length]
-      if (shares.some((s) => s.name === pick.name)) return fail('share.duplicate')
-      if (pick.sizeBytes === 0) return fail('file.unreadable')
+      return shareFile(pick)
+    },
 
-      const share: ShareDto = { id: newId(), ...pick, status: stepMs === 0 ? 'ready' : 'preparing' }
-      shares = [...shares, share]
-      addedAt.set(share.id, new Date().toISOString())
-      emitShares()
-      if (stepMs > 0) {
-        setTimeout(() => {
-          shares = shares.map((s) => (s.id === share.id ? { ...s, status: 'ready' } : s))
-          emitShares()
-        }, stepMs * 2)
+    'shares.addDropped': (args) => {
+      const { token } = args as DropArgs
+      const files = dropped.get(token)
+      dropped.delete(token)
+      if (!files) return fail('share.dropFailed')
+      let added = 0
+      let problem: ErrorCode | null = null
+      for (const file of files) {
+        const result = shareFile(file)
+        if (result.ok) added++
+        else problem ??= result.error.code
       }
-      return ok(share)
+      return ok({ added, problem })
     },
 
     'shares.remove': (args) => {
@@ -380,9 +404,8 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       const name =
         kind === 'share'
           ? shares.find((s) => s.id === id && s.status !== 'unavailable')?.name
-          : transfers.find((t) => t.id === id && t.state === 'done')?.name ?? undefined
-      if (!name)
-        return kind === 'share' && !shares.some((s) => s.id === id) ? fail('share.notFound') : ok(null)
+          : (transfers.find((t) => t.id === id && t.state === 'done')?.name ?? undefined)
+      if (!name) return kind === 'share' && !shares.some((s) => s.id === id) ? fail('share.notFound') : ok(null)
       return ok(isPicture(name) ? fakePicture(name) : null)
     },
 
@@ -477,6 +500,14 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
         return fail(code)
       }
       return handlers[command]?.(args) ?? fail('unexpected')
+    },
+
+    handOverDrop(token: string, files: File[]) {
+      dropped.set(
+        token,
+        files.map((file) => ({ name: file.name, sizeBytes: file.size })),
+      )
+      return true
     },
 
     subscribe(listener: (event: EventEnvelope) => void) {

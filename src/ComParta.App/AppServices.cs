@@ -23,6 +23,7 @@ public sealed class AppServices
 
 	/// <summary>Invites handed to the app from outside, such as a clicked link (AD-16).</summary>
 	public OpenedInvites Opened { get; } = new();
+	public DroppedFiles Dropped { get; } = new();
 
 	public static AppServices Start() => new();
 
@@ -44,7 +45,7 @@ public sealed class AppServices
 			var received = new ReceivedUseCases(transfers, _paths, opener, new LocalFileSystem());
 			var thumbnails = new ThumbnailUseCases(shares, received, new WindowsThumbnails());
 			var router = new BridgeRouter(
-				shares, transfers, settings, connection, Opened, activity, received, new NativeClipboard(), opener, thumbnails);
+				shares, transfers, settings, connection, Opened, activity, received, new NativeClipboard(), opener, thumbnails, Dropped);
 
 			// Written at every start so a clicked link finds the app even after its folder moved.
 			LinkScheme.Register(executable);

@@ -75,7 +75,30 @@ public sealed class ShareUseCases
         var path = await _picker.PickFileAsync(ct);
         if (path is null)
             return Result<ShareView?>.Success(null);
+        return await ShareFileAsync(path, ct);
+    }
 
+    /// <summary>
+    /// Shares each file dropped onto the window, as if picked one by one (epic 8 story 6). Returns
+    /// how many were shared and why the first one that could not be was refused.
+    /// </summary>
+    public async Task<(int Added, ErrorKind? Problem)> AddDroppedAsync(IEnumerable<string> paths, CancellationToken ct = default)
+    {
+        var added = 0;
+        ErrorKind? problem = null;
+        foreach (var path in paths)
+        {
+            var result = await ShareFileAsync(path, ct);
+            if (result.Ok)
+                added++;
+            else
+                problem ??= result.Error;
+        }
+        return (added, problem);
+    }
+
+    private async Task<Result<ShareView?>> ShareFileAsync(string path, CancellationToken ct)
+    {
         ShareView view;
         await _gate.WaitAsync(ct);
         try

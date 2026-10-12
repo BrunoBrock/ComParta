@@ -34,6 +34,7 @@ public static class Commands
     public const string SharesDetails = "shares.details";
     public const string TransfersDetails = "transfers.details";
     public const string ThumbnailsGet = "thumbnails.get";
+    public const string SharesAddDropped = "shares.addDropped";
 }
 
 public static class Events
@@ -63,13 +64,14 @@ public static class ErrorCodes
     public const string SettingsInvalid = "settings.invalid";
     public const string ReceivedNotFound = "received.notFound";
     public const string ReceivedOpenFailed = "received.openFailed";
+    public const string ShareDropFailed = "share.dropFailed";
     public const string Unexpected = "unexpected";
 
     public static IReadOnlyList<string> All { get; } =
     [
         ShareDuplicate, ShareNotFound, ShareNotReady, FileUnreadable,
         InviteInvalid, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, DiskFull, SettingsInvalid,
-        ReceivedNotFound, ReceivedOpenFailed, Unexpected,
+        ReceivedNotFound, ReceivedOpenFailed, ShareDropFailed, Unexpected,
     ];
 }
 
@@ -102,6 +104,12 @@ public sealed record ReceiveArgs(string Invite);
 /// Without it, only the link is copied.
 /// </param>
 public sealed record CopyInviteArgs(string Id, string? Message);
+
+/// <param name="Token">The id the UI gave the drop when it handed the files to the window (AD-7).</param>
+public sealed record DropArgs(string Token);
+
+/// <param name="Problem">The error code of the first file that could not be shared, or null.</param>
+public sealed record DropResultDto(int Added, string? Problem);
 
 /// <summary>
 /// What an invite or download link says, before anything is received. Name, size and sender come
@@ -196,6 +204,7 @@ public static class Contract
         new(Commands.SharesDetails, typeof(IdArgs), typeof(ShareDetailsDto)),
         new(Commands.TransfersDetails, typeof(IdArgs), typeof(TransferDetailsDto)),
         // A data: URL, or null when the file has no picture (AD-18: no path crosses the bridge).
+        new(Commands.SharesAddDropped, typeof(DropArgs), typeof(DropResultDto)),
         new(Commands.ThumbnailsGet, typeof(ThumbnailArgs), typeof(string), ResultMayBeNull: true),
     ];
 
