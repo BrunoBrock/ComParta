@@ -42,5 +42,5 @@ Showing and explaining transfer state. Not speed limits, queues or other power-u
 
 ## Notes
 
-- Open question: OQ-1 decides which stuck states exist (for example "waiting for the other person's device").
+- Decision: OQ-1 is answered for the first release by AD-8 (extended to the whole internet on 2026-10-12). The stuck states include "waiting for the other person's device" and "the sender cannot be reached from outside"; the sender's own reachability line comes from epic-send-to-a-person.
 - Waits on epic-send-to-a-person because: it provides transfers between two devices.

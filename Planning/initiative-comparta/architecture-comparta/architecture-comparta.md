@@ -7,7 +7,7 @@ paradigm: 'hexagonal (ports and adapters), web-view UI as a driving adapter'
 scope: 'ComParta whole product, MVP-first: Windows desktop app where a person adds or removes a shared file'
 status: final
 created: '2026-10-08'
-updated: '2026-10-08'
+updated: '2026-10-12'
 binds: []
 sources:
   - '../../ReadMe.md'
@@ -92,7 +92,9 @@ An arrow means "may depend on". `ComParta.Core` depends on no other project and 
 - **Binds:** engine, core
 - **Prevents:** a story switching on wider discovery and exposing family files; inconsistent network settings per share.
 - **Rule:** All discovery, encryption and port settings come from one `SharingPolicy` object in core, applied only by the engine adapter. The policy (decided 2026-10-08) allows three ways for two devices to meet, all keyed by the invite: the sender's own network address carried inside the invite, local-network discovery, and the public BitTorrent lookup network (DHT). Peer exchange and trackers stay off, addresses of servers found in a pasted invite are dropped, and connections are encrypted. No other code sets engine network options.
+- **Rule (decided 2026-10-12):** A share is reachable from the whole internet, not only the local network. The sender's address in the invite includes the public address, and the app asks the router to open the listening port (UPnP / NAT-PMP). The public address is learned from the router or the lookup network, never from a third-party "what is my IP" service (AD-9). The engine reports whether the share can be reached from outside; the UI words it (AD-11).
 - **Accepted trade-off:** the content's fingerprint is announced on the public lookup network, so a share is unlisted, not secret: only someone holding the invite can ask for it, but the fingerprint is not hidden from that network. A stronger model (per-person keys) stays in Deferred.
+- **Accepted trade-off (2026-10-12), for family and friends:** the invite is a bearer key, so anyone holding it can download, it never expires, and removing the share is the only revocation. The sender's public address is visible to anyone who asks for the fingerprint or connects. The encryption hides traffic from casual inspection but is not confidentiality. Uploads are not limited.
 
 ### AD-9 — No hosted services, no accounts, no telemetry
 
@@ -193,7 +195,8 @@ Operational envelope: the product is an installed desktop app with no servers an
 | Item | Why it can wait | Revisit when |
 | --- | --- | --- |
 | Stronger privacy model: per-person keys so that only chosen people can download, and no fingerprint on the public lookup network | The first release uses the invite-as-secret model in AD-8. | Before the app is offered to people outside the maintainer's circle. |
-| Connecting through home routers: at least one of the two devices must accept incoming connections (Windows Firewall allowed, and either the same network or a router that opens the port automatically). MonoTorrent has no uTP hole punching | Same-network transfers work today; AD-2 keeps an engine swap cheap. | After the first real two-household transfers. |
+| Connecting when a router has no inbound path (carrier-grade NAT, strict routers): at least one of the two devices must accept incoming connections, and MonoTorrent has no uTP hole punching. The public address in the invite, automatic port mapping and the reachability status (AD-8) cover the common case | Most home routers can map a port, and AD-2 keeps an engine swap cheap. | After the first real two-household transfers. |
+| Hardening considered and not decided: an upload rate limit and connection cap, invites that expire, an option to turn the public lookup network off | The AD-8 trade-off is accepted for family and friends. | Before the app is offered outside the maintainer's circle. |
 | Operating-system sandbox on Windows, and scanning or marking of received files | AD-6 already contains received content at app level. | Before the first epic that receives a file. |
 | Open source license | Does not affect code structure; MonoTorrent's MIT license fits MIT, Apache-2.0 and AGPL-3.0. | Before the repository is made public. |
 | Packaging, code signing and updates | Not needed until other people install it. An update check is a network call and must be reconciled with AD-9. | Before the first public release. |

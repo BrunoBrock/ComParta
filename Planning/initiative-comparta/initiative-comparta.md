@@ -44,7 +44,8 @@ Tracer path: a file picked in the Windows dialog appears in the list, survives a
 
 - Assumption: the platform baseline (scaffold, CI) is the first stories of epic 1 and not its own epic, because the product has no servers or environments to stand up.
 - Assumption: epics after the first keep their envelope only; they are broken into stories when their open question is answered.
-- Open question: OQ-1 privacy and discovery model; epics 2, 4 and 7 wait on it. It is a decision several epics adopt, so it belongs in the architecture spine (`bmad-architecture` update) before epic 2 is planned.
+- Decision: OQ-1 privacy and discovery model is answered for the first release by AD-8 (2026-10-08), and on 2026-10-12 the maintainer accepted that shared files are reachable from the whole internet, with the limits stated in AD-8. Still open: a stronger model where only chosen people can download, hardening (upload limits, invites that expire), and routers with no inbound path; epic 2 plans the rest.
+- Source conflict: Done when 3 ("no connection to any hosted service") vs the public lookup network that AD-8 allows, which starts from a well-known public host (`router.bittorrent.com` is in the MonoTorrent DHT library). The maintainer decides whether to reword it; see epic-send-to-a-person Notes.
 - Open question: OQ-2 Windows sandbox and marking of received files; epic 3 waits on it.
 - Open question: OQ-3 open source license; needed before the repository is public.
 - Open question: OQ-4 packaging, signing and updates; epic 5 waits on it.

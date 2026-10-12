@@ -1,0 +1,73 @@
+# Stories of epic-send-to-a-person, in build order.
+# The first version of this epic (invite, receive, transfers on one PC) was built on 2026-10-08 with epic-share-a-file; these stories are what is left.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Engine: put the sender's public address in the invite"
+description = "Reads the address the router reports for its internet side (through Mono.Nat, already shipped with the engine; the address the public lookup network reports is the fallback) and lists it first among the invite's address hints (a receiver reads at most six) when it is a public address, without calling any third-party service."
+verify = "Engine tests with a fake router: the invite lists the public address first when the router reports one; it lists only local addresses when the router reports a private or shared-range address or none; the engine code makes no web request."
+covers = ["CAP-6"]
+after = ["1.6"]                # the engine adapter from epic-share-a-file
+hitl = false
+risk = "medium"
+references = ["architecture-comparta/architecture-comparta.md#ad-2", "architecture-comparta/architecture-comparta.md#ad-8", "architecture-comparta/architecture-comparta.md#ad-9"]
+
+[[entry]]
+id = 2
+type = "story"
+title = "Core and bridge: whether the share can be reached from outside"
+description = "Adds to the core a reachability state (checking, reachable, not reachable), a way to read it and be told of changes on the engine port with a fake, and a bridge query, change event, DTO, generated types and fake-bridge support for it; copying an invite stays possible in every state."
+verify = "Core tests against the fake engine: the state starts as checking, follows the fake's changes, and an invite is still produced when it is not reachable; changing the DTO in C# changes the generated TypeScript; UI tests can read the state from the fake bridge."
+covers = ["CAP-6"]
+after = ["1.3", "1.4"]      # the bridge contract and the core ports from epic-share-a-file; touches core and contracts only, entry 1 touches the engine adapter
+hitl = false
+risk = "low"
+references = ["architecture-comparta/architecture-comparta.md#ad-3", "architecture-comparta/architecture-comparta.md#ad-4", "architecture-comparta/architecture-comparta.md#ad-5", "architecture-comparta/architecture-comparta.md#ad-11", "architecture-comparta/architecture-comparta.md#ad-12"]
+
+[[entry]]
+id = 3
+type = "story"
+title = "Engine: report whether the way in is open"
+description = "Makes the engine adapter report the reachability state from entry 2: checking while the router is asked, reachable when the router opened the port and the address read in entry 1 is public, and not reachable when the router refused or did not answer or the address is private or shared-range (carrier-grade NAT)."
+verify = "Engine tests with a fake router, one per case: opened with a public address is reachable; refused, silent, or opened with a 100.64.x.x address is not reachable; each change is raised to the core."
+covers = ["CAP-6"]
+after = [1, 2]              # same engine code as 1; implements the state and port member from 2
+hitl = false
+risk = "medium"
+references = ["architecture-comparta/architecture-comparta.md#ad-2", "architecture-comparta/architecture-comparta.md#ad-8"]
+
+[[entry]]
+id = 4
+type = "story"
+title = "UI: say whether the share can be reached from outside"
+description = "Shows the reachability state from entry 2 in plain words next to the copy-invite action, says what to do when it is not reachable, and says that anyone who gets the invite can download the file, so it goes only to the chosen person; every string comes from the translation catalog."
+verify = "In a browser against the fake bridge: each state shows its own message, a change event updates it without reload, the invite warning is shown, and the guard tests for banned terms and missing messages pass."
+covers = ["CAP-6"]
+after = [2, "1.7"]          # the state from 2; the shares screen from epic-share-a-file
+unknown = "What the message tells a person whose router will not open the port by itself, since a manual router step conflicts with the spec's rule of no step needing networking knowledge (spec OQ-1)."
+hitl = false
+risk = "low"
+references = ["architecture-comparta/architecture-comparta.md#ad-5", "architecture-comparta/architecture-comparta.md#ad-11"]
+
+[[entry]]
+id = 5
+type = "story"
+title = "Check a transfer between two homes"
+description = "A person runs a release build on a Windows PC in each of two homes, sends a large video with an invite from one to the other, and compares what the sender's reachability line said with what happened, keeping a network capture of the transfer."
+verify = "The received file's checksum equals the original's; the receiver connected using only the invite; the sender's line matched the outcome; the capture lists no host except the other PC, the router and the public lookup network's entry nodes."
+covers = ["CAP-6", "CAP-7"]
+after = [1, 2, 3, 4, "1.10"] # "1.10" is the running app from epic-share-a-file
+hitl = true                 # a person in each home runs the build and the capture
+risk = "medium"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Refactor sweep"
+description = "Cleans up what the epic's plans and deferred review findings name; scope is set when it starts and takes cleanup only."
+verify = "All tests and the Done when checks of the epic still pass after the cleanup."
+covers = []
+after = [1, 2, 3, 4, 5]
+hitl = false
+risk = "low"

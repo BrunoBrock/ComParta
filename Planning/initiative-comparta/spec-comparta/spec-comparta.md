@@ -35,10 +35,10 @@ Capabilities marked **[MVP]** form the first release (Windows desktop: add or re
   - **success:** Such a share is marked unavailable in the list and can still be removed.
 - **CAP-6 [MVP] Invite a person**
   - **intent:** A person offers a share to someone they choose, through a channel they already know (email, chat).
-  - **success:** The sender copies an invite they can paste into an email or chat; someone without the invite cannot ask for the share (see AD-8 for the limits of this).
+  - **success:** The sender copies an invite they can paste into an email or chat, and it works from outside the sender's home network, not only on the same one. The sender is told in plain words whether the share can be reached from outside, and what to do when it cannot. Someone without the invite cannot ask for the share (see AD-8 for the limits of this).
 - **CAP-7 [MVP] Receive a share**
   - **intent:** A person accepts an invite and gets the file.
-  - **success:** Pasting an invite brings the content directly from the sender's device into the Received folder, with no account and no hosted service involved, and never overwrites a file already there.
+  - **success:** Pasting an invite brings the content directly from the sender's device, in another home or on the same network, into the Received folder, with no account and no hosted service involved, and never overwrites a file already there.
 - **CAP-8 [MVP, first form] Follow a transfer**
   - **intent:** A person sees whether a file is on its way, done or stuck.
   - **success:** Each transfer shows progress and a plain-language state, and says what to do when it cannot proceed (for example, the other person's device is off).
@@ -58,9 +58,9 @@ Capabilities marked **[MVP]** form the first release (Windows desktop: add or re
 ## Constraints
 
 - AD-1 to AD-12 in the architecture companion are binding.
-- No account, no cloud, no hosted service, no telemetry (AD-9).
+- No account, no cloud, no hosted service, no telemetry (AD-9). The sender's public address comes from the router, never from a third-party service.
 - The target user can use a smartphone and email but nothing more complex; any step needing networking or torrent knowledge is a defect.
-- Private by default: content reaches only people who hold its invite; nothing is listed or searchable. The limits of this are stated in AD-8.
+- Private by default: content reaches only people who hold its invite; nothing is listed or searchable. The invite itself is the secret: anyone holding it can download, so the app never presents it as safe to post publicly. The limits of this are stated in AD-8.
 - Sharing never copies, moves, changes or deletes the original file (AD-6).
 - The MVP is Windows desktop only; nothing in it may block the Android shell (AD-1).
 - Open source. qBittorrent and other clients are reference only; no code is copied from them.
@@ -81,7 +81,7 @@ Capabilities marked **[MVP]** form the first release (Windows desktop: add or re
 ## Assumptions
 
 - The MVP shares single files only; folders (photo albums) come in a later story.
-- Both people keep ComParta open during a transfer, and at least one of the two computers can accept incoming connections (see the architecture's Deferred table).
+- Both people keep ComParta open during a transfer. The sender's router either opens the port automatically or the person opens it by hand; a router with no inbound path (carrier-grade NAT) is not solved in this release (see the architecture's Deferred table).
 - Unfinished received data is kept in a hidden folder inside the Received folder and moved to its final name when complete.
 - CAP-5 is not in the input; it follows from sharing files in place (AD-6).
 - Remove asks for confirmation and states that the original file is kept.
@@ -89,7 +89,7 @@ Capabilities marked **[MVP]** form the first release (Windows desktop: add or re
 
 ## Open Questions
 
-- OQ-1: Answered for the first release by AD-8 (invite carries the sender's address, plus local discovery and the public lookup network). Still open: a stronger model where only chosen people can download, and reliable connection when both people are behind strict routers.
+- OQ-1: Answered for the first release by AD-8: the invite carries the sender's local and public address, the app asks the router to open the port automatically and tells the sender whether the share can be reached from outside, and devices also find each other through local discovery and the public lookup network. Still open: a stronger model where only chosen people can download; hardening (upload limits, invites that expire, an option to turn the public lookup network off); reliable connection through routers with no inbound path; and what the app tells a person whose router will not open the port by itself.
 - OQ-2: Which Windows sandbox mechanism is used, and are received files scanned or marked? Blocks CAP-9.
 - OQ-3: Which open source license (MIT, Apache-2.0, AGPL-3.0)? Needed before the repository goes public.
 - OQ-4: How is the app packaged, signed and updated, given an update check is a network call (AD-9)? Blocks CAP-11.

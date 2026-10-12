@@ -43,6 +43,6 @@ The Android shell and phone layout. Not iOS. No change to core rules; anything A
 ## Notes
 
 - Open question: background sharing on phones (battery, mobile data, operating-system limits) is deferred in the architecture; settle it before planning.
-- Open question: OQ-1 applies to phones on mobile networks too.
+- Open question: OQ-1 is answered for the first release by AD-8, but a phone on a mobile network usually has no inbound path (carrier-grade NAT) and cannot open a router port, so it can receive but cannot be reached; settle what a phone can offer before planning.
 - Waits on epic-share-a-file because: it provides the core, contracts and UI the Android shell hosts.
 - Waits on epic-send-to-a-person because: it provides the invite and receive flows to carry over.
