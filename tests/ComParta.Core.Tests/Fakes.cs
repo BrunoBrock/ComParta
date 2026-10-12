@@ -134,7 +134,14 @@ internal sealed class FakeEngine : ITransferEngine
 
     public Task PauseReceivingAsync(TransferId id, CancellationToken ct = default) { Paused.Add(id); return Task.CompletedTask; }
 
-    public Task ContinueReceivingAsync(TransferId id, CancellationToken ct = default) { Paused.Remove(id); return Task.CompletedTask; }
+    public List<TransferId> Continued { get; } = [];
+
+    public Task ContinueReceivingAsync(TransferId id, CancellationToken ct = default)
+    {
+        Paused.Remove(id);
+        Continued.Add(id);
+        return Task.CompletedTask;
+    }
 
     public void Report(ReceiveProgress progress) => ReceiveProgressed?.Invoke(progress);
 }
@@ -159,10 +166,55 @@ internal sealed class FakeFileSystem : IFileSystem
     public long GetReadableFileSize(string path) =>
         Locked.Contains(path) ? throw new UnauthorizedAccessException() : Files[path];
 
+    public List<string> Deleted { get; } = [];
+
+    public void DeleteFile(string path)
+    {
+        if (Locked.Contains(path))
+            throw new IOException("in use");
+        Files.Remove(path);
+        Deleted.Add(path);
+    }
+
     public byte[] ReadSmallFile(string path, int maxBytes) =>
         Locked.Contains(path) || !Contents.TryGetValue(path, out var content) ? throw new UnauthorizedAccessException()
         : content.Length > maxBytes ? throw new IOException()
         : content;
+}
+
+internal sealed class FakePaths(string root) : IAppPaths
+{
+    public string DatabasePath => Path.Combine(root, "data", "comparta.db");
+    public string EngineRoot => Path.Combine(root, "engine");
+    public string ReceivedRoot => Path.Combine(root, "Received");
+    public string LogsRoot => Path.Combine(root, "logs");
+}
+
+internal sealed class FakeOpener : IContentOpener
+{
+    public int FolderOpened { get; private set; }
+    public List<string> Opened { get; } = [];
+    public List<string> Revealed { get; } = [];
+    public bool OpenWorks { get; set; } = true;
+
+    public Task OpenReceivedFolderAsync(CancellationToken ct = default) { FolderOpened++; return Task.CompletedTask; }
+    public Task<bool> OpenAsync(string path, CancellationToken ct = default) { Opened.Add(path); return Task.FromResult(OpenWorks); }
+    public Task RevealAsync(string path, CancellationToken ct = default) { Revealed.Add(path); return Task.CompletedTask; }
+}
+
+internal sealed class FakeThumbnails : IThumbnailProvider
+{
+    public List<(string Path, int Size)> Asked { get; } = [];
+    public Thumbnail? Next { get; set; } = new("image/png", [1, 2, 3]);
+    public bool Throws { get; set; }
+
+    public Task<Thumbnail?> GetAsync(string path, int size, CancellationToken ct = default)
+    {
+        Asked.Add((path, size));
+        if (Throws)
+            throw new IOException("The system could not draw it.");
+        return Task.FromResult(Next);
+    }
 }
 
 internal sealed class FakeStorage : IStorageInfo
@@ -201,4 +253,15 @@ internal sealed class ManualClock(DateTimeOffset start) : TimeProvider
 {
     public DateTimeOffset Now { get; set; } = start;
     public override DateTimeOffset GetUtcNow() => Now;
+}
+
+internal sealed class FakeNotifier : INotifier
+{
+    public List<Notification> Shown { get; } = [];
+    public void Show(Notification notification) => Shown.Add(notification);
+}
+
+internal sealed class FakeWindow : IWindowState
+{
+    public bool IsInFront { get; set; }
 }

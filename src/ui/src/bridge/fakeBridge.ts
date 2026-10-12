@@ -3,6 +3,7 @@ import type {
   ActivityDto,
   CommandResult,
   ConnectionHealthDto,
+  DetailsTargetDto,
   ErrorCode,
   EventEnvelope,
   CopyInviteArgs,
@@ -14,10 +15,13 @@ import type {
   SettingsDto,
   ShareDetailsDto,
   ShareDto,
+  DropArgs,
+  ThumbnailArgs,
   TransferDetailsDto,
   TransferDto,
   TransferSourceDto,
 } from './contract.generated.ts'
+import { isPicture } from '../fileNames.ts'
 
 export interface PickedFile {
   name: string
@@ -39,6 +43,11 @@ export interface FakeBridgeOptions {
   connection?: ConnectionHealthDto
   /** Sending or receiving already stopped from the speed bar, as the app remembers it. */
   stopped?: Partial<SetActivityArgs>
+  /** How files were shown and ordered last time, as the app stored it. */
+  view?: string | null
+  sort?: string | null
+  /** How many guided sends the person has been through; 3 means the steps no longer show. */
+  sendStepsSeen?: number
 }
 
 export interface FakeBridge extends Bridge {
@@ -53,6 +62,9 @@ export interface FakeBridge extends Bridge {
   /** What the system clipboard holds, for the "found an invite you copied" path. */
   clipboardText: string | null
   openedFolder: number
+  /** Ids of received files "opened" and "shown in their folder", in order. */
+  openedReceived: string[]
+  revealedReceived: string[]
   /** How many times the firewall settings were opened. */
   openedConnectionSettings: number
   /** Change the connection health, as the app does when the network changes. */
@@ -61,8 +73,22 @@ export interface FakeBridge extends Bridge {
   openInvite(text: string): void
   /** Change state from outside, as the app does when something happens on its own. */
   setShares(shares: ShareDto[]): void
+  /** The person clicked a system notification about this item. */
+  clickNotification(target: DetailsTargetDto): void
+  /** Another device gets a share, a quarter at a time each step, then it reads as sent. */
+  sendTo(shareId: string): void
   setTransfers(transfers: TransferDto[]): void
 }
+
+/** What a share reports while nobody is getting it. */
+export const notSending = {
+  activity: 'idle',
+  receiverCount: 0,
+  percent: 0,
+  finishedCount: 0,
+  secondsLeft: null,
+  neededBytes: null,
+} as const
 
 /** Roughly what one ready share sends while someone is getting it, in the moving fake. */
 export const fakeSendingPerShare = 180_000
@@ -73,6 +99,18 @@ const invitePrefix = 'comparta://receive/v1/'
 const invitePattern = /comparta:\/\/receive\/v1\/([A-Za-z0-9_-]+)/i
 const downloadLinkPrefix = 'https://example.org/download/'
 const demoInvite = { senderName: 'Paulo', name: 'Birthday party.mp4', sizeBytes: 250_000_000 }
+/** A made-up picture for a photo or video, coloured from its name, so the browser preview shows thumbnails. */
+export function fakePicture(name: string): string {
+  const hue = [...name].reduce((sum, c) => (sum + c.charCodeAt(0) * 7) % 360, 0)
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="240" height="160">` +
+    `<defs><linearGradient id="g" x2="1" y2="1"><stop offset="0" stop-color="hsl(${hue} 60% 70%)"/>` +
+    `<stop offset="1" stop-color="hsl(${(hue + 60) % 360} 50% 45%)"/></linearGradient></defs>` +
+    `<rect width="240" height="160" fill="url(#g)"/><circle cx="180" cy="48" r="20" fill="hsl(50 90% 85%)"/>` +
+    `<path d="M0 160 L80 80 L140 130 L180 100 L240 160 Z" fill="hsl(${hue} 40% 30%)"/></svg>`
+  return `data:image/svg+xml;base64,${btoa(svg)}`
+}
+
 const ok = <T>(value: T): CommandResult<T> => ({ ok: true, value })
 const fail = (code: ErrorCode): CommandResult<never> => ({ ok: false, error: { code } })
 
@@ -144,13 +182,20 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
         received = Math.min(total, received + step)
         if (received >= total) {
           clearInterval(timer)
-          updateTransfer(id, { receivedBytes: total, state: 'done', bytesPerSecond: 0, secondsLeft: null })
+          updateTransfer(id, {
+            receivedBytes: total,
+            state: 'done',
+            bytesPerSecond: 0,
+            secondsLeft: null,
+            neededBytes: null,
+          })
         } else {
           updateTransfer(id, {
             receivedBytes: Math.round(received),
             state: 'receiving',
             bytesPerSecond,
             secondsLeft: Math.ceil((total - received) / bytesPerSecond),
+            neededBytes: null,
           })
         }
       }, stepMs)
@@ -175,6 +220,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       state: 'connecting',
       bytesPerSecond: 0,
       secondsLeft: null,
+      neededBytes: null,
       ...known,
     }
     transfers = [...transfers.filter((t) => t.id !== id), transfer]
@@ -187,14 +233,29 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     const transfer = transfers.find((t) => t.id === id)
     if (!transfer) return fail('transfer.notFound')
     if (transfer.state === 'done' || transfer.state === 'failed') return fail('transfer.finished')
-    if (paused) updateTransfer(id, { state: 'paused', bytesPerSecond: 0, secondsLeft: null })
+    if (paused) updateTransfer(id, { state: 'paused', bytesPerSecond: 0, secondsLeft: null, neededBytes: null })
     else if (transfer.state === 'paused') updateTransfer(id, { state: transfer.sizeBytes ? 'receiving' : 'connecting' })
+    return ok(null)
+  }
+
+  // Only a file that has arrived can be opened, shown or deleted, as in the app.
+  const withArrived = (id: string, act: (id: string) => void) => {
+    const transfer = transfers.find((t) => t.id === id)
+    if (!transfer) return fail('transfer.notFound')
+    if (transfer.state !== 'done') return fail('received.notFound')
+    act(id)
     return ok(null)
   }
 
   let connection: ConnectionHealthDto = options.connection ?? 'good'
   let openedInvite: string | null = null
-  let settings: SettingsDto = { language: options.language ?? null, systemLanguage: options.systemLanguage ?? 'en' }
+  let settings: SettingsDto = {
+    language: options.language ?? null,
+    systemLanguage: options.systemLanguage ?? 'en',
+    view: options.view ?? null,
+    sort: options.sort ?? null,
+    sendStepsSeen: options.sendStepsSeen ?? 0,
+  }
   const freeBytes = options.freeBytes === undefined ? 120 * 1024 ** 3 : options.freeBytes
 
   /** Reads text the way the app's invite codec and engine do, or null when it is neither. */
@@ -216,6 +277,27 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     return null
   }
 
+  // Shares one picked or dropped file the way the app does: no duplicates, no empty files.
+  const shareFile = (pick: PickedFile): CommandResult<ShareDto> => {
+    if (shares.some((s) => s.name === pick.name)) return fail('share.duplicate')
+    if (pick.sizeBytes === 0) return fail('file.unreadable')
+
+    const share: ShareDto = { id: newId(), ...pick, status: stepMs === 0 ? 'ready' : 'preparing', ...notSending }
+    shares = [...shares, share]
+    addedAt.set(share.id, new Date().toISOString())
+    emitShares()
+    if (stepMs > 0) {
+      setTimeout(() => {
+        shares = shares.map((s) => (s.id === share.id ? { ...s, status: 'ready' } : s))
+        emitShares()
+      }, stepMs * 2)
+    }
+    return ok(share)
+  }
+
+  // Files the page handed over with a drop, by token, as the window does in the app.
+  const dropped = new Map<string, PickedFile[]>()
+
   const handlers: Record<string, (args: unknown) => CommandResult<unknown>> = {
     'shares.list': () => ok([...shares]),
 
@@ -223,20 +305,22 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       const pick = fake.nextPick
       if (pick === null) return ok(null)
       fake.nextPick = samplePicks[++nextSample % samplePicks.length]
-      if (shares.some((s) => s.name === pick.name)) return fail('share.duplicate')
-      if (pick.sizeBytes === 0) return fail('file.unreadable')
+      return shareFile(pick)
+    },
 
-      const share: ShareDto = { id: newId(), ...pick, status: stepMs === 0 ? 'ready' : 'preparing' }
-      shares = [...shares, share]
-      addedAt.set(share.id, new Date().toISOString())
-      emitShares()
-      if (stepMs > 0) {
-        setTimeout(() => {
-          shares = shares.map((s) => (s.id === share.id ? { ...s, status: 'ready' } : s))
-          emitShares()
-        }, stepMs * 2)
+    'shares.addDropped': (args) => {
+      const { token } = args as DropArgs
+      const files = dropped.get(token)
+      dropped.delete(token)
+      if (!files) return fail('share.dropFailed')
+      let added = 0
+      let problem: ErrorCode | null = null
+      for (const file of files) {
+        const result = shareFile(file)
+        if (result.ok) added++
+        else problem ??= result.error.code
       }
-      return ok(share)
+      return ok({ added, problem })
     },
 
     'shares.remove': (args) => {
@@ -253,7 +337,11 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       if (!share) return fail('share.notFound')
       if (share.status !== 'ready') return fail('share.notReady')
       const link = invitePrefix + share.id
-      fake.copiedInvite = message ? (message.includes('{link}') ? message.replace('{link}', link) : `${message}\n${link}`) : link
+      fake.copiedInvite = message
+        ? message.includes('{link}')
+          ? message.replace('{link}', link)
+          : `${message}\n${link}`
+        : link
       return ok(null)
     },
 
@@ -309,7 +397,16 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     'settings.get': () => ok({ ...settings }),
 
     'settings.set': (args) => {
-      settings = { ...settings, language: (args as SetSettingsArgs).language }
+      const { language, view, sort } = args as SetSettingsArgs
+      const sendStepsSeen = (args as SetSettingsArgs).sendStepsSeen ?? 0
+      if (
+        (view !== null && view !== 'grid' && view !== 'list') ||
+        (sort !== null && !['added', 'name', 'size'].includes(sort)) ||
+        sendStepsSeen < 0 ||
+        sendStepsSeen > 3
+      )
+        return fail('settings.invalid')
+      settings = { ...settings, language, view, sort, sendStepsSeen }
       emit({ event: 'settings.changed', payload: { ...settings } })
       return ok(null)
     },
@@ -323,6 +420,16 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       stopped = { sendingStopped, receivingStopped }
       emitActivity()
       return ok(null)
+    },
+
+    'thumbnails.get': (args) => {
+      const { kind, id } = args as ThumbnailArgs
+      const name =
+        kind === 'share'
+          ? shares.find((s) => s.id === id && s.status !== 'unavailable')?.name
+          : (transfers.find((t) => t.id === id && t.state === 'done')?.name ?? undefined)
+      if (!name) return kind === 'share' && !shares.some((s) => s.id === id) ? fail('share.notFound') : ok(null)
+      return ok(isPicture(name) ? fakePicture(name) : null)
     },
 
     'shares.details': (args) => {
@@ -376,9 +483,21 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       fake.openedFolder++
       return ok(null)
     },
+
+    'received.open': (args) => withArrived((args as IdArgs).id, (id) => fake.openedReceived.push(id)),
+
+    'received.reveal': (args) => withArrived((args as IdArgs).id, (id) => fake.revealedReceived.push(id)),
+
+    'received.delete': (args) =>
+      withArrived((args as IdArgs).id, (id) => {
+        transfers = transfers.filter((t) => t.id !== id)
+        emitTransfers()
+      }),
   }
 
   const fake = {
+    openedReceived: [] as string[],
+    revealedReceived: [] as string[],
     nextPick: samplePicks[0] as PickedFile | null,
     nextDownloadFile: { name: 'Free documentary.mkv', sizeBytes: 2_147_483_648 } as PickedFile | 'invalid' | null,
     failNextWith: null as ErrorCode | null,
@@ -406,9 +525,45 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       return handlers[command]?.(args) ?? fail('unexpected')
     },
 
+    handOverDrop(token: string, files: File[]) {
+      dropped.set(
+        token,
+        files.map((file) => ({ name: file.name, sizeBytes: file.size })),
+      )
+      return true
+    },
+
     subscribe(listener: (event: EventEnvelope) => void) {
       listeners.add(listener)
       return () => listeners.delete(listener)
+    },
+
+    clickNotification(target: DetailsTargetDto) {
+      emit({ event: 'details.changed', payload: target })
+    },
+
+    sendTo(shareId: string) {
+      const update = (change: Partial<ShareDto>) => {
+        shares = shares.map((s) => (s.id === shareId ? { ...s, ...change } : s))
+        emitShares()
+      }
+      const step = (percent: number) => {
+        const share = shares.find((s) => s.id === shareId)
+        if (!share) return
+        if (percent >= 100) {
+          update({ ...notSending, activity: 'sent', finishedCount: share.finishedCount + 1 })
+          return
+        }
+        const left = (share.sizeBytes * (100 - percent)) / 100
+        update({
+          activity: 'sending',
+          receiverCount: 1,
+          percent,
+          secondsLeft: percent === 0 ? null : Math.ceil(left / fakeSendingPerShare),
+        })
+        setTimeout(() => step(percent + 25), Math.max(stepMs, 1))
+      }
+      step(0)
     },
 
     setShares(next: ShareDto[]) {

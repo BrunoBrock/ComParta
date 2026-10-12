@@ -37,6 +37,7 @@ public sealed partial class MonoTorrentTransferEngine
                 // The save directory is the folder the file already sits in, so it is read where it is (AD-6).
                 var manager = await engine.AddAsync(torrent, Path.GetDirectoryName(offer.FilePath)!, ToTorrentSettings());
                 WatchIncoming(manager);
+                WatchReceivers(offer, manager);
                 offer.Manager = manager;
                 await manager.HashCheckAsync(false);
                 offer.Cancel.Token.ThrowIfCancellationRequested();

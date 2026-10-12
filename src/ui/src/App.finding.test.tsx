@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import App from './App.tsx'
 import type { ShareDto, TransferDto } from './bridge/contract.generated.ts'
-import { createFakeBridge } from './bridge/fakeBridge.ts'
+import { createFakeBridge, notSending } from './bridge/fakeBridge.ts'
 import { en } from './i18n/en.ts'
 import { setLanguage } from './i18n/index.ts'
 import { ptBR } from './i18n/pt-BR.ts'
@@ -18,7 +18,7 @@ import {
 } from './test/appHarness.tsx'
 
 describe('finding my files', () => {
-  const recipe: ShareDto = { id: 's3', name: 'Receita de aniversário.pdf', sizeBytes: 482_113, status: 'ready' }
+  const recipe: ShareDto = { id: 's3', name: 'Receita de aniversário.pdf', sizeBytes: 482_113, status: 'ready', ...notSending }
 
   it('counts the files in each place', async () => {
     setup({ shares: [video, album], transfers: [] })
@@ -50,7 +50,7 @@ describe('finding my files', () => {
   })
 
   it('shows files as a grid or a list and remembers the choice', async () => {
-    const { user } = setup({ shares: [video] })
+    const { bridge, user } = setup({ shares: [video] })
     await screen.findByText('Birthday party.mp4')
     expect(within(sharesSection()).getByRole('list')).toHaveClass('items-grid')
 
@@ -58,12 +58,45 @@ describe('finding my files', () => {
 
     expect(within(sharesSection()).getByRole('list')).toHaveClass('items-list')
     expect(screen.getByRole('button', { name: en['view.list'] })).toHaveAttribute('aria-pressed', 'true')
-    expect(localStorage.getItem('comparta.view')).toBe('list')
+    const stored = await bridge.invoke('settings.get')
+    expect(stored.ok && stored.value.view).toBe('list')
+  })
+
+  it('opens in the view and order stored last time', async () => {
+    setup({ shares: [video, album], view: 'list', sort: 'name' })
+
+    expect(await screen.findByText('Birthday party.mp4')).toBeInTheDocument()
+    expect(within(sharesSection()).getByRole('list')).toHaveClass('items-list')
+    expect(screen.getByRole('button', { name: 'Order: Name' })).toBeInTheDocument()
+  })
+
+  it('orders files by name, by size, or newest first, and stores the choice', async () => {
+    const small: ShareDto = { id: 's3', name: 'photo 10.jpg', sizeBytes: 5, status: 'ready', ...notSending }
+    const big: ShareDto = { id: 's4', name: 'Photo 2.jpg', sizeBytes: 500, status: 'ready', ...notSending }
+    const middle: ShareDto = { id: 's5', name: 'Árvore.png', sizeBytes: 50, status: 'ready', ...notSending }
+    const { bridge, user } = setup({ shares: [small, big, middle] })
+    await screen.findByText(small.name)
+    const names = () => within(sharesSection()).getAllByRole('listitem').map((item) => item.querySelector('.item-name')?.getAttribute('title'))
+    expect(names()).toEqual([middle.name, big.name, small.name])
+
+    await user.click(screen.getByRole('button', { name: 'Order: Newest first' }))
+    const menu = screen.getByRole('menu', { name: en['sort.menu'] })
+    expect(within(menu).getByRole('menuitemradio', { name: en['sort.added'] })).toHaveAttribute('aria-checked', 'true')
+    await user.click(within(menu).getByRole('menuitemradio', { name: en['sort.name'] }))
+    expect(names()).toEqual([middle.name, big.name, small.name])
+
+    await user.click(screen.getByRole('button', { name: 'Order: Name' }))
+    await user.click(screen.getByRole('menuitemradio', { name: en['sort.size'] }))
+    expect(names()).toEqual([big.name, middle.name, small.name])
+
+    await user.click(screen.getByRole('button', { name: en['view.list'] }))
+    const stored = await bridge.invoke('settings.get')
+    expect(stored.ok && [stored.value.sort, stored.value.view]).toEqual(['size', 'list'])
   })
 
   it('puts files still on their way above finished ones', async () => {
-    const done: TransferDto = { id: 't2', name: 'Old photo.jpg', sizeBytes: 10, receivedBytes: 10, state: 'done', bytesPerSecond: 0, secondsLeft: null }
-    const coming: TransferDto = { id: 't3', name: 'New video.mp4', sizeBytes: 100, receivedBytes: 40, state: 'receiving', bytesPerSecond: 0, secondsLeft: null }
+    const done: TransferDto = { id: 't2', name: 'Old photo.jpg', sizeBytes: 10, receivedBytes: 10, state: 'done', bytesPerSecond: 0, secondsLeft: null, neededBytes: null }
+    const coming: TransferDto = { id: 't3', name: 'New video.mp4', sizeBytes: 100, receivedBytes: 40, state: 'receiving', bytesPerSecond: 0, secondsLeft: null, neededBytes: null }
     const { user } = setup({ transfers: [done, coming] })
     await goToReceived(user)
 
@@ -93,13 +126,16 @@ describe('the language', () => {
     const first = render(<App bridge={bridge} />)
     await screen.findByText(ptBR['shares.empty'])
 
+    await user.click(within(screen.getByRole('banner')).getByRole('button', { name: ptBR['nav.settings'] }))
     await user.selectOptions(screen.getByRole('combobox', { name: ptBR['language.label'] }), 'en')
+    await user.click(screen.getByRole('button', { name: en['settings.close'] }))
 
     expect(await screen.findByText(en['shares.empty'])).toBeInTheDocument()
     first.unmount()
     setLanguage('pt-BR')
     render(<App bridge={bridge} />)
     expect(await screen.findByText(en['shares.empty'])).toBeInTheDocument()
+    await user.click(within(screen.getByRole('banner')).getByRole('button', { name: en['nav.settings'] }))
     expect(screen.getByRole('combobox', { name: en['language.label'] })).toHaveValue('en')
   })
 })

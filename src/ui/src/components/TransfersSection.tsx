@@ -1,11 +1,29 @@
-import { CircleHelp, FolderOpen, Pause, Play, X } from 'lucide-react'
+import {
+  CircleHelp,
+  Download,
+  ExternalLink,
+  FolderOpen,
+  FolderSearch,
+  Inbox,
+  Pause,
+  Play,
+  Trash2,
+  X,
+} from 'lucide-react'
+import { useState } from 'react'
 import type { Bridge, ErrorCode, TransferDto } from '../bridge/index.ts'
 import { formatSize, formatTimeLeft, percentOf, t } from '../i18n/index.ts'
+import { inOrder, type SortOrder } from '../order.ts'
 import { matches } from '../search.ts'
+import DeleteReceivedDialog from './DeleteReceivedDialog.tsx'
 import type { DetailsOf } from './DetailsWindow.tsx'
+import Thumbnail from './ui/Thumbnail.tsx'
+import { moveBetweenItems } from './itemKeys.ts'
 import ItemView, { type ViewMode } from './ItemView.tsx'
 import SectionHead from './SectionHead.tsx'
-import type { ChipTone } from './StatusChip.tsx'
+import Button from './ui/Button.tsx'
+import EmptyState from './ui/EmptyState.tsx'
+import type { ChipTone } from './ui/StatusChip.tsx'
 
 interface TransfersSectionProps {
   bridge: Bridge
@@ -14,7 +32,11 @@ interface TransfersSectionProps {
   query: string
   view: ViewMode
   onViewChange: (view: ViewMode) => void
+  sort: SortOrder
+  onSortChange: (sort: SortOrder) => void
   onError: (code: ErrorCode) => void
+  /** A confirmation that goes by itself, such as a deleted file. */
+  onInfo: (text: string) => void
   onStart: () => void
   onClearSearch: () => void
   /** Transfers that have waited long enough to offer the connection help (UX design, "Stuck transfer"). */
@@ -23,6 +45,8 @@ interface TransfersSectionProps {
   /** Receiving is stopped from the speed bar, so every unfinished transfer reads "Stopped". */
   stopped: boolean
   onDetails: (item: DetailsOf) => void
+  /** The section's primary action, offered when it is empty. */
+  onReceive: () => void
 }
 
 const tones: Record<TransferDto['state'], ChipTone> = {
@@ -31,6 +55,9 @@ const tones: Record<TransferDto['state'], ChipTone> = {
   paused: 'paused',
   done: 'ok',
   failed: 'warn',
+  waiting: 'warn',
+  noSpace: 'warn',
+  blocked: 'warn',
 }
 
 const percent = (transfer: TransferDto) => percentOf(transfer.receivedBytes, transfer.sizeBytes)
@@ -53,11 +80,12 @@ function describe(transfer: TransferDto): string {
     if (transfer.secondsLeft !== null) parts.push(formatTimeLeft(transfer.secondsLeft))
     return parts.join(' · ')
   }
+  if (state === 'noSpace')
+    return transfer.neededBytes === null
+      ? t('transfers.state.noSpaceUnknown')
+      : t('transfers.state.noSpace', { needed: formatSize(transfer.neededBytes) })
   return t(`transfers.state.${state}`)
 }
-
-/** Files on their way are pinned on top, finished ones follow (UX design, "On the way"). */
-const order = (a: TransferDto, b: TransferDto) => Number(a.state === 'done') - Number(b.state === 'done')
 
 export default function TransfersSection(props: TransfersSectionProps) {
   const {
@@ -66,14 +94,21 @@ export default function TransfersSection(props: TransfersSectionProps) {
     query,
     view,
     onViewChange,
+    sort,
+    onSortChange,
     onError,
+    onInfo,
     onStart,
     onClearSearch,
     stuck,
     onHelp,
     stopped,
     onDetails,
+    onReceive,
   } = props
+
+  // The received file waiting for the person to confirm its deletion.
+  const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null)
 
   async function remove(transfer: TransferDto) {
     onStart()
@@ -87,23 +122,69 @@ export default function TransfersSection(props: TransfersSectionProps) {
     if (!result.ok) onError(result.error.code)
   }
 
+  async function runOnReceived(command: 'received.open' | 'received.reveal', transfer: TransferDto) {
+    const result = await bridge.invoke(command, { id: transfer.id })
+    if (!result.ok) onError(result.error.code)
+  }
+
+  async function confirmDelete() {
+    const target = deleting!
+    setDeleting(null)
+    onStart()
+    const result = await bridge.invoke('received.delete', { id: target.id })
+    if (result.ok) onInfo(t('received.deleted', { name: target.name }))
+    else onError(result.error.code)
+  }
+
   async function openFolder() {
     const result = await bridge.invoke('received.openFolder')
     if (!result.ok) onError(result.error.code)
   }
 
-  const shown = transfers?.filter((transfer) => matches(transfer.name ?? '', query)).sort(order) ?? null
+  const found = transfers?.filter((transfer) => matches(transfer.name ?? '', query))
+  const shown = found
+    ? inOrder(
+        found,
+        sort,
+        (transfer) => transfer.name ?? '',
+        (transfer) => transfer.sizeBytes,
+      )
+    : null
+  // Files on their way are pinned on top, the ones that arrived follow (UX design, "On the way").
+  const groups = shown
+    ? [
+        { key: 'onTheWay' as const, items: shown.filter((transfer) => transfer.state !== 'done') },
+        { key: 'arrived' as const, items: shown.filter((transfer) => transfer.state === 'done') },
+      ].filter((group) => group.items.length > 0)
+    : []
 
   return (
     <section aria-labelledby="transfers-heading" className="content-section">
-      <SectionHead id="transfers-heading" title={t('transfers.heading')} view={view} onViewChange={onViewChange}>
+      <SectionHead
+        id="transfers-heading"
+        title={t('transfers.heading')}
+        view={view}
+        onViewChange={onViewChange}
+        sort={sort}
+        onSortChange={onSortChange}
+      >
         <button type="button" onClick={openFolder}>
           <FolderOpen size={18} aria-hidden="true" />
           {t('transfers.openFolder')}
         </button>
       </SectionHead>
 
-      {transfers !== null && transfers.length === 0 && <p className="empty">{t('transfers.empty')}</p>}
+      {transfers !== null && transfers.length === 0 && (
+        <EmptyState
+          icon={Inbox}
+          text={t('transfers.empty')}
+          action={
+            <Button variant="primary" icon={Download} onClick={onReceive}>
+              {t('transfers.open')}
+            </Button>
+          }
+        />
+      )}
       {transfers !== null && transfers.length > 0 && shown!.length === 0 && (
         <p className="empty">
           {t('search.none', { query: query.trim() })}{' '}
@@ -113,73 +194,123 @@ export default function TransfersSection(props: TransfersSectionProps) {
         </p>
       )}
 
-      {shown !== null && shown.length > 0 && (
-        <ul className={`items items-${view}`}>
-          {shown.map((transfer) => {
-            const name = transfer.name ?? t('transfers.unnamed')
-            const state = shownState(transfer)
-            const finished = transfer.state === 'done'
-            const canPause = transfer.state === 'connecting' || transfer.state === 'receiving'
-            const paused = transfer.state === 'paused'
-            const stoppedHere = stopped && !finished && transfer.state !== 'failed'
-            const shownProgress = stoppedHere
-              ? transfer.sizeBytes
-                ? { value: transfer.receivedBytes, max: transfer.sizeBytes }
-                : undefined
-              : state === 'receiving' || (state === 'paused' && transfer.sizeBytes)
-                ? { value: transfer.receivedBytes, max: transfer.sizeBytes! }
-                : state === 'connecting'
-                  ? 'unknown'
+      {groups.map((group) => (
+        <div key={group.key} className="item-group">
+          <h3 id={`transfers-${group.key}`} className="group-heading">
+            {t(`transfers.${group.key}`)}
+          </h3>
+          <ul className={`items items-${view}`} aria-labelledby={`transfers-${group.key}`} onKeyDown={moveBetweenItems}>
+            {group.items.map((transfer) => {
+              const name = transfer.name ?? t('transfers.unnamed')
+              const state = shownState(transfer)
+              const finished = transfer.state === 'done'
+              const canPause = ['connecting', 'receiving', 'waiting', 'noSpace'].includes(transfer.state)
+              const paused = transfer.state === 'paused'
+              const ended = transfer.state === 'failed' || transfer.state === 'blocked'
+              const stoppedHere = stopped && !finished && !ended
+              const shownProgress = stoppedHere
+                ? transfer.sizeBytes
+                  ? { value: transfer.receivedBytes, max: transfer.sizeBytes }
                   : undefined
-            return (
-              <ItemView
-                key={transfer.id}
-                name={name}
-                size={transfer.sizeBytes !== null ? formatSize(transfer.sizeBytes) : null}
-                tone={stoppedHere ? 'paused' : tones[state]}
-                chip={stoppedHere ? t('stopped.chip') : t(`transfers.chip.${state}`, { percent: percent(transfer) })}
-                note={stoppedHere ? t('stopped.note') : describe(transfer)}
-                progress={shownProgress}
-                onDetails={() => onDetails({ kind: 'transfer', id: transfer.id, name })}
-                actions={
-                  <>
-                    {!stoppedHere && state === 'connecting' && stuck.has(transfer.id) && (
+                : state === 'receiving' || (['paused', 'waiting', 'noSpace'].includes(state) && transfer.sizeBytes)
+                  ? { value: transfer.receivedBytes, max: transfer.sizeBytes! }
+                  : state === 'connecting'
+                    ? 'unknown'
+                    : undefined
+              return (
+                <ItemView
+                  key={transfer.id}
+                  name={name}
+                  size={transfer.sizeBytes !== null ? formatSize(transfer.sizeBytes) : null}
+                  tone={stoppedHere ? 'paused' : tones[state]}
+                  chip={stoppedHere ? t('stopped.chip') : t(`transfers.chip.${state}`, { percent: percent(transfer) })}
+                  note={stoppedHere ? t('stopped.note') : describe(transfer)}
+                  progress={shownProgress}
+                  onDetails={() => onDetails({ kind: 'transfer', id: transfer.id, name })}
+                  picture={<Thumbnail bridge={bridge} kind="transfer" id={transfer.id} name={name} ready={finished} />}
+                  onMain={finished ? () => runOnReceived('received.open', transfer) : undefined}
+                  // A running file is only cancelled with its own button; Delete never stops it by accident.
+                  onRemove={() => {
+                    if (finished) setDeleting({ id: transfer.id, name })
+                    else if (ended) void remove(transfer)
+                  }}
+                  actions={
+                    <>
+                      {finished && (
+                        <>
+                          <button
+                            type="button"
+                            className="primary"
+                            onClick={() => runOnReceived('received.open', transfer)}
+                            aria-label={t('received.openFor', { name })}
+                          >
+                            <ExternalLink size={18} aria-hidden="true" />
+                            {t('received.open')}
+                          </button>
+                          <button
+                            type="button"
+                            className="quiet"
+                            onClick={() => runOnReceived('received.reveal', transfer)}
+                            aria-label={t('received.revealFor', { name })}
+                          >
+                            <FolderSearch size={18} aria-hidden="true" />
+                            {t('received.reveal')}
+                          </button>
+                        </>
+                      )}
+                      {!stoppedHere && (state === 'connecting' || state === 'waiting') && stuck.has(transfer.id) && (
+                        <button
+                          type="button"
+                          className="quiet"
+                          onClick={onHelp}
+                          aria-label={t('transfers.helpFor', { name })}
+                        >
+                          <CircleHelp size={18} aria-hidden="true" />
+                          {t('transfers.help')}
+                        </button>
+                      )}
+                      {!stoppedHere && (canPause || paused) && (
+                        <button
+                          type="button"
+                          className="quiet"
+                          onClick={() => setPaused(transfer, canPause)}
+                          aria-label={t(paused ? 'transfers.continueFor' : 'transfers.pauseFor', { name })}
+                        >
+                          {paused ? <Play size={18} aria-hidden="true" /> : <Pause size={18} aria-hidden="true" />}
+                          {t(paused ? 'transfers.continue' : 'transfers.pause')}
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="quiet"
-                        onClick={onHelp}
-                        aria-label={t('transfers.helpFor', { name })}
+                        onClick={() => remove(transfer)}
+                        aria-label={t(finished ? 'transfers.clearFor' : 'transfers.cancelFor', { name })}
                       >
-                        <CircleHelp size={18} aria-hidden="true" />
-                        {t('transfers.help')}
+                        <X size={18} aria-hidden="true" />
+                        {t(finished ? 'transfers.clear' : 'transfers.cancel')}
                       </button>
-                    )}
-                    {!stoppedHere && (canPause || paused) && (
-                      <button
-                        type="button"
-                        className="quiet"
-                        onClick={() => setPaused(transfer, canPause)}
-                        aria-label={t(paused ? 'transfers.continueFor' : 'transfers.pauseFor', { name })}
-                      >
-                        {paused ? <Play size={18} aria-hidden="true" /> : <Pause size={18} aria-hidden="true" />}
-                        {t(paused ? 'transfers.continue' : 'transfers.pause')}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="quiet"
-                      onClick={() => remove(transfer)}
-                      aria-label={t(finished ? 'transfers.clearFor' : 'transfers.cancelFor', { name })}
-                    >
-                      <X size={18} aria-hidden="true" />
-                      {t(finished ? 'transfers.clear' : 'transfers.cancel')}
-                    </button>
-                  </>
-                }
-              />
-            )
-          })}
-        </ul>
+                      {finished && (
+                        <button
+                          type="button"
+                          className="quiet danger-text"
+                          onClick={() => setDeleting({ id: transfer.id, name })}
+                          aria-label={t('received.deleteFor', { name })}
+                        >
+                          <Trash2 size={18} aria-hidden="true" />
+                          {t('received.delete')}
+                        </button>
+                      )}
+                    </>
+                  }
+                />
+              )
+            })}
+          </ul>
+        </div>
+      ))}
+
+      {deleting && (
+        <DeleteReceivedDialog name={deleting.name} onConfirm={confirmDelete} onCancel={() => setDeleting(null)} />
       )}
     </section>
   )

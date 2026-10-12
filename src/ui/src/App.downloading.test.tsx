@@ -8,6 +8,7 @@ import {
   transfersSection,
   goToReceived,
   pasteInvite,
+  railButton,
 } from './test/appHarness.tsx'
 
 describe('downloading from a link or a download file', () => {
@@ -19,6 +20,7 @@ describe('downloading from a link or a download file', () => {
     state: 'receiving',
     bytesPerSecond: 2 * 1024 * 1024,
     secondsLeft: 250,
+    neededBytes: null,
   }
 
   it('starts a download when a download link is pasted', async () => {
@@ -33,7 +35,7 @@ describe('downloading from a link or a download file', () => {
   it('starts a download from a download file', async () => {
     const { user } = setup()
 
-    await user.click(await screen.findByRole('button', { name: en['transfers.open'] }))
+    await user.click(await railButton(en['transfers.open']))
     await user.click(screen.getByRole('button', { name: en['receive.openFile'] }))
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -44,7 +46,7 @@ describe('downloading from a link or a download file', () => {
     const { bridge, user } = setup()
     bridge.nextDownloadFile = null
 
-    await user.click(await screen.findByRole('button', { name: en['transfers.open'] }))
+    await user.click(await railButton(en['transfers.open']))
     await user.click(screen.getByRole('button', { name: en['receive.openFile'] }))
 
     const dialog = screen.getByRole('dialog', { name: en['receive.title'] })
@@ -55,7 +57,7 @@ describe('downloading from a link or a download file', () => {
     const { bridge, user } = setup()
     bridge.nextDownloadFile = 'invalid'
 
-    await user.click(await screen.findByRole('button', { name: en['transfers.open'] }))
+    await user.click(await railButton(en['transfers.open']))
     await user.click(screen.getByRole('button', { name: en['receive.openFile'] }))
 
     const dialog = screen.getByRole('dialog', { name: en['receive.title'] })

@@ -12,6 +12,7 @@ public sealed class AppServices
 {
 	private readonly AppPaths _paths = new();
 	private MonoTorrentTransferEngine? _engine;
+	private WindowsNotifier? _notifier;
 
 	private AppServices()
 	{
@@ -23,6 +24,13 @@ public sealed class AppServices
 
 	/// <summary>Invites handed to the app from outside, such as a clicked link (AD-16).</summary>
 	public OpenedInvites Opened { get; } = new();
+	public DroppedFiles Dropped { get; } = new();
+
+	/// <summary>Whether the person is looking at the window; notifications wait for when they are not (CAP-20).</summary>
+	public WindowFocus Focus { get; } = new();
+
+	/// <summary>Raised when the person clicked a notification, so the window comes to the front.</summary>
+	public event Action? NotificationClicked;
 
 	public static AppServices Start() => new();
 
@@ -40,8 +48,22 @@ public sealed class AppServices
 			var executable = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "ComParta.exe");
 			var connection = new ConnectionUseCases(_engine, new WindowsFirewall(executable));
 			var activity = new ActivityUseCases(_engine, store);
+			var opener = new ReceivedFolderOpener(_paths);
+			var received = new ReceivedUseCases(transfers, _paths, opener, new LocalFileSystem());
+			var thumbnails = new ThumbnailUseCases(shares, received, new WindowsThumbnails());
+			var sending = new SendingUseCases(_engine, shares);
+			NotificationUseCases? notifications = null;
+			_notifier = new WindowsNotifier(
+				(kind, id, name) =>
+				{
+					NotificationClicked?.Invoke();
+					notifications?.Open(kind, id, name);
+				},
+				Log);
+			notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, _notifier, Focus);
 			var router = new BridgeRouter(
-				shares, transfers, settings, connection, Opened, activity, new NativeClipboard(), new ReceivedFolderOpener(_paths));
+				shares, transfers, settings, connection, Opened, activity, received, new NativeClipboard(), opener, thumbnails, Dropped,
+				sending, notifications);
 
 			// Written at every start so a clicked link finds the app even after its folder moved.
 			LinkScheme.Register(executable);
@@ -51,6 +73,7 @@ public sealed class AppServices
 			await activity.StartAsync();
 			await shares.StartAsync();
 			await transfers.StartAsync();
+			await notifications.StartAsync();
 			return router;
 		}
 		catch (Exception e)
@@ -66,6 +89,7 @@ public sealed class AppServices
 		{
 			// Lets the engine save where each transfer got to before the process ends.
 			_engine?.StopAsync().Wait(TimeSpan.FromSeconds(5));
+			_notifier?.Stop();
 		}
 		catch (Exception e)
 		{

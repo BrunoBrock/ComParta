@@ -55,4 +55,17 @@ public sealed class PolicyTests
     [InlineData("192.168.0.10", false)]
     public void Only_global_IPv6_addresses_count_as_reachable_from_anywhere(string address, bool global) =>
         Assert.Equal(global, MonoTorrentTransferEngine.IsGlobalIPv6(System.Net.IPAddress.Parse(address)));
+
+    [Theory]
+    [InlineData(unchecked((int)0x80070070), true)]
+    [InlineData(unchecked((int)0x80070027), true)]
+    [InlineData(28, true)]
+    [InlineData(unchecked((int)0x80070005), false)]
+    public void A_write_that_failed_for_lack_of_room_is_told_apart(int code, bool full)
+    {
+        var error = new InvalidOperationException("write failed", new IOException("disk", code));
+
+        Assert.Equal(full, MonoTorrentTransferEngine.IsDiskFull(error));
+        Assert.False(MonoTorrentTransferEngine.IsDiskFull(null));
+    }
 }

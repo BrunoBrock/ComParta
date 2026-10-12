@@ -15,7 +15,18 @@ public sealed partial class MonoTorrentTransferEngine
         foreach (var offer in _offers.Values)
         {
             if (offer.Manager is { } manager)
-                shares[offer.Id] = ActivityOf(manager);
+            {
+                var receivers = offer.Receivers;
+                int finished;
+                lock (offer.Finished)
+                    finished = offer.Finished.Count;
+                shares[offer.Id] = ActivityOf(manager) with
+                {
+                    Receivers = receivers.Count,
+                    ReceiversPercent = receivers.Percent,
+                    Finished = finished,
+                };
+            }
         }
         var transfers = new Dictionary<TransferId, ItemActivity>();
         foreach (var incoming in _incoming.Values)
@@ -81,6 +92,59 @@ public sealed partial class MonoTorrentTransferEngine
             catch (ObjectDisposedException) { await Task.Delay(100); }
         }
     }
+
+    private async Task TickActivityAsync()
+    {
+        foreach (var offer in _offers.Values)
+        {
+            if (offer.Manager is { } manager)
+            {
+                try { await CountReceiversAsync(offer, manager); }
+                catch (Exception) { /* the next tick tries again */ }
+            }
+        }
+        RaiseActivityChanged();
+    }
+
+    /// <summary>
+    /// A connected device that lacks part of the file is getting it. One counts as finished once it
+    /// has all of the file and some of it came from this device, so another sender is never counted.
+    /// </summary>
+    private static async Task CountReceiversAsync(Offer offer, TorrentManager manager)
+    {
+        var count = 0;
+        double percent = 0;
+        foreach (var peer in await manager.GetPeersAsync())
+        {
+            if (peer.BitField is not { } have)
+                continue;
+            if (have.AllTrue)
+                CountIfFinished(offer, peer, 0);
+            else
+            {
+                count++;
+                percent += have.PercentComplete;
+            }
+        }
+        offer.Receivers = count == 0 ? ReceiverCount.None : new ReceiverCount(count, (int)Math.Floor(percent / count));
+    }
+
+    private static void CountIfFinished(Offer offer, PeerId peer, long size)
+    {
+        if (peer.BitField is not { } have || peer.Monitor.DataBytesSent <= 0)
+            return;
+        // A device that leaves right after finishing often has not told which last parts it has, so
+        // what was sent to it counts too.
+        var missing = (long)Math.Ceiling(size * (1 - have.PercentComplete / 100));
+        if (!have.AllTrue && peer.Monitor.DataBytesSent < missing)
+            return;
+        lock (offer.Finished)
+            offer.Finished.Add(peer.PeerID.ToHex());
+    }
+
+    /// <summary>A device that finishes usually leaves at once, often between two ticks.</summary>
+    private static void WatchReceivers(Offer offer, TorrentManager manager) =>
+        manager.PeerDisconnected += (_, e) => CountIfFinished(offer, e.Peer, manager.Torrent?.Size ?? long.MaxValue);
 
     private void RaiseActivityChanged()
     {

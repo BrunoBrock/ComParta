@@ -1,15 +1,8 @@
 import { useEffect, useState } from 'react'
-import type { Bridge, ShareDetailsDto, TransferDetailsDto } from '../bridge/index.ts'
-import {
-  formatDateTime,
-  formatRate,
-  formatSize,
-  formatTimeLeft,
-  type MessageKey,
-  percentOf,
-  t,
-} from '../i18n/index.ts'
-import Modal from './Modal.tsx'
+import type { Bridge, ErrorCode, ShareDetailsDto, TransferDetailsDto } from '../bridge/index.ts'
+import { formatDateTime, formatRate, formatSize, formatTimeLeft, type MessageKey, percentOf, t } from '../i18n/index.ts'
+import { inviteMessage } from '../invite.ts'
+import Dialog from './ui/Dialog.tsx'
 
 export type DetailsOf = { kind: 'share' | 'transfer'; id: string; name: string }
 
@@ -19,6 +12,8 @@ interface DetailsWindowProps {
   /** Stopped from the speed bar: the state row says so, as the item does. */
   stopped: boolean
   onClose: () => void
+  onError: (code: ErrorCode) => void
+  onInfo: (text: string) => void
 }
 
 /** How often the open window asks again (UX design, "Details window"). */
@@ -46,7 +41,7 @@ function transferRows(transfer: TransferDetailsDto, stopped: boolean): [MessageK
         percent: percentOf(transfer.receivedBytes, transfer.sizeBytes),
       })
     : t('details.unknown')
-  const finished = transfer.state === 'done' || transfer.state === 'failed'
+  const finished = ['done', 'failed', 'blocked'].includes(transfer.state)
   const state =
     stopped && !finished
       ? t('stopped.chip')
@@ -72,7 +67,7 @@ function transferRows(transfer: TransferDetailsDto, stopped: boolean): [MessageK
  * Everything ComParta knows about one file, refreshed every second while open (CAP-26). Escape or
  * Close shuts it, and focus goes back to the button that opened it.
  */
-export default function DetailsWindow({ bridge, item, stopped, onClose }: DetailsWindowProps) {
+export default function DetailsWindow({ bridge, item, stopped, onClose, onError, onInfo }: DetailsWindowProps) {
   const [details, setDetails] = useState<Details | null>(null)
   const [gone, setGone] = useState(false)
 
@@ -95,6 +90,19 @@ export default function DetailsWindow({ bridge, item, stopped, onClose }: Detail
     }
   }, [bridge, item])
 
+  // The main action sits on top of the window's buttons (UX design, Details panel).
+  async function copyInvite(share: ShareDetailsDto) {
+    const message = inviteMessage({ name: item.name, sizeBytes: share.sizeBytes })
+    const result = await bridge.invoke('shares.copyInvite', { id: item.id, message })
+    if (result.ok) onInfo(t('shares.inviteCopied', { name: item.name }))
+    else onError(result.error.code)
+  }
+
+  async function runOnReceived(command: 'received.open' | 'received.reveal') {
+    const result = await bridge.invoke(command, { id: item.id })
+    if (!result.ok) onError(result.error.code)
+  }
+
   const rows =
     gone || details === null
       ? []
@@ -103,7 +111,7 @@ export default function DetailsWindow({ bridge, item, stopped, onClose }: Detail
         : transferRows(details.value, stopped)
 
   return (
-    <Modal labelledBy="details-title" className="details" onClose={onClose}>
+    <Dialog labelledBy="details-title" className="details" onClose={onClose}>
       <h2 id="details-title">{t('details.title', { name: item.name })}</h2>
       {gone ? (
         <p>{t('details.gone')}</p>
@@ -121,7 +129,22 @@ export default function DetailsWindow({ bridge, item, stopped, onClose }: Detail
         <button type="button" onClick={onClose} autoFocus>
           {t('details.close')}
         </button>
+        {!gone && details?.kind === 'transfer' && details.value.state === 'done' && (
+          <>
+            <button type="button" onClick={() => runOnReceived('received.reveal')}>
+              {t('received.reveal')}
+            </button>
+            <button type="button" className="primary" onClick={() => runOnReceived('received.open')}>
+              {t('received.open')}
+            </button>
+          </>
+        )}
+        {!gone && details?.kind === 'share' && details.value.status === 'ready' && (
+          <button type="button" className="primary" onClick={() => copyInvite(details.value)}>
+            {t('shares.copyInvite')}
+          </button>
+        )}
       </div>
-    </Modal>
+    </Dialog>
   )
 }

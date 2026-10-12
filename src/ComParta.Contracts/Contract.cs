@@ -21,6 +21,9 @@ public static class Commands
     public const string TransfersPause = "transfers.pause";
     public const string TransfersResume = "transfers.resume";
     public const string ReceivedOpenFolder = "received.openFolder";
+    public const string ReceivedOpen = "received.open";
+    public const string ReceivedReveal = "received.reveal";
+    public const string ReceivedDelete = "received.delete";
     public const string SettingsGet = "settings.get";
     public const string SettingsSet = "settings.set";
     public const string ConnectionGet = "connection.get";
@@ -30,6 +33,8 @@ public static class Commands
     public const string ActivitySet = "activity.set";
     public const string SharesDetails = "shares.details";
     public const string TransfersDetails = "transfers.details";
+    public const string ThumbnailsGet = "thumbnails.get";
+    public const string SharesAddDropped = "shares.addDropped";
 }
 
 public static class Events
@@ -41,6 +46,8 @@ public static class Events
     /// <summary>True when an invite opened from outside the app waits; the UI takes it with <c>invites.takeOpened</c>.</summary>
     public const string InvitesChanged = "invites.changed";
     public const string ActivityChanged = "activity.changed";
+    /// <summary>The item whose details should show, after the person clicked a system notification (CAP-20).</summary>
+    public const string DetailsChanged = "details.changed";
 }
 
 /// <summary>Stable codes; the words for them live in the UI's translation catalog (AD-11).</summary>
@@ -57,29 +64,52 @@ public static class ErrorCodes
     public const string DownloadInvalidFile = "download.invalidFile";
     public const string DiskFull = "disk.full";
     public const string SettingsInvalid = "settings.invalid";
+    public const string ReceivedNotFound = "received.notFound";
+    public const string ReceivedOpenFailed = "received.openFailed";
+    public const string ShareDropFailed = "share.dropFailed";
     public const string Unexpected = "unexpected";
 
     public static IReadOnlyList<string> All { get; } =
     [
         ShareDuplicate, ShareNotFound, ShareNotReady, FileUnreadable,
-        InviteInvalid, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, DiskFull, SettingsInvalid, Unexpected,
+        InviteInvalid, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, DiskFull, SettingsInvalid,
+        ReceivedNotFound, ReceivedOpenFailed, ShareDropFailed, Unexpected,
     ];
 }
 
 public enum ShareStatusDto { Preparing, Ready, Unavailable }
 
-public enum TransferStateDto { Connecting, Receiving, Paused, Done, Failed }
+public enum TransferStateDto { Connecting, Receiving, Paused, Done, Failed, Waiting, NoSpace, Blocked }
+
+public enum ThumbnailKindDto { Share, Transfer }
+
+public enum ItemKindDto { Share, Transfer }
+
+public sealed record DetailsTargetDto(ItemKindDto Kind, string Id, string Name);
+
+/// <param name="Size">The picture's longest side in pixels; the app keeps it between 32 and 512.</param>
+public sealed record ThumbnailArgs(ThumbnailKindDto Kind, string Id, int Size);
 
 public enum ConnectionHealthDto { Good, Limited, Blocked }
 
 public enum TransferSourceDto { Invite, DownloadLink, DownloadFile }
 
-public sealed record ShareDto(string Id, string Name, long SizeBytes, ShareStatusDto Status);
+/// <param name="Activity">Whether devices are getting the file now, or someone finished since the app started.</param>
+/// <param name="ReceiverCount">How many devices are getting it now.</param>
+/// <param name="Percent">How much of it they have, on average, 0 to 100.</param>
+/// <param name="FinishedCount">How many devices got all of it since the app started.</param>
+/// <param name="SecondsLeft">Roughly how long until they have all of it, or null when it cannot be told.</param>
+public sealed record ShareDto(
+    string Id, string Name, long SizeBytes, ShareStatusDto Status,
+    ShareActivityDto Activity, int ReceiverCount, int Percent, int FinishedCount, long? SecondsLeft);
+
+public enum ShareActivityDto { Idle, Sending, Sent }
 
 /// <param name="BytesPerSecond">Current speed while receiving, else 0.</param>
 /// <param name="SecondsLeft">Roughly how long is left, or null when it cannot be told.</param>
 public sealed record TransferDto(
-    string Id, string? Name, long? SizeBytes, long ReceivedBytes, TransferStateDto State, long BytesPerSecond, long? SecondsLeft);
+    string Id, string? Name, long? SizeBytes, long ReceivedBytes, TransferStateDto State, long BytesPerSecond, long? SecondsLeft,
+    long? NeededBytes);
 
 public sealed record IdArgs(string Id);
 
@@ -90,6 +120,12 @@ public sealed record ReceiveArgs(string Invite);
 /// Without it, only the link is copied.
 /// </param>
 public sealed record CopyInviteArgs(string Id, string? Message);
+
+/// <param name="Token">The id the UI gave the drop when it handed the files to the window (AD-7).</param>
+public sealed record DropArgs(string Token);
+
+/// <param name="Problem">The error code of the first file that could not be shared, or null.</param>
+public sealed record DropResultDto(int Added, string? Problem);
 
 /// <summary>
 /// What an invite or download link says, before anything is received. Name, size and sender come
@@ -102,10 +138,13 @@ public sealed record InvitePreviewDto(
 
 /// <param name="Language">The language the person chose, or null to follow the system.</param>
 /// <param name="SystemLanguage">The language the operating system shows, as a tag like "pt-BR".</param>
-public sealed record SettingsDto(string? Language, string SystemLanguage);
+/// <param name="View">"grid" or "list", or null for the default.</param>
+/// <param name="Sort">"added", "name" or "size", or null for the default.</param>
+public sealed record SettingsDto(string? Language, string SystemLanguage, string? View, string? Sort, int SendStepsSeen);
 
+/// <summary>Every choice at once; the UI sends what it has, with the one it changed.</summary>
 /// <param name="Language">A language tag, or null to follow the system again.</param>
-public sealed record SetSettingsArgs(string? Language);
+public sealed record SetSettingsArgs(string? Language, string? View, string? Sort, int? SendStepsSeen);
 
 /// <param name="Health">How well others can reach this computer (AD-15).</param>
 public sealed record ConnectionDto(ConnectionHealthDto Health);
@@ -168,6 +207,9 @@ public static class Contract
         new(Commands.TransfersPause, typeof(IdArgs), null),
         new(Commands.TransfersResume, typeof(IdArgs), null),
         new(Commands.ReceivedOpenFolder, null, null),
+        new(Commands.ReceivedOpen, typeof(IdArgs), null),
+        new(Commands.ReceivedReveal, typeof(IdArgs), null),
+        new(Commands.ReceivedDelete, typeof(IdArgs), null),
         new(Commands.SettingsGet, null, typeof(SettingsDto)),
         new(Commands.SettingsSet, typeof(SetSettingsArgs), null),
         new(Commands.ConnectionGet, null, typeof(ConnectionDto)),
@@ -177,6 +219,9 @@ public static class Contract
         new(Commands.ActivitySet, typeof(SetActivityArgs), null),
         new(Commands.SharesDetails, typeof(IdArgs), typeof(ShareDetailsDto)),
         new(Commands.TransfersDetails, typeof(IdArgs), typeof(TransferDetailsDto)),
+        // A data: URL, or null when the file has no picture (AD-18: no path crosses the bridge).
+        new(Commands.SharesAddDropped, typeof(DropArgs), typeof(DropResultDto)),
+        new(Commands.ThumbnailsGet, typeof(ThumbnailArgs), typeof(string), ResultMayBeNull: true),
     ];
 
     public static IReadOnlyList<EventSpec> EventSpecs { get; } =
@@ -187,6 +232,7 @@ public static class Contract
         new(Events.ConnectionChanged, typeof(ConnectionDto)),
         new(Events.InvitesChanged, typeof(bool)),
         new(Events.ActivityChanged, typeof(ActivityDto)),
+        new(Events.DetailsChanged, typeof(DetailsTargetDto)),
     ];
 
     /// <summary>camelCase JSON with enums as camelCase strings, as the conventions require.</summary>

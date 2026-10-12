@@ -11,6 +11,7 @@ import {
   goToReceived,
   enterInvite,
   pasteInvite,
+  railButton,
 } from './test/appHarness.tsx'
 
 describe('receiving from another person', () => {
@@ -22,6 +23,7 @@ describe('receiving from another person', () => {
     state: 'receiving',
     bytesPerSecond: 0,
     secondsLeft: null,
+    neededBytes: null,
   }
 
   it('shows the empty-state message when nothing is being received', async () => {
@@ -55,7 +57,7 @@ describe('receiving from another person', () => {
   it('closes the invite box without receiving anything', async () => {
     const { user } = setup()
 
-    await user.click(await screen.findByRole('button', { name: en['transfers.open'] }))
+    await user.click(await railButton(en['transfers.open']))
     await user.click(screen.getByRole('button', { name: en['receive.cancel'] }))
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -133,7 +135,7 @@ describe('confirming before receiving', () => {
     const { bridge, user } = setup()
     bridge.clipboardText = `Paulo sent you this: ${sampleFakeInvite}`
 
-    await user.click(await screen.findByRole('button', { name: en['transfers.open'] }))
+    await user.click(await railButton(en['transfers.open']))
 
     const dialog = screen.getByRole('dialog', { name: en['receive.title'] })
     expect(await within(dialog).findByText(en['receive.found'])).toBeInTheDocument()
@@ -144,7 +146,7 @@ describe('confirming before receiving', () => {
     const { bridge, user } = setup()
     bridge.clipboardText = 'shopping list'
 
-    await user.click(await screen.findByRole('button', { name: en['transfers.open'] }))
+    await user.click(await railButton(en['transfers.open']))
 
     const dialog = screen.getByRole('dialog', { name: en['receive.title'] })
     expect(within(dialog).getByLabelText(en['transfers.inviteLabel'])).toHaveValue('')

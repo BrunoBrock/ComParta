@@ -1,6 +1,6 @@
 import type { ShareDto } from '../bridge/index.ts'
 import { t } from '../i18n/index.ts'
-import Modal from './Modal.tsx'
+import Dialog from './ui/Dialog.tsx'
 
 interface RemoveShareDialogProps {
   share: ShareDto
@@ -12,7 +12,7 @@ interface RemoveShareDialogProps {
 export default function RemoveShareDialog({ share, onConfirm, onCancel }: RemoveShareDialogProps) {
 
   return (
-    <Modal labelledBy="remove-title" describedBy="remove-body" onClose={onCancel}>
+    <Dialog labelledBy="remove-title" describedBy="remove-body" onClose={onCancel}>
       <h2 id="remove-title">{t('remove.title', { name: share.name })}</h2>
       <p id="remove-body">{t('remove.body')}</p>
       <div className="dialog-actions">
@@ -23,6 +23,6 @@ export default function RemoveShareDialog({ share, onConfirm, onCancel }: Remove
           {t('remove.confirm')}
         </button>
       </div>
-    </Modal>
+    </Dialog>
   )
 }

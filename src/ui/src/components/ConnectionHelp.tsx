@@ -1,6 +1,6 @@
 import type { ConnectionHealthDto } from '../bridge/index.ts'
 import { t } from '../i18n/index.ts'
-import Modal from './Modal.tsx'
+import Dialog from './ui/Dialog.tsx'
 
 interface ConnectionHelpProps {
   health: ConnectionHealthDto | null
@@ -15,7 +15,7 @@ interface ConnectionHelpProps {
 export default function ConnectionHelp({ health, onOpenSettings, onClose }: ConnectionHelpProps) {
 
   return (
-    <Modal labelledBy="connection-title" onClose={onClose}>
+    <Dialog labelledBy="connection-title" onClose={onClose}>
       <h2 id="connection-title">{t('connection.title')}</h2>
       {health !== null && (
         <p className={`connection connection-${health} connection-state`}>
@@ -42,6 +42,6 @@ export default function ConnectionHelp({ health, onOpenSettings, onClose }: Conn
           {t('connection.close')}
         </button>
       </div>
-    </Modal>
+    </Dialog>
   )
 }

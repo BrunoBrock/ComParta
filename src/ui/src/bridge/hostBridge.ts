@@ -50,6 +50,16 @@ export function createHostBridge(): Bridge {
       }
     },
 
+    handOverDrop(token: string, files: File[]) {
+      // WebView2 gives the files to the window with their real paths; the page never sees one (AD-7).
+      const webview = window.chrome?.webview as
+        | { postMessageWithAdditionalObjects?: (message: string, objects: File[]) => void }
+        | undefined
+      if (typeof webview?.postMessageWithAdditionalObjects !== 'function') return false
+      webview.postMessageWithAdditionalObjects(`comparta-drop:${token}`, files)
+      return true
+    },
+
     subscribe(listener) {
       const onMessage = (event: Event) => {
         const message = (event as CustomEvent<{ message: string }>).detail?.message

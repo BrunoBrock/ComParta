@@ -2,17 +2,28 @@
 
 export type ShareStatusDto = "preparing" | "ready" | "unavailable";
 
-export type TransferStateDto = "connecting" | "receiving" | "paused" | "done" | "failed";
+export type ShareActivityDto = "idle" | "sending" | "sent";
+
+export type TransferStateDto = "connecting" | "receiving" | "paused" | "done" | "failed" | "waiting" | "noSpace" | "blocked";
 
 export type ConnectionHealthDto = "good" | "limited" | "blocked";
 
 export type TransferSourceDto = "invite" | "downloadLink" | "downloadFile";
+
+export type ThumbnailKindDto = "share" | "transfer";
+
+export type ItemKindDto = "share" | "transfer";
 
 export interface ShareDto {
   id: string;
   name: string;
   sizeBytes: number;
   status: ShareStatusDto;
+  activity: ShareActivityDto;
+  receiverCount: number;
+  percent: number;
+  finishedCount: number;
+  secondsLeft: number | null;
 }
 
 export interface IdArgs {
@@ -32,6 +43,7 @@ export interface TransferDto {
   state: TransferStateDto;
   bytesPerSecond: number;
   secondsLeft: number | null;
+  neededBytes: number | null;
 }
 
 export interface ReceiveArgs {
@@ -50,10 +62,16 @@ export interface InvitePreviewDto {
 export interface SettingsDto {
   language: string | null;
   systemLanguage: string;
+  view: string | null;
+  sort: string | null;
+  sendStepsSeen: number;
 }
 
 export interface SetSettingsArgs {
   language: string | null;
+  view: string | null;
+  sort: string | null;
+  sendStepsSeen: number | null;
 }
 
 export interface ConnectionDto {
@@ -99,6 +117,27 @@ export interface TransferDetailsDto {
   bytesSent: number;
 }
 
+export interface DropArgs {
+  token: string;
+}
+
+export interface DropResultDto {
+  added: number;
+  problem: string | null;
+}
+
+export interface ThumbnailArgs {
+  kind: ThumbnailKindDto;
+  id: string;
+  size: number;
+}
+
+export interface DetailsTargetDto {
+  kind: ItemKindDto;
+  id: string;
+  name: string;
+}
+
 export const errorCodes = [
   "share.duplicate",
   "share.notFound",
@@ -111,6 +150,9 @@ export const errorCodes = [
   "download.invalidFile",
   "disk.full",
   "settings.invalid",
+  "received.notFound",
+  "received.openFailed",
+  "share.dropFailed",
   "unexpected",
 ] as const;
 
@@ -130,6 +172,9 @@ export interface Commands {
   "transfers.pause": { args: IdArgs; result: null };
   "transfers.resume": { args: IdArgs; result: null };
   "received.openFolder": { args: undefined; result: null };
+  "received.open": { args: IdArgs; result: null };
+  "received.reveal": { args: IdArgs; result: null };
+  "received.delete": { args: IdArgs; result: null };
   "settings.get": { args: undefined; result: SettingsDto };
   "settings.set": { args: SetSettingsArgs; result: null };
   "connection.get": { args: undefined; result: ConnectionDto };
@@ -139,6 +184,8 @@ export interface Commands {
   "activity.set": { args: SetActivityArgs; result: null };
   "shares.details": { args: IdArgs; result: ShareDetailsDto };
   "transfers.details": { args: IdArgs; result: TransferDetailsDto };
+  "shares.addDropped": { args: DropArgs; result: DropResultDto };
+  "thumbnails.get": { args: ThumbnailArgs; result: string | null };
 }
 
 export interface Events {
@@ -148,6 +195,7 @@ export interface Events {
   "connection.changed": ConnectionDto;
   "invites.changed": boolean;
   "activity.changed": ActivityDto;
+  "details.changed": DetailsTargetDto;
 }
 
 export type CommandResult<T> = { ok: true; value: T } | { ok: false; error: { code: ErrorCode } };

@@ -86,6 +86,13 @@ public sealed partial class MonoTorrentTransferEngine
             // While everything is stopped it stays still; the global continue starts it.
             if (_receivingStopped)
                 return;
+            // One that stopped on a full disk may count parts it never wrote, so what is on disk is
+            // checked again before it continues.
+            if (incoming.Manager.State == TorrentState.Error)
+            {
+                await StopFullyAsync(incoming.Manager);
+                await incoming.Manager.HashCheckAsync(autoStart: false);
+            }
             await incoming.Manager.StartAsync();
             await TryHintsAsync(incoming);
         }
@@ -193,6 +200,12 @@ public sealed partial class MonoTorrentTransferEngine
                 if (incoming.Finishing || incoming.Paused || _receivingStopped)
                     continue;
                 var manager = incoming.Manager;
+                if (manager.State == TorrentState.Error && IsDiskFull(manager.Error?.Exception) && manager.Torrent is { } full)
+                {
+                    ReceiveProgressed?.Invoke(new ReceiveProgress(
+                        incoming.Id, incoming.Name, full.Size, (long)(full.Size * (manager.Progress / 100.0)), false, NoSpace: true));
+                    continue;
+                }
                 if (!CheckContained(incoming) || manager.State == TorrentState.Error)
                 {
                     ReceiveProgressed?.Invoke(new ReceiveProgress(incoming.Id, incoming.Name, incoming.Size, 0, false, Failed: true));
@@ -230,6 +243,20 @@ public sealed partial class MonoTorrentTransferEngine
         {
             Volatile.Write(ref _reporting, 0);
         }
+    }
+
+    // ERROR_HANDLE_DISK_FULL and ERROR_DISK_FULL on Windows; ENOSPC elsewhere.
+    private static readonly int[] DiskFullCodes = [unchecked((int)0x80070027), unchecked((int)0x80070070), 28];
+
+    /// <summary>True when a write failed because the disk is full, however deep the cause sits.</summary>
+    internal static bool IsDiskFull(Exception? error)
+    {
+        for (var e = error; e is not null; e = e.InnerException)
+        {
+            if (e is IOException && DiskFullCodes.Contains(e.HResult))
+                return true;
+        }
+        return false;
     }
 
     /// <summary>

@@ -8,6 +8,7 @@ import {
   sharesSection,
   transfersSection,
   goToReceived,
+  railButton,
 } from './test/appHarness.tsx'
 
 describe('the speed bar', () => {
@@ -19,6 +20,7 @@ describe('the speed bar', () => {
     state: 'receiving',
     bytesPerSecond: 2 * 1024 * 1024,
     secondsLeft: 250,
+    neededBytes: null,
   }
   const speedBar = () => screen.getByRole('region', { name: en['speed.label'] })
 
@@ -117,6 +119,7 @@ describe('the details of a file', () => {
     state: 'receiving',
     bytesPerSecond: 2 * 1024 * 1024,
     secondsLeft: 250,
+    neededBytes: null,
   }
   const row = (dialog: HTMLElement, label: string) =>
     within(dialog).getByText(label, { selector: 'dt' }).nextElementSibling?.textContent
@@ -161,7 +164,7 @@ describe('the details of a file', () => {
 
   it('remembers how a download file was received', async () => {
     const { user } = setup()
-    await user.click(await screen.findByRole('button', { name: en['transfers.open'] }))
+    await user.click(await railButton(en['transfers.open']))
     await user.click(screen.getByRole('button', { name: en['receive.openFile'] }))
     await goToReceived(user)
 

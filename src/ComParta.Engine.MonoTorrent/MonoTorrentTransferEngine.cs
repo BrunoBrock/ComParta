@@ -10,6 +10,7 @@ using MonoTorrent;
 using MonoTorrent.Client;
 using MonoTorrent.Connections;
 using MonoTorrent.Connections.Peer;
+using MonoTorrent.PieceWriter;
 
 [assembly: InternalsVisibleTo("ComParta.Engine.MonoTorrent.Tests")]
 
@@ -82,6 +83,9 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
     /// <summary>For tests: false makes this device refuse every incoming connection.</summary>
     internal bool AcceptIncoming { get; init; } = true;
 
+    /// <summary>For tests: wraps the disk writer, for example to stand for a full disk.</summary>
+    internal Func<IPieceWriter, IPieceWriter> WrapWriter { get; init; } = writer => writer;
+
     /// <summary>For tests: the router port mapping this engine uses.</summary>
     internal PortMapper? PortMapper => _portMapper;
 
@@ -97,6 +101,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         _portMapper.MappingsChanged += (_, _) => RaiseReachabilityChanged();
         var factories = Factories.Default
             .WithPortForwarderCreator(() => _portMapper)
+            .WithPieceWriterCreator(maxOpenFiles => WrapWriter(Factories.Default.CreatePieceWriter(maxOpenFiles)))
             .WithPeerConnectionListenerCreator(endPoint =>
             {
                 var listener = Factories.Default.CreatePeerConnectionListener(endPoint);
@@ -108,7 +113,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         _engine = new ClientEngine(ToEngineSettings(_policy, _cacheFolder, AcceptIncoming), factories);
         _progressTimer = new Timer(_ => ReportProgress(), null, ProgressInterval, ProgressInterval);
         _reachabilityTimer = new Timer(_ => RaiseReachabilityChanged(), null, ReachabilityInterval, ReachabilityInterval);
-        _activityTimer = new Timer(_ => RaiseActivityChanged(), null, ActivityInterval, ActivityInterval);
+        _activityTimer = new Timer(_ => _ = TickActivityAsync(), null, ActivityInterval, ActivityInterval);
         NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
         return Task.CompletedTask;
     }
@@ -134,6 +139,8 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
             AutoSaveLoadFastResume = true,
             AutoSaveLoadMagnetLinkMetadata = true,
             CacheDirectory = cacheFolder,
+            // No write cache: on a full disk a cached part could count as written when it never was.
+            DiskCacheBytes = 0,
             ListenEndPoints = listen,
         };
         if (policy.RequireEncryption)
@@ -309,6 +316,15 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         public Task Work { get; set; } = Task.CompletedTask;
         public volatile TorrentManager? Manager;
         public volatile string? Invite;
+        /// <summary>Devices getting the file now, and their average percentage; refreshed each activity tick.</summary>
+        public volatile ReceiverCount Receivers = ReceiverCount.None;
+        /// <summary>Devices that got all of the file from this one, by their session id.</summary>
+        public readonly HashSet<string> Finished = [];
+    }
+
+    private sealed record ReceiverCount(int Count, int Percent)
+    {
+        public static ReceiverCount None { get; } = new(0, 0);
     }
 
     private sealed class Incoming(TransferId id, TorrentManager manager, string folder, IReadOnlyList<IPEndPoint> hints)

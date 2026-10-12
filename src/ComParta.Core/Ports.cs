@@ -53,8 +53,18 @@ public sealed record ReachabilityFacts(
 /// <param name="Connections">How many other computers are connected for it.</param>
 /// <param name="BytesReceived">Bytes received for it since the app started.</param>
 /// <param name="BytesSent">Bytes sent for it since the app started.</param>
+/// <param name="Receivers">For a share: how many connected devices are getting it now. Counts only, no addresses.</param>
+/// <param name="ReceiversPercent">For a share: how much of it those devices have, on average, 0 to 100.</param>
+/// <param name="Finished">For a share: how many devices got all of it from this one since the app started.</param>
 public sealed record ItemActivity(
-    long ReceivingBytesPerSecond, long SendingBytesPerSecond, int Connections, long BytesReceived, long BytesSent)
+    long ReceivingBytesPerSecond,
+    long SendingBytesPerSecond,
+    int Connections,
+    long BytesReceived,
+    long BytesSent,
+    int Receivers = 0,
+    int ReceiversPercent = 0,
+    int Finished = 0)
 {
     public static ItemActivity None { get; } = new(0, 0, 0, 0, 0);
 }
@@ -69,8 +79,10 @@ public sealed record EngineActivity(
     public static EngineActivity None { get; } = new(0, 0, new Dictionary<ShareId, ItemActivity>(), new Dictionary<TransferId, ItemActivity>());
 }
 
+/// <param name="NoSpace">Writing failed because the disk is full; the transfer is stopped until it is continued.</param>
 public sealed record ReceiveProgress(
-    TransferId Id, string? Name, long? SizeBytes, long ReceivedBytes, bool Done, bool Failed = false, long BytesPerSecond = 0);
+    TransferId Id, string? Name, long? SizeBytes, long ReceivedBytes, bool Done, bool Failed = false, long BytesPerSecond = 0,
+    bool NoSpace = false);
 
 /// <summary>
 /// The only way core reaches the transfer engine (AD-2). Invites are opaque text to core.
@@ -126,7 +138,7 @@ public interface ITransferEngine
     Task<bool> ReceiveFromFileAsync(TransferId id, byte[] content, CancellationToken ct = default);
     /// <summary>Stops moving bytes for a transfer but keeps everything needed to continue it.</summary>
     Task PauseReceivingAsync(TransferId id, CancellationToken ct = default);
-    /// <summary>Continues a paused transfer.</summary>
+    /// <summary>Continues a paused transfer, or one that stopped because the disk was full.</summary>
     Task ContinueReceivingAsync(TransferId id, CancellationToken ct = default);
 }
 
@@ -165,6 +177,39 @@ public interface IFirewall
 public interface IContentOpener
 {
     Task OpenReceivedFolderAsync(CancellationToken ct = default);
+    /// <summary>Opens one received file with the program Windows uses for it; false when that failed.</summary>
+    Task<bool> OpenAsync(string path, CancellationToken ct = default);
+    /// <summary>Shows the folder with this one file selected.</summary>
+    Task RevealAsync(string path, CancellationToken ct = default);
+}
+
+/// <summary>Which item a system notification opens when the person clicks it.</summary>
+public enum NotifiedItem { Share, Transfer }
+
+/// <summary>A system notification (CAP-20), already in the person's language.</summary>
+/// <param name="Name">The item's name, so the screen can title its details at once.</param>
+public sealed record Notification(string Title, string Body, NotifiedItem Kind, string Id, string Name);
+
+/// <summary>Shows notifications the operating system's way (AD-11).</summary>
+public interface INotifier
+{
+    void Show(Notification notification);
+}
+
+/// <summary>Whether the person is looking at the app's window.</summary>
+public interface IWindowState
+{
+    /// <summary>True while the window is open, not minimised, and the one in front.</summary>
+    bool IsInFront { get; }
+}
+
+/// <summary>A small picture of a file, as the operating system draws it.</summary>
+public sealed record Thumbnail(string ContentType, byte[] Bytes);
+
+/// <summary>Thumbnails for photos and videos (AD-18). Null when the system has none for the file.</summary>
+public interface IThumbnailProvider
+{
+    Task<Thumbnail?> GetAsync(string path, int size, CancellationToken ct = default);
 }
 
 public interface IFileSystem
@@ -174,6 +219,8 @@ public interface IFileSystem
     long GetReadableFileSize(string path);
     /// <summary>The whole content of a small file; throws when it cannot be read or is larger than <paramref name="maxBytes"/>.</summary>
     byte[] ReadSmallFile(string path, int maxBytes);
+    /// <summary>Deletes one file; nothing happens when it is already gone.</summary>
+    void DeleteFile(string path);
 }
 
 public interface IAppPaths

@@ -89,6 +89,49 @@ public sealed class ReceivedFolderOpener(Ports.IAppPaths paths) : Ports.IContent
 		Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { paths.ReceivedRoot } })?.Dispose();
 		return Task.CompletedTask;
 	}
+
+	public Task<bool> OpenAsync(string path, CancellationToken ct = default)
+	{
+		// Core has already refused programs; this opens a document with its usual app.
+		try
+		{
+			Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
+			return Task.FromResult(true);
+		}
+		catch (Exception)
+		{
+			return Task.FromResult(false);
+		}
+	}
+
+	public Task RevealAsync(string path, CancellationToken ct = default)
+	{
+		Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = false })?.Dispose();
+		return Task.CompletedTask;
+	}
+}
+
+/// <summary>
+/// Thumbnails drawn by Windows itself, from its own thumbnail cache (AD-18). Only real pictures
+/// come back; when Windows would show an icon, the UI shows its own file icon instead.
+/// </summary>
+public sealed class WindowsThumbnails : Ports.IThumbnailProvider
+{
+	public async Task<Ports.Thumbnail?> GetAsync(string path, int size, CancellationToken ct = default)
+	{
+		var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path).AsTask(ct);
+		using var thumbnail = await file.GetThumbnailAsync(
+			Windows.Storage.FileProperties.ThumbnailMode.SingleItem,
+			(uint)size,
+			Windows.Storage.FileProperties.ThumbnailOptions.ResizeThumbnail).AsTask(ct);
+		if (thumbnail is null || thumbnail.Type != Windows.Storage.FileProperties.ThumbnailType.Image)
+			return null;
+		using var picture = thumbnail.AsStreamForRead();
+		using var copy = new MemoryStream();
+		await picture.CopyToAsync(copy, ct);
+		var type = string.IsNullOrEmpty(thumbnail.ContentType) ? "image/jpeg" : thumbnail.ContentType;
+		return new Ports.Thumbnail(type, copy.ToArray());
+	}
 }
 
 public sealed class LocalFileSystem : Ports.IFileSystem
@@ -100,6 +143,8 @@ public sealed class LocalFileSystem : Ports.IFileSystem
 		using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 		return stream.Length;
 	}
+
+	public void DeleteFile(string path) => File.Delete(path);
 
 	public byte[] ReadSmallFile(string path, int maxBytes)
 	{

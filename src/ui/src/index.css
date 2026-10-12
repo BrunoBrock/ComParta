@@ -1,55 +1,4 @@
-/* Tokens from the UX design (Planning/initiative-comparta/ux-comparta, "Visual design"). */
-:root {
-  --color-bg: #f8fafc;
-  --color-surface: #ffffff;
-  --color-text: #0f172a;
-  --color-text-muted: #475569;
-  --color-primary: #0b6e4f;
-  --color-on-primary: #ffffff;
-  --color-primary-soft: #e3f2ec;
-  --color-ok: #15803d;
-  --color-busy: #1d4ed8;
-  --color-warn: #b45309;
-  --color-warn-soft: #fff7ed;
-  --color-danger: #b91c1c;
-  --color-border: #cbd5e1;
-  --color-info-soft: #e8f0fe;
-  --radius: 12px;
-  --space: 8px;
-  --target: 44px;
-  --text-sm: 14px;
-  --text-base: 16px;
-  --text-lg: 20px;
-  --text-xl: 28px;
-  --shadow: 0 1px 2px rgb(15 23 42 / 6%), 0 2px 8px rgb(15 23 42 / 6%);
-
-  color-scheme: light dark;
-  font-family: 'Segoe UI Variable Text', 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
-  font-size: var(--text-base);
-  line-height: 1.5;
-  color: var(--color-text);
-  background: var(--color-bg);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-bg: #0f1418;
-    --color-surface: #182027;
-    --color-text: #e8edf2;
-    --color-text-muted: #a6b3c0;
-    --color-primary: #4fc79b;
-    --color-on-primary: #06281c;
-    --color-primary-soft: #173a2e;
-    --color-ok: #5fd38a;
-    --color-busy: #8ab4ff;
-    --color-warn: #f5b25c;
-    --color-warn-soft: #33261a;
-    --color-danger: #ff8f85;
-    --color-border: #34404b;
-    --color-info-soft: #1b2a3d;
-    --shadow: none;
-  }
-}
+@import './tokens.css';
 
 * {
   box-sizing: border-box;
@@ -351,10 +300,9 @@ button:hover:not(:disabled) {
   filter: brightness(0.96);
 }
 
-button:focus-visible,
-input:focus-visible,
-textarea:focus-visible {
-  outline: 3px solid var(--color-primary);
+/* Every focusable element, not only buttons and inputs (UX design, Accessibility). */
+:focus-visible {
+  outline: var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -373,7 +321,7 @@ button.primary {
 button.danger {
   background: var(--color-danger);
   border-color: var(--color-danger);
-  color: #ffffff;
+  color: var(--color-on-danger);
   font-weight: 600;
 }
 
@@ -381,6 +329,10 @@ button.quiet {
   background: transparent;
   border-color: transparent;
   color: var(--color-text-muted);
+}
+
+button.quiet.danger-text {
+  color: var(--color-danger);
 }
 
 button.big {
@@ -414,6 +366,17 @@ button.link {
 }
 
 /* Items: the same parts become a card in grid view and a row in list view. */
+.item-group + .item-group {
+  margin-top: 24px;
+}
+
+.group-heading {
+  margin: 0 0 8px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
 .items {
   list-style: none;
   margin: 0;
@@ -483,6 +446,27 @@ button.link {
   height: 112px;
   background: var(--color-bg);
   border-bottom: 1px solid var(--color-border);
+}
+
+.thumbnail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.items-list .thumbnail img {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
 }
 
 .items-grid .item-picture .file-icon {
@@ -782,19 +766,91 @@ dialog textarea {
   font-variant-numeric: tabular-nums;
 }
 
-/* Medium windows: the rail keeps its buttons but drops the tagline. */
-@media (max-width: 900px) {
+/* Medium windows: the rail shrinks to icons with small labels underneath (UX design, Layout). */
+@media (max-width: 900px) and (min-width: 601px) {
   .app {
-    grid-template-columns: 220px 1fr;
+    grid-template-columns: 104px 1fr;
   }
 
   .brand {
     width: auto;
   }
 
+  .rail {
+    align-items: stretch;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 2) var(--space);
+  }
+
   .rail-tagline {
     display: none;
   }
+
+  .rail button.big,
+  .nav-item {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-height: 64px;
+    padding: 6px 4px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .rail button.big span,
+  .nav-label {
+    flex: none;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
+  .nav-count {
+    position: absolute;
+    top: 4px;
+    right: 8px;
+    min-width: 20px;
+    font-size: 11px;
+  }
+
+  .nav-item {
+    position: relative;
+  }
+
+  .connection-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  button.connection {
+    justify-content: center;
+  }
+}
+
+/* Help and Settings sit under a line, apart from the two places. */
+.rail-more {
+  margin-top: var(--space) !important;
+  padding-top: var(--space) !important;
+  border-top: 1px solid var(--color-border);
+}
+
+.help-steps {
+  margin: 0;
+  padding-left: 1.4em;
+}
+
+.help-steps li + li {
+  margin-top: var(--space);
+}
+
+/* The floating ＋ appears only on narrow windows (UX design, Phone). */
+.fab {
+  display: none;
 }
 
 /* Narrow windows and phones: navigation moves to a bar along the bottom (UX design, Phone). */
@@ -834,8 +890,20 @@ dialog textarea {
     background: var(--color-surface);
   }
 
-  .rail-actions {
-    flex-direction: row;
+  /* The floating ＋ takes the two actions; Help stays in the header. */
+  .rail-actions,
+  .rail-help,
+  .rail-tagline {
+    display: none;
+  }
+
+  .rail {
+    z-index: 10;
+  }
+
+  /* Name and tools on the first line, search on the second. */
+  .search {
+    order: 1;
   }
 
   button.connection {
@@ -844,16 +912,20 @@ dialog textarea {
     padding-block: 0;
   }
 
-  .rail-actions button {
-    flex: 1;
-    min-height: var(--target);
-    padding: 0 var(--space);
-    box-shadow: none;
-    font-size: var(--text-sm);
+  .rail nav {
+    display: flex;
   }
 
   .rail nav ul {
+    flex: 2;
     flex-direction: row;
+  }
+
+  .rail nav ul.rail-more {
+    flex: 1;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-top: 0;
   }
 
   .rail nav li {
@@ -861,7 +933,15 @@ dialog textarea {
   }
 
   .nav-item {
+    position: relative;
+    flex-direction: column;
     justify-content: center;
+    min-width: 0;
+    gap: 2px;
+    padding: 4px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    line-height: 1.2;
   }
 
   .nav-label {
@@ -870,10 +950,48 @@ dialog textarea {
     text-align: center;
   }
 
-  .nav-item {
-    min-width: 0;
-    gap: 6px;
-    padding-inline: 6px;
+  .nav-count {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    min-width: 20px;
+    font-size: 11px;
+  }
+
+  .fab {
+    position: fixed;
+    right: calc(var(--space) * 2);
+    bottom: 104px;
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space);
+  }
+
+  .fab-toggle {
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border-radius: 18px;
+    box-shadow: 0 6px 16px rgb(0 0 0 / 25%);
+  }
+
+  .fab-menu {
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
+  }
+
+  .fab-menu button {
+    width: 100%;
+    justify-content: flex-start;
+    border: 0;
+    background: transparent;
   }
 
   .items-grid {
@@ -949,15 +1067,14 @@ dialog textarea {
   overflow-wrap: anywhere;
 }
 
-.language-menu {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.header-tools {
+  display: flex;
+  gap: 4px;
   margin-inline-start: auto;
-  color: var(--color-text-muted);
 }
 
-.language-menu select {
+.settings-select {
+  width: 100%;
   font: inherit;
   color: var(--color-text);
   background: transparent;
@@ -965,4 +1082,301 @@ dialog textarea {
   border-radius: 8px;
   padding: 6px 8px;
   min-height: var(--target);
+}
+
+/* Base components (src/components/ui), one block each. */
+.card {
+  padding: calc(var(--space) * 2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space) * 2);
+  min-height: 56px;
+  padding: var(--space) calc(var(--space) * 2);
+  background: var(--color-surface);
+}
+
+.row + .row {
+  border-top: 1px solid var(--color-border);
+}
+
+.progress-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+  width: 100%;
+}
+
+.progress-bar progress {
+  flex: 1;
+}
+
+.progress-percent {
+  min-width: 4ch;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(var(--space) * 2);
+  padding: calc(var(--space) * 6) calc(var(--space) * 2);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.empty-state p {
+  max-width: 48ch;
+  margin: 0;
+}
+
+.toast {
+  position: fixed;
+  bottom: calc(var(--space) * 3);
+  left: 50%;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+  max-width: min(560px, calc(100vw - 32px));
+  padding: var(--space) var(--space) var(--space) calc(var(--space) * 2);
+  border-radius: var(--radius);
+  background: var(--color-text);
+  color: var(--color-bg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+  transform: translateX(-50%);
+  animation: item-in 150ms ease-out;
+}
+
+.toast p {
+  margin: 0;
+}
+
+.toast button {
+  color: inherit;
+}
+
+dialog.sheet {
+  margin: 0 0 0 auto;
+  height: 100dvh;
+  max-height: 100dvh;
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+@media (max-width: 600px) {
+  dialog.sheet {
+    width: 100vw;
+    max-width: 100vw;
+    margin: auto 0 0;
+    height: auto;
+    max-height: 90dvh;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+}
+
+/* Development gallery (?gallery). */
+.gallery {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space) * 3);
+  max-width: 960px;
+  margin: 0 auto;
+  padding: calc(var(--space) * 3);
+}
+
+.gallery section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+.gallery-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space);
+}
+
+.gallery-icon {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  width: 120px;
+  font-size: var(--text-sm);
+}
+
+.gallery-rows {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* The ⇅ order menu beside Grid and List. */
+.sort-menu {
+  position: relative;
+}
+
+.sort-options {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 10;
+  min-width: 220px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
+}
+
+.sort-options button {
+  width: 100%;
+  justify-content: flex-start;
+  color: var(--color-text);
+}
+
+.invisible {
+  visibility: hidden;
+}
+
+@media (max-width: 600px) {
+  .sort-current {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* On phones the toast sits above the bottom bar and the floating button. */
+@media (max-width: 600px) {
+  .toast {
+    bottom: 176px;
+  }
+}
+
+/* Guided send (UX design, "Send a file, first time") */
+.steps-count {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.steps-track {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.steps-dot {
+  width: 32px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border);
+}
+
+.steps-dot-on {
+  background: var(--color-primary);
+}
+
+.steps progress {
+  width: 100%;
+}
+
+.steps-message-label {
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+.steps-message {
+  margin-top: 0;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.steps-hide {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* Wide windows: the details open as a panel on the right, so the list stays in view (story 8.8). */
+@media (min-width: 901px) {
+  dialog.details {
+    width: 380px;
+    max-width: 380px;
+    height: 100dvh;
+    max-height: 100dvh;
+    margin: 0 0 0 auto;
+    border-radius: 0;
+    overflow-y: auto;
+  }
+
+  dialog.details::backdrop {
+    background: rgb(15 23 42 / 20%);
+  }
+
+  dialog.details .details-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  dialog.details .dialog-actions {
+    flex-wrap: wrap;
+  }
+}
+
+@media (min-width: 901px) and (prefers-reduced-motion: no-preference) {
+  dialog.details[open] {
+    animation: details-in 200ms ease-out;
+  }
+
+  @keyframes details-in {
+    from {
+      transform: translateX(32px);
+      opacity: 0;
+    }
+  }
+}
+
+/* Files dragged over the window (UX design, drop overlay). */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 12px;
+  border: 3px dashed var(--color-primary);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  pointer-events: none;
+}
+
+.drop-overlay p {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text);
 }
