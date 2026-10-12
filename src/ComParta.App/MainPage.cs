@@ -7,6 +7,7 @@ public sealed class MainPage : ContentPage
 	{
 		var webView = new HybridWebView { HybridRoot = "wwwroot", DefaultFile = "index.html" };
 		webView.SetInvokeJavaScriptTarget(new BridgeHost(services, webView));
+		webView.HandlerChanged += (_, _) => DropTarget.Attach(webView, services.Dropped, services.Log);
 		Content = webView;
 	}
 }

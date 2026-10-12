@@ -1,17 +1,75 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { errorCodes } from '../bridge/contract.generated.ts'
 import { en } from './en.ts'
-import { formatSize, formatTimeLeft } from './index.ts'
+import {
+  catalogs,
+  formatDateTime,
+  formatRate,
+  formatSize,
+  formatTimeLeft,
+  languages,
+  percentOf,
+  pickLanguage,
+  setLanguage,
+} from './index.ts'
+
+afterEach(() => setLanguage('en'))
+
+/** Fails with the names of the keys that one catalog has and the other lacks. */
+function differences(source: Record<string, string>, other: Record<string, string>) {
+  return {
+    missing: Object.keys(source).filter((key) => !(key in other)),
+    extra: Object.keys(other).filter((key) => !(key in source)),
+  }
+}
 
 // Words a person should never have to learn (AD-5). The same list is enforced for code in
 // tests/ComParta.Core.Tests/GuardTests.cs.
 const technicalTerms = ['seed', 'peer', 'leech', 'swarm', 'tracker', 'magnet', 'torrent', 'hash', 'dht']
+// The same idea in Portuguese, plus the English words, which Brazilian forums borrow.
+const portugueseTerms = ['semente', 'semear', 'par', 'pares', 'rastreador', 'enxame', ...technicalTerms]
+
+const hasTerm = (text: string, term: string) =>
+  new RegExp(`(^|[^\\p{L}])${term}(s|ed|er|ers|ing)?($|[^\\p{L}])`, 'iu').test(text)
 
 describe('the translation catalog', () => {
   it('uses no technical file-sharing term', () => {
     for (const [key, text] of Object.entries(en)) {
       for (const term of technicalTerms) {
-        expect(text.toLowerCase(), `${key} contains "${term}"`).not.toMatch(new RegExp(`\\b${term}(s|ed|er|ers|ing)?\\b`))
+        expect(hasTerm(text, term), `${key} contains "${term}"`).toBe(false)
+      }
+    }
+  })
+
+  it('uses no technical file-sharing term in Portuguese', () => {
+    for (const [key, text] of Object.entries(catalogs['pt-BR'])) {
+      for (const term of portugueseTerms) {
+        expect(hasTerm(text, term), `${key} contains "${term}"`).toBe(false)
+      }
+    }
+  })
+
+  it('catches a forbidden Portuguese word', () => {
+    expect(portugueseTerms.some((term) => hasTerm('Você é uma semente', term))).toBe(true)
+    expect(portugueseTerms.some((term) => hasTerm('Abra para receber', term))).toBe(false)
+  })
+
+  it.each(languages.filter((language) => language !== 'en'))('%s has exactly the English keys', (language) => {
+    expect(differences(en, catalogs[language])).toEqual({ missing: [], extra: [] })
+  })
+
+  it('notices a missing or extra key', () => {
+    const { 'app.title': _, ...withoutTitle } = catalogs['pt-BR']
+    expect(differences(en, { ...withoutTitle, 'made.up': 'x' })).toEqual({ missing: ['app.title'], extra: ['made.up'] })
+  })
+
+  it('keeps every placeholder in every language', () => {
+    const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort()
+    for (const language of languages) {
+      for (const [key, text] of Object.entries(en)) {
+        expect(placeholders(catalogs[language][key as keyof typeof en]), `${language} ${key}`).toEqual(
+          placeholders(text),
+        )
       }
     }
   })
@@ -44,6 +102,41 @@ describe('sizes', () => {
   })
 })
 
+describe('in Brazilian Portuguese', () => {
+  it('writes sizes with a decimal comma', () => {
+    setLanguage('pt-BR')
+    expect(formatSize(1_288_490_188)).toBe('1,20 GB')
+    expect(formatSize(5 * 1024 ** 2)).toBe('5,0 MB')
+    expect(formatSize(1023)).toBe('1.023 bytes')
+  })
+
+  it.each([
+    [30, 'falta menos de um minuto'],
+    [60, 'falta cerca de 1 minuto'],
+    [600, 'faltam cerca de 10 minutos'],
+    [3600, 'falta cerca de 1 hora'],
+    [5 * 3600, 'faltam cerca de 5 horas'],
+    [3 * 86400, 'falta mais de um dia'],
+  ])('says %d seconds are left as %s', (seconds, expected) => {
+    setLanguage('pt-BR')
+    expect(formatTimeLeft(seconds)).toBe(expected)
+  })
+})
+
+describe('choosing the language', () => {
+  it.each([
+    [null, 'pt-BR', 'pt-BR'],
+    [null, 'pt-PT', 'pt-BR'],
+    [null, 'fr-FR', 'en'],
+    [null, 'en-GB', 'en'],
+    ['en', 'pt-BR', 'en'],
+    ['pt-BR', 'en-US', 'pt-BR'],
+    ['xx', 'de', 'en'],
+  ])('saved %s with system %s speaks %s', (saved, system, expected) => {
+    expect(pickLanguage(saved, system)).toBe(expected)
+  })
+})
+
 describe('time left', () => {
   it.each([
     [0, 'less than a minute left'],
@@ -55,5 +148,24 @@ describe('time left', () => {
     [3 * 86400, 'more than a day left'],
   ])('shows %d seconds as %s', (seconds, expected) => {
     expect(formatTimeLeft(seconds)).toBe(expected)
+  })
+})
+
+describe('speeds, progress and dates', () => {
+  it('shows a speed per second', () => {
+    expect(formatRate(2 * 1024 * 1024)).toBe('2.0 MB/s')
+  })
+
+  it('never reads 100% before the last byte, and 0% when the size is not known', () => {
+    expect(percentOf(999, 1000)).toBe(99)
+    expect(percentOf(1000, 1000)).toBe(100)
+    expect(percentOf(10, null)).toBe(0)
+  })
+
+  it('shows dates in the chosen language', () => {
+    const english = formatDateTime('2026-10-10T14:05:00Z')
+    setLanguage('pt-BR')
+    expect(formatDateTime('2026-10-10T14:05:00Z')).not.toBe(english)
+    expect(english).toContain('2026')
   })
 })

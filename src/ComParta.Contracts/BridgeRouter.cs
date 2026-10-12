@@ -14,21 +14,58 @@ public sealed class BridgeRouter
 {
     private readonly ShareUseCases _shares;
     private readonly TransferUseCases _transfers;
+    private readonly SettingsUseCases _settings;
     private readonly ConnectionUseCases _connection;
+    private readonly OpenedInvites _opened;
+    private readonly ActivityUseCases _activity;
+    private readonly ReceivedUseCases _received;
     private readonly IClipboard _clipboard;
     private readonly IContentOpener _opener;
+    private readonly ThumbnailUseCases _thumbnails;
+    private readonly DroppedFiles _dropped;
+    private readonly SendingUseCases _sending;
+    private readonly BackgroundUseCases _background;
 
     public BridgeRouter(
-        ShareUseCases shares, TransferUseCases transfers, ConnectionUseCases connection, IClipboard clipboard, IContentOpener opener)
+        ShareUseCases shares,
+        TransferUseCases transfers,
+        SettingsUseCases settings,
+        ConnectionUseCases connection,
+        OpenedInvites opened,
+        ActivityUseCases activity,
+        ReceivedUseCases received,
+        IClipboard clipboard,
+        IContentOpener opener,
+        ThumbnailUseCases thumbnails,
+        DroppedFiles dropped,
+        SendingUseCases sending,
+        NotificationUseCases notifications,
+        BackgroundUseCases background)
     {
+        _background = background;
+        _background.QuitAsked += answer => Raise(Events.QuitChanged, ToDto(answer));
+        notifications.OpenRequested += (kind, id, name) => Raise(
+            Events.DetailsChanged,
+            new DetailsTargetDto(kind == NotifiedItem.Share ? ItemKindDto.Share : ItemKindDto.Transfer, id, name));
+        _sending = sending;
+        _thumbnails = thumbnails;
+        _dropped = dropped;
         _shares = shares;
         _transfers = transfers;
+        _settings = settings;
         _connection = connection;
+        _opened = opened;
+        _activity = activity;
+        _received = received;
         _clipboard = clipboard;
         _opener = opener;
-        _shares.Changed += () => Raise(Events.SharesChanged, _shares.Current().Select(ToDto).ToArray());
+        _shares.Changed += RaiseShares;
+        _sending.Changed += RaiseShares;
         _transfers.Changed += () => Raise(Events.TransfersChanged, _transfers.List().Select(ToDto).ToArray());
+        _settings.Changed += () => _ = RaiseSettingsAsync();
         _connection.Changed += () => Raise(Events.ConnectionChanged, ToDto(_connection.Current()));
+        _opened.Opened += () => Raise(Events.InvitesChanged, true);
+        _activity.Changed += activityNow => Raise(Events.ActivityChanged, ToDto(activityNow));
     }
 
     /// <summary>An event envelope as JSON, ready to be sent to the UI.</summary>
@@ -69,12 +106,24 @@ public sealed class BridgeRouter
 
             case Commands.SharesCopyInvite:
             {
-                var invite = await GetInviteAsync(argsJson);
+                var args = Args<CopyInviteArgs>(argsJson);
+                var invite = ShareId.TryParse(args?.Id, out var shareId)
+                    ? await _shares.GetInviteAsync(shareId)
+                    : Result<string>.Fail(ErrorKind.ShareNotFound);
                 if (!invite.Ok)
                     return Failure(invite.Error);
-                await _clipboard.SetTextAsync(invite.Value!);
+                await _clipboard.SetTextAsync(ComposeMessage(args!.Message, invite.Value!));
                 return CommandResult.Success(null);
             }
+
+            case Commands.TransfersPreview:
+            {
+                var preview = _transfers.Preview(Args<ReceiveArgs>(argsJson)?.Invite);
+                return preview.Ok ? CommandResult.Success(ToDto(preview.Value!)) : Failure(preview.Error);
+            }
+
+            case Commands.ClipboardFindInvite:
+                return CommandResult.Success(TransferUseCases.FindInvite(await _clipboard.GetTextAsync()));
 
             case Commands.TransfersList:
                 return CommandResult.Success(_transfers.List().Select(ToDto).ToArray());
@@ -110,18 +159,128 @@ public sealed class BridgeRouter
                 await _opener.OpenReceivedFolderAsync();
                 return CommandResult.Success(null);
 
+            case Commands.ReceivedOpen:
+                return TransferId.TryParse(Args<IdArgs>(argsJson)?.Id, out var openId)
+                    ? ToResult(await _received.OpenAsync(openId))
+                    : CommandResult.Failure(ErrorCodes.TransferNotFound);
+
+            case Commands.ReceivedReveal:
+                return TransferId.TryParse(Args<IdArgs>(argsJson)?.Id, out var revealId)
+                    ? ToResult(await _received.RevealAsync(revealId))
+                    : CommandResult.Failure(ErrorCodes.TransferNotFound);
+
+            case Commands.ReceivedDelete:
+                return TransferId.TryParse(Args<IdArgs>(argsJson)?.Id, out var deleteId)
+                    ? ToResult(await _received.DeleteAsync(deleteId))
+                    : CommandResult.Failure(ErrorCodes.TransferNotFound);
+
+            case Commands.AppQuit:
+                return CommandResult.Success(ToDto(_background.Quit(Args<QuitArgs>(argsJson)?.Force ?? false)));
+
+            case Commands.SettingsGet:
+                return CommandResult.Success(ToDto(await _settings.GetAsync()));
+
+            case Commands.SettingsSet:
+            {
+                var args = Args<SetSettingsArgs>(argsJson);
+                return ToResult(await _settings.SetAsync(args?.Language, args?.View, args?.Sort, args?.SendStepsSeen ?? 0, args?.StartWithWindows ?? false));
+            }
+
             case Commands.ConnectionGet:
-                return CommandResult.Success(ToDto(_connection.Current()));
+                return CommandResult.Success(ToDto(_connection.Refresh()));
+
+            case Commands.ConnectionOpenSettings:
+                await _connection.OpenSettingsAsync();
+                return CommandResult.Success(null);
+
+            case Commands.InvitesTakeOpened:
+                return CommandResult.Success(_opened.Take());
+
+            case Commands.ActivityGet:
+                return CommandResult.Success(ToDto(_activity.Current()));
+
+            case Commands.ActivitySet:
+            {
+                var args = Args<SetActivityArgs>(argsJson);
+                await _activity.SetStoppedAsync(args?.SendingStopped ?? false, args?.ReceivingStopped ?? false);
+                return CommandResult.Success(null);
+            }
+
+            case Commands.SharesDetails:
+            {
+                var share = ShareId.TryParse(Args<IdArgs>(argsJson)?.Id, out var detailsId)
+                    ? _shares.Current().FirstOrDefault(v => v.Share.Id == detailsId)
+                    : null;
+                return share is null
+                    ? CommandResult.Failure(ErrorCodes.ShareNotFound)
+                    : CommandResult.Success(ToDetails(share, _activity.For(share.Share.Id)));
+            }
+
+            case Commands.TransfersDetails:
+            {
+                var transfer = TransferId.TryParse(Args<IdArgs>(argsJson)?.Id, out var detailsId)
+                    ? _transfers.List().FirstOrDefault(v => v.Transfer.Id == detailsId)
+                    : null;
+                return transfer is null
+                    ? CommandResult.Failure(ErrorCodes.TransferNotFound)
+                    : CommandResult.Success(ToDetails(transfer, _activity.For(transfer.Transfer.Id)));
+            }
+
+            case Commands.SharesAddDropped:
+            {
+                if (!Guid.TryParse(Args<DropArgs>(argsJson)?.Token, out var token))
+                    return CommandResult.Failure(ErrorCodes.ShareDropFailed);
+                var paths = await _dropped.TakeAsync(token, DroppedFiles.Wait);
+                if (paths is null)
+                    return CommandResult.Failure(ErrorCodes.ShareDropFailed);
+                var (added, problem) = await _shares.AddDroppedAsync(paths);
+                return CommandResult.Success(new DropResultDto(added, problem is { } kind ? ToCode(kind) : null));
+            }
+
+            case Commands.ThumbnailsGet:
+            {
+                var args = Args<ThumbnailArgs>(argsJson);
+                Result<Thumbnail?> found;
+                if (args?.Kind == ThumbnailKindDto.Share)
+                {
+                    if (!ShareId.TryParse(args.Id, out var pictureShareId))
+                        return CommandResult.Failure(ErrorCodes.ShareNotFound);
+                    found = await _thumbnails.ForShareAsync(pictureShareId, args.Size);
+                }
+                else
+                {
+                    if (!TransferId.TryParse(args?.Id, out var pictureTransferId))
+                        return CommandResult.Failure(ErrorCodes.TransferNotFound);
+                    found = await _thumbnails.ForTransferAsync(pictureTransferId, args!.Size);
+                }
+                if (!found.Ok)
+                    return Failure(found.Error);
+                return CommandResult.Success(found.Value is { } picture
+                    ? $"data:{picture.ContentType};base64,{Convert.ToBase64String(picture.Bytes)}"
+                    : null);
+            }
 
             default:
                 return CommandResult.Failure(ErrorCodes.Unexpected);
         }
     }
 
-    private async Task<Result<string>> GetInviteAsync(string? argsJson) =>
-        ShareId.TryParse(Args<IdArgs>(argsJson)?.Id, out var id)
-            ? await _shares.GetInviteAsync(id)
-            : Result<string>.Fail(ErrorKind.ShareNotFound);
+    /// <summary>The UI's message with the link put in, or the link alone.</summary>
+    private static string ComposeMessage(string? message, string link)
+    {
+        const string placeholder = "{link}";
+        if (string.IsNullOrWhiteSpace(message))
+            return link;
+        return message.Contains(placeholder, StringComparison.Ordinal)
+            ? message.Replace(placeholder, link, StringComparison.Ordinal)
+            : message.TrimEnd() + Environment.NewLine + link;
+    }
+
+    private async Task RaiseSettingsAsync()
+    {
+        try { Raise(Events.SettingsChanged, ToDto(await _settings.GetAsync())); }
+        catch (Exception) { /* the UI reads settings again on its next start */ }
+    }
 
     private void Raise(string name, object payload) =>
         EventRaised?.Invoke(JsonSerializer.Serialize(new EventEnvelope(name, payload), Contract.Json));
@@ -134,7 +293,11 @@ public sealed class BridgeRouter
 
     private static CommandResult Failure(ErrorKind? error) => CommandResult.Failure(ToCode(error ?? ErrorKind.Unexpected));
 
-    public static ShareDto ToDto(ShareView view) => new(
+    private void RaiseShares() => Raise(Events.SharesChanged, _shares.Current().Select(ToDto).ToArray());
+
+    private ShareDto ToDto(ShareView view) => ToDto(view, _sending.For(view.Share.Id));
+
+    public static ShareDto ToDto(ShareView view, Sending sending) => new(
         view.Share.Id.ToString(),
         view.Share.Name,
         view.Share.SizeBytes,
@@ -143,7 +306,17 @@ public sealed class BridgeRouter
             ShareStatus.Ready => ShareStatusDto.Ready,
             ShareStatus.Unavailable => ShareStatusDto.Unavailable,
             _ => ShareStatusDto.Preparing,
-        });
+        },
+        sending.Activity switch
+        {
+            SendingActivity.Sending => ShareActivityDto.Sending,
+            SendingActivity.Sent => ShareActivityDto.Sent,
+            _ => ShareActivityDto.Idle,
+        },
+        sending.ReceiverCount,
+        sending.Percent,
+        sending.FinishedCount,
+        sending.SecondsLeft);
 
     public static TransferDto ToDto(TransferView view) => new(
         view.Transfer.Id.ToString(),
@@ -156,10 +329,55 @@ public sealed class BridgeRouter
             TransferState.Paused => TransferStateDto.Paused,
             TransferState.Done => TransferStateDto.Done,
             TransferState.Failed => TransferStateDto.Failed,
+            TransferState.Waiting => TransferStateDto.Waiting,
+            TransferState.NoSpace => TransferStateDto.NoSpace,
+            TransferState.Blocked => TransferStateDto.Blocked,
             _ => TransferStateDto.Connecting,
         },
         view.BytesPerSecond,
-        view.SecondsLeft);
+        view.SecondsLeft,
+        view.NeededBytes);
+
+    public static SettingsDto ToDto(Settings settings) =>
+        new(settings.Language, settings.SystemLanguage, settings.View, settings.Sort, settings.SendStepsSeen, settings.StartWithWindows);
+
+    public static QuitAnswerDto ToDto(QuitAnswer answer) => new(answer.Quitting, [.. answer.Moving]);
+
+    public static ActivityDto ToDto(Activity activity) => new(
+        activity.ReceivingBytesPerSecond, activity.SendingBytesPerSecond, activity.SendingStopped, activity.ReceivingStopped);
+
+    public static ShareDetailsDto ToDetails(ShareView view, ItemActivity activity)
+    {
+        var dto = ToDto(view, Sending.Idle);
+        return new ShareDetailsDto(
+            dto.Id, dto.Name, dto.SizeBytes, dto.Status,
+            Path.GetDirectoryName(view.Share.FilePath) ?? "",
+            view.Share.AddedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+            activity.SendingBytesPerSecond, activity.Connections, activity.BytesSent);
+    }
+
+    public static TransferDetailsDto ToDetails(TransferView view, ItemActivity activity)
+    {
+        var dto = ToDto(view);
+        return new TransferDetailsDto(
+            dto.Id, dto.Name, dto.SizeBytes, dto.ReceivedBytes, dto.State,
+            view.Transfer.Source switch
+            {
+                TransferSource.DownloadLink => TransferSourceDto.DownloadLink,
+                TransferSource.DownloadFile => TransferSourceDto.DownloadFile,
+                _ => TransferSourceDto.Invite,
+            },
+            view.Transfer.AddedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+            dto.BytesPerSecond, activity.SendingBytesPerSecond, dto.SecondsLeft, activity.Connections, activity.BytesSent);
+    }
+
+    public static InvitePreviewDto ToDto(InvitePreview preview) => new(
+        preview.Hints.SenderName,
+        preview.Hints.Name,
+        preview.Hints.SizeBytes,
+        preview.Hints.ItemCount,
+        preview.IsInvite,
+        preview.FreeBytes);
 
     public static ConnectionDto ToDto(ConnectionHealth? health) => new(health switch
     {
@@ -180,6 +398,11 @@ public sealed class BridgeRouter
         ErrorKind.TransferNotFound => ErrorCodes.TransferNotFound,
         ErrorKind.TransferFinished => ErrorCodes.TransferFinished,
         ErrorKind.DownloadFileInvalid => ErrorCodes.DownloadInvalidFile,
+        ErrorKind.DiskFull => ErrorCodes.DiskFull,
+        ErrorKind.SettingsInvalid => ErrorCodes.SettingsInvalid,
+        ErrorKind.ReceivedNotFound => ErrorCodes.ReceivedNotFound,
+        ErrorKind.ReceivedOpenFailed => ErrorCodes.ReceivedOpenFailed,
+        ErrorKind.ShareDropFailed => ErrorCodes.ShareDropFailed,
         _ => ErrorCodes.Unexpected,
     };
 }

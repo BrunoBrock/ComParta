@@ -80,6 +80,10 @@ dotnet run --project src\ComParta.App -c Release --no-build
 Share a file in A, copy the invite, and paste it into B. The file arrives in
 `C:\Temp\deviceB\Received`.
 
+Only one copy runs per data folder. Starting the app again, or clicking a `comparta://` invite
+link in mail or chat, brings the running copy to the front with "Get this file?" open. Each start
+registers the `comparta:` link for your Windows user, pointing at the copy that started last.
+
 ## Where the app keeps its data
 
 | What | Default | With `COMPARTA_HOME` set |

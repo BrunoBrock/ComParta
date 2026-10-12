@@ -64,3 +64,4 @@ The Windows desktop app and everything inside it: core, contracts, storage adapt
 - Unknown: whether MAUI `HybridWebView` on Windows is adequate; story 1 finds out. Fallback is a WPF + WebView2 shell (AD-1).
 - Parked: sharing a whole folder (OQ-5). Answered 2026-10-10: it is epic 11 in R2.
 - Plan 2026-10-10: CI now runs green on the `mvp-share-and-send` branch, so story 2 is built. What is left is story 13 (refactor sweep, run it before epic 8 changes the UI) and story 14 (second PC). The epic is done when both are.
+- Built 2026-10-12: story 13 (refactor sweep). Scope: one `Modal` component for every dialog, which also gives focus back to the opener; speed, percent and date formatting moved next to the other formatters; the screen tests split into one file per area with a shared harness in `src/ui/src/test`; the engine class split into partial files by area (offering, receiving, activity, reachability). No behaviour changed apart from the focus return.

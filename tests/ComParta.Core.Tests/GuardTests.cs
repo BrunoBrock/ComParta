@@ -63,6 +63,15 @@ public sealed partial class GuardTests
             "The contract changed. Run: dotnet run --project tools/ComParta.Contracts.TypeGen");
     }
 
+    [Fact]
+    public void The_notification_sentences_match_the_UI_catalogs()
+    {
+        var onDisk = File.ReadAllText(Path.Combine(RepositoryRoot, NotificationTextsWriter.GeneratedFile)).ReplaceLineEndings("\n");
+
+        Assert.True(onDisk == NotificationTextsWriter.Write(RepositoryRoot),
+            "A notification sentence changed. Run: dotnet run --project tools/ComParta.Contracts.TypeGen");
+    }
+
     private static IEnumerable<string> SourceFiles()
     {
         string[] extensions = [".cs", ".ts", ".tsx", ".css", ".html", ".xaml", ".csproj"];

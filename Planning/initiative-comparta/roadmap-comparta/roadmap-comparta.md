@@ -3,7 +3,7 @@ type: roadmap
 title: "ComParta roadmap: from the first build to Windows and Android"
 parent: initiative-comparta
 created: '2026-10-10'
-updated: '2026-10-10'
+updated: '2026-10-12'
 based_on: 'branch mvp-share-and-send (share, invite and receive built; CI green on Windows)'
 ---
 
@@ -61,6 +61,7 @@ crosses two homes on ordinary home internet.
 | 1 | 1 Share a file (finish) | Refactor sweep, then check the release build on a second PC. |
 | 2 | 2 Send to a person (follow-ups) | First version built. Follow-ups: ComParta links, friendly invite message, confirm before receiving, one running copy. |
 | 3 | 9 Connect between homes (field test first) | The biggest product risk. Measure before building more UI on top of it. |
+| 3b | 15 Speed bar and details | Bruno's request of 2026-10-12: the total speed and a Stop button on top, and an information button on every file. Built next, before epic 8 redesigns the screen. |
 | 4 | 6 Brazilian Portuguese | The pilot family speaks Portuguese; testing in English tests the wrong thing. Also brings the settings store. |
 | 5 | 8 Drive-like home | The product promise. Every later screen uses its design system. |
 | 6 | 4 Follow a transfer | The sender sees that someone is getting the file; stuck states explain themselves; notifications. |
@@ -115,6 +116,7 @@ recorded where it binds.
 | P-7 | Connection work starts with a measured field test; IPv6 and router port mapping come before any thought of a relay or another engine. | AD-15, epic 9 |
 | P-8 | No in-app update check, so AD-9 stays strict. Updates come from the store the app was installed from. | AD-17, epic 5 |
 | P-10 | Bruno chose "Both" (2026-10-10): ComParta also downloads from any public link or download file, like qBittorrent but simpler. CAP-25, AD-21, epic 14 in R1. | Spec CAP-25, AD-8 (amended), AD-21, epic 14 |
+| P-11 | Bruno asked (2026-10-12) for an information button on every file opening its details, and a speed bar on top with a Stop button (stop sending, receiving, or both by default). CAP-26, CAP-27, AD-22, epic 15 in R1, next in build order. | Spec CAP-26, CAP-27, AD-22, epic 15 |
 | P-9 | The UI uses its own small component set and CSS variables, with bundled Lucide icons; no UI framework. Thumbnails come from the operating system through a shell port. | AD-18, UX design |
 
 ## Decisions only Bruno can make
@@ -141,7 +143,7 @@ can be built and checked on their own, and every story's blocker is named.
 | Every epic in R1 and R2 has stories with a `verify` | Yes. |
 | Stories that need a person (`hitl`) are marked | Yes: second-PC check, field tests, store submissions, usability sessions, translation review. |
 | Stories blocked on a decision | Marked with `unknown`; see D-1 to D-4. |
-| Epic 1 story 13 (refactor sweep) | Not run yet; run it before epic 8 starts changing the UI. |
+| Epic 1 story 13 (refactor sweep) | Done 2026-10-12, before epic 8 changes the UI. |
 
 ## Risks
 

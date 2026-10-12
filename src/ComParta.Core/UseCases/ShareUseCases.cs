@@ -75,7 +75,30 @@ public sealed class ShareUseCases
         var path = await _picker.PickFileAsync(ct);
         if (path is null)
             return Result<ShareView?>.Success(null);
+        return await ShareFileAsync(path, ct);
+    }
 
+    /// <summary>
+    /// Shares each file dropped onto the window, as if picked one by one (epic 8 story 6). Returns
+    /// how many were shared and why the first one that could not be was refused.
+    /// </summary>
+    public async Task<(int Added, ErrorKind? Problem)> AddDroppedAsync(IEnumerable<string> paths, CancellationToken ct = default)
+    {
+        var added = 0;
+        ErrorKind? problem = null;
+        foreach (var path in paths)
+        {
+            var result = await ShareFileAsync(path, ct);
+            if (result.Ok)
+                added++;
+            else
+                problem ??= result.Error;
+        }
+        return (added, problem);
+    }
+
+    private async Task<Result<ShareView?>> ShareFileAsync(string path, CancellationToken ct)
+    {
         ShareView view;
         await _gate.WaitAsync(ct);
         try
@@ -129,7 +152,10 @@ public sealed class ShareUseCases
         return Result.Success;
     }
 
-    /// <summary>The invite text another person pastes to receive this share.</summary>
+    /// <summary>
+    /// The ComParta link another person opens to receive this share (AD-16). It carries the name
+    /// and size so they can see what it is before they agree.
+    /// </summary>
     public async Task<Result<string>> GetInviteAsync(ShareId id, CancellationToken ct = default)
     {
         ShareView? view;
@@ -141,7 +167,10 @@ public sealed class ShareUseCases
             return Result<string>.Fail(ErrorKind.ShareNotReady);
 
         var invite = await _engine.GetInviteAsync(id, ct);
-        return invite is null ? Result<string>.Fail(ErrorKind.ShareNotReady) : Result<string>.Success(invite);
+        if (invite is null)
+            return Result<string>.Fail(ErrorKind.ShareNotReady);
+        var hints = new InviteHints(SenderName: null, view.Share.Name, view.Share.SizeBytes, ItemCount: 1);
+        return Result<string>.Success(InviteCodec.Write(invite, hints));
     }
 
     private void OnOfferChanged(ShareId id, OfferState state)

@@ -41,10 +41,23 @@ export function createHostBridge(): Bridge {
       try {
         await ready
         const reply = await window.HybridWebView!.InvokeDotNet('Invoke', [command, JSON.stringify(args ?? null)])
-        return (typeof reply === 'string' ? JSON.parse(reply) : reply) as CommandResult<never>
+        const result = (typeof reply === 'string' ? JSON.parse(reply) : reply) as CommandResult<never>
+        // The app leaves out a null value; the contract promises null, as the fake bridge gives.
+        if (result.ok && !('value' in result)) return { ok: true, value: null } as CommandResult<never>
+        return result
       } catch {
         return unexpected
       }
+    },
+
+    handOverDrop(token: string, files: File[]) {
+      // WebView2 gives the files to the window with their real paths; the page never sees one (AD-7).
+      const webview = window.chrome?.webview as
+        | { postMessageWithAdditionalObjects?: (message: string, objects: File[]) => void }
+        | undefined
+      if (typeof webview?.postMessageWithAdditionalObjects !== 'function') return false
+      webview.postMessageWithAdditionalObjects(`comparta-drop:${token}`, files)
+      return true
     },
 
     subscribe(listener) {

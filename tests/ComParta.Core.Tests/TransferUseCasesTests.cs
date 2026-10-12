@@ -9,8 +9,9 @@ public sealed class TransferUseCasesTests
     private readonly FakeEngine _engine = new();
     private readonly FakeFilePicker _picker = new();
     private readonly FakeFileSystem _files = new();
+    private readonly FakeStorage _storage = new();
 
-    private TransferUseCases Create() => new(_repository, _engine, picker: _picker, files: _files);
+    private TransferUseCases Create() => new(_repository, _engine, picker: _picker, files: _files, storage: _storage);
 
     private const string DownloadFile = @"C:\Users\Ana\Downloads\film.download";
 
@@ -121,6 +122,30 @@ public sealed class TransferUseCasesTests
         Assert.Equal(2, listed.Count);
         Assert.Equal(TransferState.Connecting, listed.Single(v => v.Transfer.Id == unfinished).State);
         Assert.Equal(TransferState.Done, listed.Single(v => v.Transfer.Id == finished).State);
+    }
+
+    [Fact]
+    public async Task After_a_restart_progress_is_what_the_engine_has_and_done_stays_done()
+    {
+        var first = Create();
+        var unfinished = (await first.ReceiveAsync("invite:abc")).Value!.Transfer.Id;
+        var finished = (await first.ReceiveAsync("invite:def")).Value!.Transfer.Id;
+        _engine.Report(new ReceiveProgress(unfinished, "film.mp4", 1_000, 300, false));
+        _engine.Report(new ReceiveProgress(finished, "a.txt", 10, 10, true));
+        _engine.Receiving.Remove(finished);
+
+        var restarted = Create();
+        await restarted.StartAsync();
+        // The engine's first report after the restart comes from what is already on disk.
+        _engine.Report(new ReceiveProgress(unfinished, "film.mp4", 1_000, 600, false));
+        _engine.Report(new ReceiveProgress(finished, "a.txt", 10, 0, false));
+
+        var resumed = restarted.List().Single(v => v.Transfer.Id == unfinished);
+        Assert.Equal(TransferState.Receiving, resumed.State);
+        Assert.Equal(600, resumed.ReceivedBytes);
+        var done = restarted.List().Single(v => v.Transfer.Id == finished);
+        Assert.Equal(TransferState.Done, done.State);
+        Assert.Equal(10, done.ReceivedBytes);
     }
 
     [Fact]
@@ -241,15 +266,90 @@ public sealed class TransferUseCasesTests
     }
 
     [Fact]
-    public async Task Time_left_comes_from_the_current_speed()
+    public async Task Time_left_comes_from_a_smoothed_speed_and_is_unknown_after_a_stall()
     {
-        var transfers = Create();
+        var clock = new ManualClock(DateTimeOffset.UnixEpoch);
+        var transfers = new TransferUseCases(_repository, _engine, clock, _picker, _files, _storage);
         var id = (await transfers.ReceiveAsync("invite:abc")).Value!.Transfer.Id;
 
+        _engine.Report(new ReceiveProgress(id, "a.mp4", 1000, 300, false, BytesPerSecond: 100));
+        Assert.Null(Assert.Single(transfers.List()).SecondsLeft);
+        clock.Now += TimeSpan.FromSeconds(1);
         _engine.Report(new ReceiveProgress(id, "a.mp4", 1000, 400, false, BytesPerSecond: 100));
 
         var listed = Assert.Single(transfers.List());
         Assert.Equal(100, listed.BytesPerSecond);
         Assert.Equal(6, listed.SecondsLeft);
+
+        clock.Now += TimeSpan.FromSeconds(TimeLeft.StallAfter.TotalSeconds);
+        _engine.Report(new ReceiveProgress(id, "a.mp4", 1000, 400, false));
+        Assert.Null(Assert.Single(transfers.List()).SecondsLeft);
+    }
+
+    [Fact]
+    public async Task A_ComParta_link_in_a_message_is_received_with_the_engine_text_inside_it()
+    {
+        var transfers = Create();
+        var link = InviteCodec.Write("invite:abc", new InviteHints("Paulo", "..\\..\\evil.exe", 10, 1));
+
+        var result = await transfers.ReceiveAsync($"Oi! Abra isto: {link} 😀");
+
+        Assert.True(result.Ok);
+        Assert.Equal("abc", _engine.Receiving[result.Value!.Transfer.Id]);
+        // A name from the invite is never used as the transfer's name; that comes from the received metadata.
+        Assert.Null(result.Value.Transfer.Name);
+    }
+
+    [Fact]
+    public async Task A_link_with_a_broken_payload_is_refused()
+    {
+        var result = await Create().ReceiveAsync("comparta://receive/v1/broken!");
+
+        Assert.Equal(ErrorKind.InviteInvalid, result.Error);
+        Assert.Empty(_engine.Receiving);
+    }
+
+    [Fact]
+    public void The_preview_shows_the_invites_hints_and_the_room_left_without_receiving()
+    {
+        _storage.FreeBytes = 120_000;
+        var link = InviteCodec.Write("invite:abc", new InviteHints("Paulo", "Natal.mp4", 4_200, 1));
+
+        var preview = Create().Preview(link);
+
+        Assert.True(preview.Ok);
+        Assert.Equal(new InviteHints("Paulo", "Natal.mp4", 4_200, 1), preview.Value!.Hints);
+        Assert.True(preview.Value.IsInvite);
+        Assert.Equal(120_000, preview.Value.FreeBytes);
+        Assert.False(preview.Value.NotEnoughSpace);
+        Assert.Empty(_engine.Receiving);
+    }
+
+    [Fact]
+    public void The_preview_of_a_download_link_uses_what_the_engine_reads_from_it()
+    {
+        _engine.Announced["abc"] = new InviteSummary("Open film.mkv", 1_800);
+
+        var preview = Create().Preview("invite:abc");
+
+        Assert.Equal("Open film.mkv", preview.Value!.Hints.Name);
+        Assert.Equal(1_800, preview.Value.Hints.SizeBytes);
+        Assert.False(preview.Value.IsInvite);
+        Assert.Equal(ErrorKind.InviteInvalid, Create().Preview("hello grandma").Error);
+    }
+
+    [Fact]
+    public async Task A_file_larger_than_the_room_left_is_not_started()
+    {
+        _storage.FreeBytes = 1_000;
+        var transfers = Create();
+        var link = InviteCodec.Write("invite:abc", new InviteHints(null, "big.mp4", 5_000, 1));
+
+        Assert.True(transfers.Preview(link).Value!.NotEnoughSpace);
+        var result = await transfers.ReceiveAsync(link);
+
+        Assert.Equal(ErrorKind.DiskFull, result.Error);
+        Assert.Empty(_engine.Receiving);
+        Assert.Empty(transfers.List());
     }
 }

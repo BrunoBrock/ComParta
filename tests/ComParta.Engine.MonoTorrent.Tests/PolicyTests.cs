@@ -26,4 +26,46 @@ public sealed class PolicyTests
         Assert.NotNull(settings.DhtEndPoint);
         Assert.DoesNotContain(EncryptionType.PlainText, settings.AllowedEncryption);
     }
+
+    [Fact]
+    public void Connections_are_accepted_on_both_internet_protocols_when_the_system_has_them()
+    {
+        var settings = MonoTorrentTransferEngine.ToEngineSettings(SharingPolicy.Default with { ListenPort = 41_000 }, "cache");
+
+        Assert.Equal(41_000, settings.ListenEndPoints["ipv4"].Port);
+        Assert.Equal(System.Net.Sockets.Socket.OSSupportsIPv6, settings.ListenEndPoints.ContainsKey("ipv6"));
+    }
+
+    [Fact]
+    public void A_device_that_refuses_incoming_connections_listens_nowhere()
+    {
+        var settings = MonoTorrentTransferEngine.ToEngineSettings(SharingPolicy.Default, "cache", acceptIncoming: false);
+
+        Assert.Empty(settings.ListenEndPoints);
+    }
+
+    [Theory]
+    [InlineData("2804:14c:65a1:4000::1", true)]
+    [InlineData("2001:db8::1", true)]
+    [InlineData("fe80::1", false)]
+    [InlineData("fd12:3456::1", false)]
+    [InlineData("::1", false)]
+    [InlineData("2001:0:4136:e378::1", false)]
+    [InlineData("ff02::1", false)]
+    [InlineData("192.168.0.10", false)]
+    public void Only_global_IPv6_addresses_count_as_reachable_from_anywhere(string address, bool global) =>
+        Assert.Equal(global, MonoTorrentTransferEngine.IsGlobalIPv6(System.Net.IPAddress.Parse(address)));
+
+    [Theory]
+    [InlineData(unchecked((int)0x80070070), true)]
+    [InlineData(unchecked((int)0x80070027), true)]
+    [InlineData(28, true)]
+    [InlineData(unchecked((int)0x80070005), false)]
+    public void A_write_that_failed_for_lack_of_room_is_told_apart(int code, bool full)
+    {
+        var error = new InvalidOperationException("write failed", new IOException("disk", code));
+
+        Assert.Equal(full, MonoTorrentTransferEngine.IsDiskFull(error));
+        Assert.False(MonoTorrentTransferEngine.IsDiskFull(null));
+    }
 }

@@ -17,7 +17,7 @@ repository, see [Running ComParta locally](RUNNING.md).
    moves or changes it.
 2. When it says **Ready to send**, choose **Copy invite** and paste the invite into an email or
    chat message.
-3. Keep ComParta open until the other person has the file.
+3. Keep ComParta running until the other person has the file. Closing the window leaves it next to the clock while something is shared; quit it from that icon.
 
 **To receive a file**
 

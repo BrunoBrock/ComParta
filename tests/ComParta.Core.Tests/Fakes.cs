@@ -35,6 +35,27 @@ internal sealed class FakeEngine : ITransferEngine
     public event Action<ReceiveProgress>? ReceiveProgressed;
     public event Action<ReachabilityFacts>? ReachabilityChanged;
 
+    public event Action? ActivityChanged;
+
+    public EngineActivity Activity { get; set; } = EngineActivity.None;
+    public EngineActivity GetActivity() => Activity;
+    public (bool Sending, bool Receiving) StoppedFlags { get; private set; }
+    public int StopCalls { get; private set; }
+
+    public Task SetStoppedAsync(bool sending, bool receiving, CancellationToken ct = default)
+    {
+        StoppedFlags = (sending, receiving);
+        StopCalls++;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Sets new activity and tells whoever listens, as the real engine does every second.</summary>
+    public void Move(EngineActivity activity)
+    {
+        Activity = activity;
+        ActivityChanged?.Invoke();
+    }
+
     public SharingPolicy? Policy { get; private set; }
     public Dictionary<ShareId, string> Offered { get; } = [];
     public Dictionary<TransferId, string> Receiving { get; } = [];
@@ -59,6 +80,12 @@ internal sealed class FakeEngine : ITransferEngine
 
     public string? ReadInviteKey(string inviteText) =>
         inviteText.StartsWith(InvitePrefix, StringComparison.Ordinal) ? inviteText[InvitePrefix.Length..] : null;
+
+    /// <summary>What an invite announces, by content key; anything else announces nothing.</summary>
+    public Dictionary<string, InviteSummary> Announced { get; } = [];
+
+    public InviteSummary? DescribeInvite(string inviteText) =>
+        ReadInviteKey(inviteText) is { } key ? Announced.GetValueOrDefault(key) ?? new InviteSummary(null, null) : null;
 
     public string? GetReceiveKey(TransferId id) => Receiving.GetValueOrDefault(id);
 
@@ -97,7 +124,14 @@ internal sealed class FakeEngine : ITransferEngine
 
     public Task PauseReceivingAsync(TransferId id, CancellationToken ct = default) { Paused.Add(id); return Task.CompletedTask; }
 
-    public Task ContinueReceivingAsync(TransferId id, CancellationToken ct = default) { Paused.Remove(id); return Task.CompletedTask; }
+    public List<TransferId> Continued { get; } = [];
+
+    public Task ContinueReceivingAsync(TransferId id, CancellationToken ct = default)
+    {
+        Paused.Remove(id);
+        Continued.Add(id);
+        return Task.CompletedTask;
+    }
 
     public void Report(ReceiveProgress progress) => ReceiveProgressed?.Invoke(progress);
 
@@ -124,8 +158,112 @@ internal sealed class FakeFileSystem : IFileSystem
     public long GetReadableFileSize(string path) =>
         Locked.Contains(path) ? throw new UnauthorizedAccessException() : Files[path];
 
+    public List<string> Deleted { get; } = [];
+
+    public void DeleteFile(string path)
+    {
+        if (Locked.Contains(path))
+            throw new IOException("in use");
+        Files.Remove(path);
+        Deleted.Add(path);
+    }
+
     public byte[] ReadSmallFile(string path, int maxBytes) =>
         Locked.Contains(path) || !Contents.TryGetValue(path, out var content) ? throw new UnauthorizedAccessException()
         : content.Length > maxBytes ? throw new IOException()
         : content;
+}
+
+internal sealed class FakePaths(string root) : IAppPaths
+{
+    public string DatabasePath => Path.Combine(root, "data", "comparta.db");
+    public string EngineRoot => Path.Combine(root, "engine");
+    public string ReceivedRoot => Path.Combine(root, "Received");
+    public string LogsRoot => Path.Combine(root, "logs");
+}
+
+internal sealed class FakeOpener : IContentOpener
+{
+    public int FolderOpened { get; private set; }
+    public List<string> Opened { get; } = [];
+    public List<string> Revealed { get; } = [];
+    public bool OpenWorks { get; set; } = true;
+
+    public Task OpenReceivedFolderAsync(CancellationToken ct = default) { FolderOpened++; return Task.CompletedTask; }
+    public Task<bool> OpenAsync(string path, CancellationToken ct = default) { Opened.Add(path); return Task.FromResult(OpenWorks); }
+    public Task RevealAsync(string path, CancellationToken ct = default) { Revealed.Add(path); return Task.CompletedTask; }
+}
+
+internal sealed class FakeThumbnails : IThumbnailProvider
+{
+    public List<(string Path, int Size)> Asked { get; } = [];
+    public Thumbnail? Next { get; set; } = new("image/png", [1, 2, 3]);
+    public bool Throws { get; set; }
+
+    public Task<Thumbnail?> GetAsync(string path, int size, CancellationToken ct = default)
+    {
+        Asked.Add((path, size));
+        if (Throws)
+            throw new IOException("The system could not draw it.");
+        return Task.FromResult(Next);
+    }
+}
+
+internal sealed class FakeStorage : IStorageInfo
+{
+    public long? FreeBytes { get; set; }
+    public long? GetReceivedFreeBytes() => FreeBytes;
+}
+
+internal sealed class FakeSettingsRepository : ISettingsRepository
+{
+    public Dictionary<string, string> Values { get; } = [];
+    public Task<string?> GetAsync(string key, CancellationToken ct = default) => Task.FromResult(Values.GetValueOrDefault(key));
+    public Task SetAsync(string key, string? value, CancellationToken ct = default)
+    {
+        if (value is null) Values.Remove(key);
+        else Values[key] = value;
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class FakeSystem(string uiLanguage) : ISystemInfo
+{
+    public string UiLanguage { get; } = uiLanguage;
+}
+
+internal sealed class FakeFirewall : IFirewall
+{
+    public bool? Allows { get; set; }
+    public int SettingsOpened { get; private set; }
+    public bool? AllowsIncoming() => Allows;
+    public Task OpenSettingsAsync(CancellationToken ct = default) { SettingsOpened++; return Task.CompletedTask; }
+}
+
+/// <summary>A clock the test moves by hand.</summary>
+internal sealed class ManualClock(DateTimeOffset start) : TimeProvider
+{
+    public DateTimeOffset Now { get; set; } = start;
+    public override DateTimeOffset GetUtcNow() => Now;
+}
+
+internal sealed class FakeNotifier : INotifier
+{
+    public List<Notification> Shown { get; } = [];
+    public void Show(Notification notification) => Shown.Add(notification);
+}
+
+internal sealed class FakeWindow : IWindowState
+{
+    public bool IsInFront { get; set; }
+}
+
+internal sealed class FakePresence : IBackgroundPresence
+{
+    public List<bool> Awake { get; } = [];
+    public List<bool> StartWithSystem { get; } = [];
+    public int Quits { get; private set; }
+    public void KeepAwake(bool awake) => Awake.Add(awake);
+    void IBackgroundPresence.StartWithSystem(bool on) => StartWithSystem.Add(on);
+    public void Quit() => Quits++;
 }

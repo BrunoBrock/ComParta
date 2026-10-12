@@ -1,5 +1,7 @@
-import { Download, Inbox, Plus, Upload } from 'lucide-react'
+import { CircleHelp, Download, Inbox, Plus, Settings, Upload } from 'lucide-react'
+import type { ConnectionHealthDto } from '../bridge/index.ts'
 import { t } from '../i18n/index.ts'
+import ConnectionIndicator from './ConnectionIndicator.tsx'
 
 export type Section = 'shared' | 'received'
 
@@ -8,16 +10,24 @@ interface RailProps {
   sharedCount: number | null
   receivedCount: number | null
   adding: boolean
+  connection: ConnectionHealthDto | null
+  onConnection: () => void
   onSection: (section: Section) => void
   onAdd: () => void
   onReceive: () => void
+  onHelp: () => void
+  onSettings: () => void
 }
 
 /**
- * The two things a person comes to do, always in reach, and the two places their files live.
- * A column on a wide window; a bar along the bottom on a narrow one (UX design, Layout).
+ * The two things a person comes to do, always in reach, the two places their files live, and Help
+ * and Settings. A column on a wide window, icons with small labels between 600 and 900 px, and a
+ * bar along the bottom on a narrow one, where the floating ＋ takes the two actions (UX design,
+ * Layout).
  */
-export default function Rail({ section, sharedCount, receivedCount, adding, onSection, onAdd, onReceive }: RailProps) {
+export default function Rail(props: RailProps) {
+  const { section, sharedCount, receivedCount, adding, connection, onConnection, onSection, onAdd, onReceive } = props
+  const { onHelp, onSettings } = props
   const places = [
     { id: 'shared' as const, label: t('nav.shared'), count: sharedCount, Icon: Upload },
     { id: 'received' as const, label: t('nav.received'), count: receivedCount, Icon: Inbox },
@@ -58,9 +68,24 @@ export default function Rail({ section, sharedCount, receivedCount, adding, onSe
             </li>
           ))}
         </ul>
+        <ul className="rail-more">
+          <li className="rail-help">
+            <button type="button" className="nav-item" onClick={onHelp}>
+              <CircleHelp size={20} aria-hidden="true" />
+              <span className="nav-label">{t('nav.help')}</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" className="nav-item" onClick={onSettings}>
+              <Settings size={20} aria-hidden="true" />
+              <span className="nav-label">{t('nav.settings')}</span>
+            </button>
+          </li>
+        </ul>
       </nav>
 
       <p className="rail-tagline">{t('app.tagline')}</p>
+      <ConnectionIndicator health={connection} onOpen={onConnection} />
     </aside>
   )
 }

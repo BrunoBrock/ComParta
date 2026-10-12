@@ -119,10 +119,13 @@ public sealed class ReachabilityFactsTests : IAsyncLifetime
 
     private async Task<MonoTorrentTransferEngine> StartAsync(
         string name, SharingPolicy policy, Factories? factories = null, TimeProvider? clock = null,
-        Func<IPAddress, bool>? isOutside = null, int? port = null)
+        Func<IPAddress, bool>? isOutside = null, int? port = null, Func<IEnumerable<IPAddress>>? addresses = null)
     {
+        // The computer's own addresses are replaced too, so what a test finds does not depend on this
+        // computer having an internet-wide IPv6 address. The engine itself does listen on IPv6.
         var engine = new MonoTorrentTransferEngine(
-            new Paths(Path.Combine(_folder, name)), factories ?? Factories.Default, clock ?? TimeProvider.System, isOutside);
+            new Paths(Path.Combine(_folder, name)), factories ?? Factories.Default, clock ?? TimeProvider.System, isOutside,
+            addresses ?? (() => []));
         _engines.Add(engine);
         await engine.StartAsync(policy with { ListenPort = port ?? FreePort() });
         return engine;
@@ -175,11 +178,11 @@ public sealed class ReachabilityFactsTests : IAsyncLifetime
         Assert.False(facts.ListenPortBusy);
         Assert.Equal(PortMappingState.NotRequested, facts.PortMapping);
         Assert.Null(facts.ExternalPort);
-        Assert.False(facts.ListeningOnIPv6);
+        Assert.Equal(Socket.OSSupportsIPv6, facts.ListeningOnIPv6);
         // The router is never started, so nothing can be sent to it, and nothing was opened.
         Assert.False(router.EverStarted);
         Assert.Empty(router.Mappings.Created);
-        // Listening, but nothing asked the router and there is no IPv6 listener: nobody can get in.
+        // Listening, but nothing asked the router and this computer has no internet-wide IPv6 address: nobody can get in.
         Assert.Equal(ConnectionHealth.Blocked, connection.Current());
     }
 
@@ -190,6 +193,13 @@ public sealed class ReachabilityFactsTests : IAsyncLifetime
         busy.Start();
         _occupied.Add(busy);
         var busyPort = ((IPEndPoint)busy.LocalEndpoint).Port;
+        if (Socket.OSSupportsIPv6)
+        {
+            // The engine listens on both internet protocols, so the same port is taken on the other one too.
+            var busyV6 = new TcpListener(IPAddress.IPv6Any, busyPort) { Server = { DualMode = false } };
+            busyV6.Start();
+            _occupied.Add(busyV6);
+        }
         var engine = await StartAsync("receiver", SharingPolicy.Closed, port: busyPort);
         var connection = new ConnectionUseCases(engine);
 
@@ -332,8 +342,14 @@ public sealed class ReachabilityFactsTests : IAsyncLifetime
         engine.ReportReachability();
         engine.ReportReachability();
 
-        Assert.Equal(2, reported.Count);
+        // The engine also reports by itself as each listener comes up, so there may be a step in between.
+        Assert.True(reported.Count >= 2);
         Assert.True(reported.Last().Listening);
+        Assert.All(reported.Zip(reported.Skip(1)), pair => Assert.NotEqual(pair.First, pair.Second));
+        var settled = reported.Count;
+        engine.ReportReachability();
+        engine.ReportReachability();
+        Assert.Equal(settled, reported.Count);
     }
 
     [Fact]
@@ -346,9 +362,14 @@ public sealed class ReachabilityFactsTests : IAsyncLifetime
         var facts = await first.Task.WaitAsync(TimeSpan.FromSeconds(15));
 
         Assert.False(facts.Listening);
-        await engine.ReceiveAsync(TransferId.New(), LinkOnly);
+        // Subscribed first: the engine reports the moment its listener comes up.
         var next = new TaskCompletionSource<ReachabilityFacts>(TaskCreationOptions.RunContinuationsAsynchronously);
-        engine.ReachabilityChanged += changed => next.TrySetResult(changed);
+        engine.ReachabilityChanged += changed =>
+        {
+            if (changed.Listening)
+                next.TrySetResult(changed);
+        };
+        await engine.ReceiveAsync(TransferId.New(), LinkOnly);
         Assert.True((await next.Task.WaitAsync(TimeSpan.FromSeconds(15))).Listening);
     }
 

@@ -48,6 +48,8 @@ Invite and receive on Windows. Not transfer progress beyond done or not done (ep
 ## Notes
 
 - Status 2026-10-08: a first version was built together with epic-share-a-file. Done when 1, 2 and 4 are met in the app and checked on one PC with two copies running; 3, 5 and 6 still need two real PCs in two homes.
+- Built 2026-10-11: stories 2 to 5 (ComParta links, friendly invite message, "Get this file?", paste anywhere). The invite message says "Someone" until epic 12 adds your name. Story 5's manual check (copy from WhatsApp Desktop, press Ctrl+V) still needs a Windows PC.
+- Built 2026-10-11: story 6. One running copy per data folder (`ComParta.Shell.SingleInstance`, a local pipe only this user can open); each start writes the `comparta:` scheme under HKCU, and the MSIX manifest declares it. A clicked link reaches the running copy, which comes to the front with "Get this file?" open. Still to check by hand on Windows: clicking a link in Outlook, Gmail in Edge and WhatsApp Desktop.
 - OQ-1 was answered for this release by AD-8. What remains is in the architecture's Deferred table.
 - Unknown: whether MonoTorrent connects reliably through home routers without uTP. Moved to epic 9, which starts with a field test.
 - Plan 2026-10-10: invites become `comparta://` links (AD-16); the receive step always confirms first; story 6 also brings the single running copy that epic 10 builds on. The epic is done when stories 2 to 7 are built and Done when 1, 2, 4, 5 and 6 are checked.

@@ -11,10 +11,10 @@ function listen(bridge: ReturnType<typeof createFakeBridge>) {
 }
 
 describe('the fake bridge: connection health', () => {
-  it('answers connection.get, so the command is not silently unexpected', async () => {
+  it('answers connection.get with a good connection when none is given, so the command is not silently unexpected', async () => {
     const bridge = createFakeBridge()
 
-    expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health: null } })
+    expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health: 'good' } })
   })
 
   it.each(healths)('starts with the %s health it was given', async (health) => {
@@ -23,14 +23,14 @@ describe('the fake bridge: connection health', () => {
     expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health } })
   })
 
-  it('starts with no health when none is given or null is given', async () => {
+  it('starts with no health when null is given', async () => {
     const bridge = createFakeBridge({ connection: null })
 
     expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health: null } })
   })
 
   it.each(healths)('becomes %s when the app learns it, and says so', async (health) => {
-    const bridge = createFakeBridge()
+    const bridge = createFakeBridge({ connection: null })
     const { events } = listen(bridge)
 
     bridge.setConnection(health)
@@ -68,7 +68,7 @@ describe('the fake bridge: connection health', () => {
   })
 
   it('stops raising events once the listener has stopped', () => {
-    const bridge = createFakeBridge()
+    const bridge = createFakeBridge({ connection: null })
     const { events, stop } = listen(bridge)
 
     stop()
@@ -82,6 +82,6 @@ describe('the fake bridge: connection health', () => {
     bridge.failNextWith = 'unexpected'
 
     expect(await bridge.invoke('connection.get')).toEqual({ ok: false, error: { code: 'unexpected' } })
-    expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health: null } })
+    expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health: 'good' } })
   })
 })

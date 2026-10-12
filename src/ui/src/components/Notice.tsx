@@ -1,22 +1,18 @@
+import { X } from 'lucide-react'
 import { t } from '../i18n/index.ts'
 
-export interface NoticeContent {
-  kind: 'error' | 'info'
-  text: string
-}
-
 interface NoticeProps {
-  notice: NoticeContent
+  text: string
   onDismiss: () => void
 }
 
-/** One message at a time, announced to screen readers. */
-export default function Notice({ notice, onDismiss }: NoticeProps) {
+/** A problem, at the top of the list until dismissed, announced to screen readers at once. */
+export default function Notice({ text, onDismiss }: NoticeProps) {
   return (
-    <div className={`notice notice-${notice.kind}`} role={notice.kind === 'error' ? 'alert' : 'status'}>
-      <p>{notice.text}</p>
-      <button type="button" className="quiet" onClick={onDismiss} aria-label={t('notice.dismiss')}>
-        ×
+    <div className="notice notice-error" role="alert">
+      <p>{text}</p>
+      <button type="button" className="quiet icon-only" onClick={onDismiss} aria-label={t('notice.dismiss')}>
+        <X size={18} aria-hidden="true" />
       </button>
     </div>
   )

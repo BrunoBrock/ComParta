@@ -13,6 +13,11 @@ export interface Bridge {
     command: C,
     ...args: ArgsOf<C> extends undefined ? [] : [ArgsOf<C>]
   ): Promise<CommandResult<ResultOf<C>>>
+  /**
+   * Hands files dropped onto the window to the app under a token, for `shares.addDropped`
+   * (epic 8 story 6). False when this window cannot take dropped files.
+   */
+  handOverDrop(token: string, files: File[]): boolean
   /** Returns a function that stops listening. */
   subscribe(listener: (event: EventEnvelope) => void): () => void
 }

@@ -46,7 +46,20 @@ public sealed record ShareView(Share Share, ShareStatus Status);
 /// A file on its way into the Received folder, from another person's device or from a public
 /// download link or download file (AD-21).
 /// </summary>
-public sealed record Transfer(TransferId Id, string? Name, long? SizeBytes, bool Done, DateTimeOffset AddedAt, bool Paused = false);
+public sealed record Transfer(
+    TransferId Id, string? Name, long? SizeBytes, bool Done, DateTimeOffset AddedAt, bool Paused = false,
+    TransferSource Source = TransferSource.Invite);
+
+/// <summary>Where a transfer came from, for the details window (CAP-26).</summary>
+public enum TransferSource
+{
+    /// <summary>A ComParta invite from a person.</summary>
+    Invite,
+    /// <summary>A public download link the person pasted.</summary>
+    DownloadLink,
+    /// <summary>A download file the person opened.</summary>
+    DownloadFile,
+}
 
 public enum TransferState
 {
@@ -58,16 +71,29 @@ public enum TransferState
     Done,
     /// <summary>It cannot continue; the person removes it and asks for a new invite.</summary>
     Failed,
+    /// <summary>No connection to the other device for a while; it continues by itself when one comes back.</summary>
+    Waiting,
+    /// <summary>The computer ran out of room for it; it continues by itself once there is room.</summary>
+    NoSpace,
+    /// <summary>The antivirus stopped the file (AD-13). Final, like <see cref="Failed"/>.</summary>
+    Blocked,
 }
 
-public sealed record TransferView(Transfer Transfer, TransferState State, long ReceivedBytes, long BytesPerSecond = 0)
+/// <summary>
+/// What the person sees before agreeing to receive: the hints, whether they come from a ComParta
+/// invite, and the room left for received files.
+/// </summary>
+public sealed record InvitePreview(InviteHints Hints, bool IsInvite, long? FreeBytes)
 {
-    /// <summary>Roughly how long is left at the current speed, or null when it cannot be told.</summary>
-    public long? SecondsLeft =>
-        State == TransferState.Receiving && BytesPerSecond > 0 && Transfer.SizeBytes is { } size && size > ReceivedBytes
-            ? (long)Math.Ceiling((size - ReceivedBytes) / (double)BytesPerSecond)
-            : null;
+    /// <summary>True when the size is known and larger than the room left.</summary>
+    public bool NotEnoughSpace => Hints.SizeBytes is { } size && FreeBytes is { } free && size > free;
 }
+
+/// <param name="SecondsLeft">Roughly how long is left, from a smoothed speed, or null when it cannot be told.</param>
+/// <param name="NeededBytes">With <see cref="TransferState.NoSpace"/>: how much room to free, or null when it cannot be told.</param>
+public sealed record TransferView(
+    Transfer Transfer, TransferState State, long ReceivedBytes, long BytesPerSecond = 0, long? SecondsLeft = null,
+    long? NeededBytes = null);
 
 /// <summary>
 /// The one place network behaviour is decided (AD-8). Only the engine adapter applies it.
@@ -200,6 +226,11 @@ public enum ErrorKind
     TransferNotFound,
     DownloadFileInvalid,
     TransferFinished,
+    DiskFull,
+    SettingsInvalid,
+    ReceivedNotFound,
+    ReceivedOpenFailed,
+    ShareDropFailed,
     Unexpected,
 }
 

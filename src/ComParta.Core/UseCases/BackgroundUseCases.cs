@@ -1,0 +1,177 @@
+using ComParta.Core.Ports;
+
+namespace ComParta.Core.UseCases;
+
+/// <summary>What closing the window does: hide it while there is work, else quit (AD-14).</summary>
+public enum CloseChoice { Hide, Quit }
+
+/// <summary>The answer to quitting: it goes ahead, or these files would stop moving and the person is asked first.</summary>
+public sealed record QuitAnswer(bool Quitting, IReadOnlyList<string> Moving);
+
+/// <summary>
+/// Keeps sharing when the window is closed (CAP-17, AD-14): whether there is work, whether the
+/// computer must stay awake, starting with Windows, and quitting without cutting anyone off.
+/// </summary>
+public sealed class BackgroundUseCases
+{
+    /// <summary>How long the computer stays awake after the last bytes moved.</summary>
+    public static readonly TimeSpan AwakeAfterMoving = TimeSpan.FromSeconds(45);
+
+    private const string ExplainedKey = "background.explained";
+
+    private readonly ITransferEngine _engine;
+    private readonly ShareUseCases _shares;
+    private readonly TransferUseCases _transfers;
+    private readonly SendingUseCases _sending;
+    private readonly SettingsUseCases _settings;
+    private readonly ISettingsRepository _store;
+    private readonly NotificationUseCases _notifications;
+    private readonly IBackgroundPresence _presence;
+    private readonly TimeProvider _clock;
+    private readonly object _lock = new();
+    private DateTimeOffset? _lastMoved;
+    private bool _awake;
+    private bool _explained;
+    private bool? _startWithSystem;
+
+    public BackgroundUseCases(
+        ITransferEngine engine,
+        ShareUseCases shares,
+        TransferUseCases transfers,
+        SendingUseCases sending,
+        SettingsUseCases settings,
+        ISettingsRepository store,
+        NotificationUseCases notifications,
+        IBackgroundPresence presence,
+        TimeProvider? clock = null)
+    {
+        _engine = engine;
+        _shares = shares;
+        _transfers = transfers;
+        _sending = sending;
+        _settings = settings;
+        _store = store;
+        _notifications = notifications;
+        _presence = presence;
+        _clock = clock ?? TimeProvider.System;
+        _engine.ActivityChanged += OnActivityChanged;
+        _settings.Changed += () => _ = ApplyStartWithSystemAsync();
+    }
+
+    /// <summary>Raised when quitting from outside the window found files moving; the screen asks the person.</summary>
+    public event Action<QuitAnswer>? QuitAsked;
+
+    /// <summary>Reads whether the first hide was explained already, and applies start with Windows.</summary>
+    public async Task StartAsync(CancellationToken ct = default)
+    {
+        var explained = await _store.GetAsync(ExplainedKey, ct) == "true";
+        lock (_lock)
+            _explained |= explained;
+        await ApplyStartWithSystemAsync(ct);
+    }
+
+    /// <summary>Anything shared and ready, or any transfer not finished (AD-14).</summary>
+    public bool HasActiveWork =>
+        _shares.Current().Any(view => view.Status == ShareStatus.Ready)
+        || _transfers.List().Any(view => view.State is not (TransferState.Done or TransferState.Failed or TransferState.Blocked));
+
+    /// <summary>The shell asks this when the person closes the window. The first hide says why once.</summary>
+    public CloseChoice WindowClosing()
+    {
+        if (!HasActiveWork)
+            return CloseChoice.Quit;
+        bool explain;
+        lock (_lock)
+        {
+            explain = !_explained;
+            _explained = true;
+        }
+        if (explain)
+        {
+            _notifications.ExplainBackground();
+            _ = RememberExplainedAsync();
+        }
+        return CloseChoice.Hide;
+    }
+
+    /// <summary>
+    /// What would stop if the app quit now: shared files someone is getting, and files this
+    /// computer is receiving.
+    /// </summary>
+    public IReadOnlyList<string> Moving()
+    {
+        var sending = _shares.Current()
+            .Where(view => _sending.For(view.Share.Id).ReceiverCount > 0)
+            .Select(view => view.Share.Name);
+        var receiving = _transfers.List()
+            .Where(view => view.State == TransferState.Receiving)
+            .Select(view => view.Transfer.Name ?? "");
+        return [.. sending.Concat(receiving)];
+    }
+
+    /// <summary>Quits, unless files are moving and the person has not confirmed (<paramref name="force"/>).</summary>
+    public QuitAnswer Quit(bool force)
+    {
+        var moving = force ? [] : Moving();
+        if (moving.Count > 0)
+            return new QuitAnswer(false, moving);
+        _presence.Quit();
+        return new QuitAnswer(true, []);
+    }
+
+    /// <summary>
+    /// Quitting from the icon's menu: the same check, and when files are moving the screen is asked
+    /// to confirm. Returns false when the window should be shown for that.
+    /// </summary>
+    public bool QuitFromOutside()
+    {
+        var answer = Quit(force: false);
+        if (!answer.Quitting)
+            QuitAsked?.Invoke(answer);
+        return answer.Quitting;
+    }
+
+    private void OnActivityChanged()
+    {
+        var now = _clock.GetUtcNow();
+        EngineActivity activity;
+        try { activity = _engine.GetActivity(); }
+        catch (Exception) { return; }
+        bool? change = null;
+        lock (_lock)
+        {
+            if (activity.ReceivingBytesPerSecond + activity.SendingBytesPerSecond > 0)
+                _lastMoved = now;
+            var awake = _lastMoved is { } last && now - last < AwakeAfterMoving;
+            if (awake != _awake)
+                change = _awake = awake;
+        }
+        if (change is { } keep)
+        {
+            try { _presence.KeepAwake(keep); }
+            catch (Exception) { /* the computer may sleep; the transfer continues after */ }
+        }
+    }
+
+    private async Task ApplyStartWithSystemAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var on = (await _settings.GetAsync(ct)).StartWithWindows;
+            lock (_lock)
+            {
+                if (_startWithSystem == on)
+                    return;
+                _startWithSystem = on;
+            }
+            _presence.StartWithSystem(on);
+        }
+        catch (Exception) { /* tried again at the next start */ }
+    }
+
+    private async Task RememberExplainedAsync()
+    {
+        try { await _store.SetAsync(ExplainedKey, "true"); }
+        catch (Exception) { /* explained again next time, which does no harm */ }
+    }
+}

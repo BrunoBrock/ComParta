@@ -1,4 +1,5 @@
 using System.Net;
+using ComParta.Core.Ports;
 using ComParta.Core.UseCases;
 
 namespace ComParta.Core.Tests;
@@ -131,6 +132,89 @@ public sealed class ConnectionUseCasesTests
         _engine.Report(Facts(busy: true, listening: false));
 
         Assert.Equal(ConnectionHealth.Blocked, seen);
+    }
+
+    [Theory]
+    [InlineData(true, false, PortMappingState.Obtained, "203.0.113.7", true, true, true, false)]
+    [InlineData(true, false, PortMappingState.Obtained, null, false, false, false, false)]
+    [InlineData(true, false, PortMappingState.NotRequested, null, true, true, false, false)]
+    public void A_firewall_that_refuses_incoming_connections_makes_it_blocked_whatever_else_is_true(
+        bool listening, bool busy, PortMappingState mapping, string? externalAddress,
+        bool globalIPv6, bool listeningOnIPv6, bool incoming, bool firewallAllows)
+    {
+        var facts = Facts(listening, busy, mapping, externalAddress, globalIPv6, listeningOnIPv6, incoming);
+
+        Assert.Equal(ConnectionHealth.Blocked, ConnectionUseCases.Reduce(facts, firewallAllows));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(true)]
+    public void A_firewall_that_allows_or_cannot_say_changes_nothing(bool? firewallAllows)
+    {
+        var facts = Facts(mapping: PortMappingState.Obtained);
+
+        Assert.Equal(ConnectionUseCases.Reduce(facts), ConnectionUseCases.Reduce(facts, firewallAllows));
+    }
+
+    [Fact]
+    public void Nothing_is_measured_while_nothing_is_shared_even_when_the_firewall_refuses()
+    {
+        Assert.Null(ConnectionUseCases.Reduce(Facts(listening: false), firewallAllows: false));
+    }
+
+    [Fact]
+    public void Refresh_asks_the_firewall_again_and_raises_the_change()
+    {
+        var firewall = new FakeFirewall { Allows = true };
+        var connection = new ConnectionUseCases(_engine, firewall);
+        var raised = 0;
+        connection.Changed += () => raised++;
+        Assert.Null(connection.Refresh());
+
+        _engine.Report(Facts(mapping: PortMappingState.Obtained));
+        Assert.Equal(ConnectionHealth.Good, connection.Current());
+        Assert.Equal(1, raised);
+
+        firewall.Allows = false;
+        Assert.Equal(ConnectionHealth.Blocked, connection.Refresh());
+        Assert.Equal(2, raised);
+
+        // Asked again with the same answer: no new event.
+        Assert.Equal(ConnectionHealth.Blocked, connection.Refresh());
+        Assert.Equal(2, raised);
+    }
+
+    [Fact]
+    public void A_firewall_that_cannot_be_asked_counts_as_not_decided()
+    {
+        var connection = new ConnectionUseCases(_engine, new BrokenFirewall());
+
+        _engine.Report(Facts(mapping: PortMappingState.Obtained));
+
+        Assert.Equal(ConnectionHealth.Good, connection.Current());
+    }
+
+    [Fact]
+    public async Task Opening_settings_without_a_firewall_does_nothing()
+    {
+        await Create().OpenSettingsAsync();
+    }
+
+    [Fact]
+    public async Task Opening_settings_asks_the_firewall_to_show_them()
+    {
+        var firewall = new FakeFirewall();
+
+        await new ConnectionUseCases(_engine, firewall).OpenSettingsAsync();
+
+        Assert.Equal(1, firewall.SettingsOpened);
+    }
+
+    private sealed class BrokenFirewall : IFirewall
+    {
+        public bool? AllowsIncoming() => throw new InvalidOperationException();
+        public Task OpenSettingsAsync(CancellationToken ct = default) => Task.CompletedTask;
     }
 
     [Theory]
