@@ -86,9 +86,6 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
     /// <summary>For tests: wraps the disk writer, for example to stand for a full disk.</summary>
     internal Func<IPieceWriter, IPieceWriter> WrapWriter { get; init; } = writer => writer;
 
-    /// <summary>For tests: bytes per second each item may send, so a transfer can be watched half way. 0 is no limit.</summary>
-    internal int SendRateLimit { get; init; }
-
     /// <summary>For tests: the router port mapping this engine uses.</summary>
     internal PortMapper? PortMapper => _portMapper;
 
@@ -187,7 +184,6 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
     {
         AllowDht = _policy.AllowPublicLookup,
         AllowPeerExchange = _policy.AllowPeerExchange || (publicDownload && _policy.AllowServersInDownloadLinks),
-        MaximumUploadRate = SendRateLimit,
     }.ToSettings();
 
     public async Task StopAsync()

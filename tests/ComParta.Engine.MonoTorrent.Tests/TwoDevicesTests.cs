@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using ComParta.Core;
 using ComParta.Core.Ports;
+using MonoTorrent.PieceWriter;
 
 namespace ComParta.Engine.MonoTorrent.Tests;
 
@@ -36,14 +37,13 @@ public sealed class TwoDevicesTests : IAsyncLifetime
     }
 
     private async Task<(MonoTorrentTransferEngine Engine, Paths Paths)> StartDeviceAsync(
-        string name, bool allowDownloadLinks = false, bool acceptIncoming = true, int sendRateLimit = 0, FullDiskWriter[]? disk = null)
+        string name, bool allowDownloadLinks = false, bool acceptIncoming = true, Func<IPieceWriter, IPieceWriter>? disk = null)
     {
         var paths = new Paths(Path.Combine(_folder, name));
         var engine = new MonoTorrentTransferEngine(paths)
         {
             AcceptIncoming = acceptIncoming,
-            SendRateLimit = sendRateLimit,
-            WrapWriter = disk is null ? writer => writer : writer => disk[0] = new FullDiskWriter(writer) { Full = true },
+            WrapWriter = disk ?? (writer => writer),
         };
         _engines.Add(engine);
         await engine.StartAsync(SharingPolicy.Closed with
@@ -53,6 +53,9 @@ public sealed class TwoDevicesTests : IAsyncLifetime
         });
         return (engine, paths);
     }
+
+    /// <summary>Each write waits a little, so a few megabytes take a few seconds to arrive.</summary>
+    private static IPieceWriter SlowDisk(IPieceWriter writer) => new TestDiskWriter(writer) { Delay = TimeSpan.FromMilliseconds(15) };
 
     private static TaskCompletionSource<ReceiveProgress> WhenFinished(MonoTorrentTransferEngine receiver)
     {
@@ -485,8 +488,9 @@ public sealed class TwoDevicesTests : IAsyncLifetime
     public async Task The_sender_counts_a_device_getting_the_file_and_then_one_that_finished()
     {
         var original = CreateFile("holiday.mp4", 3 * 1024 * 1024);
-        var (sender, _) = await StartDeviceAsync("sender", sendRateLimit: 1024 * 1024);
-        var (receiver, _) = await StartDeviceAsync("receiver");
+        var (sender, _) = await StartDeviceAsync("sender");
+        // A slow disk makes the transfer take a few seconds, so the sender's count can be watched.
+        var (receiver, _) = await StartDeviceAsync("receiver", disk: SlowDisk);
         var shareId = ShareId.New();
         await OfferAndWaitAsync(sender, shareId, original);
         var seen = new List<ItemActivity>();
@@ -500,18 +504,9 @@ public sealed class TwoDevicesTests : IAsyncLifetime
         var transferId = TransferId.New();
         await receiver.ReceiveAsync(transferId, (await sender.GetInviteAsync(shareId))!);
         var done = WhenFinished(receiver);
-        // Connected again every few seconds while it runs, as an invite's addresses are retried,
-        // because the limited sending makes this transfer take a while.
-        var senderAddress = new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port);
-        var until = DateTime.UtcNow + Timeout;
-        while (!done.Task.IsCompleted && DateTime.UtcNow < until)
-        {
-            try { await receiver.ConnectAsync(transferId, senderAddress); }
-            catch (KeyNotFoundException) { /* finished meanwhile */ }
-            await Task.WhenAny(done.Task, Task.Delay(TimeSpan.FromSeconds(3)));
-        }
+        await receiver.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
         Assert.True((await done.Task.WaitAsync(Timeout)).Done);
-        until = DateTime.UtcNow + Timeout;
+        var until = DateTime.UtcNow + Timeout;
         while (sender.GetActivity().Shares[shareId] is { Finished: 0 } or { Receivers: > 0 } && DateTime.UtcNow < until)
             await Task.Delay(100);
 
@@ -532,8 +527,8 @@ public sealed class TwoDevicesTests : IAsyncLifetime
     {
         var original = CreateFile("family album.zip", 2 * 1024 * 1024);
         var (sender, _) = await StartDeviceAsync("sender");
-        var disk = new FullDiskWriter[1];
-        var (receiver, receiverPaths) = await StartDeviceAsync("receiver", disk: disk);
+        TestDiskWriter? disk = null;
+        var (receiver, receiverPaths) = await StartDeviceAsync("receiver", disk: writer => disk = new TestDiskWriter(writer) { Full = true });
         var shareId = ShareId.New();
         await OfferAndWaitAsync(sender, shareId, original);
         var transferId = TransferId.New();
@@ -553,7 +548,7 @@ public sealed class TwoDevicesTests : IAsyncLifetime
         Assert.Equal(2 * 1024 * 1024, full.SizeBytes);
         Assert.False(done.Task.IsCompleted);
 
-        disk[0].Full = false;
+        disk!.Full = false;
         await receiver.ContinueReceivingAsync(transferId);
         await receiver.ConnectAsync(transferId, senderAddress);
 
@@ -565,11 +560,11 @@ public sealed class TwoDevicesTests : IAsyncLifetime
     public async Task A_transfer_continued_in_a_new_run_reports_what_it_already_has_at_once()
     {
         var original = CreateFile("long film.mp4", 4 * 1024 * 1024);
-        var (sender, _) = await StartDeviceAsync("sender", sendRateLimit: 1024 * 1024);
+        var (sender, _) = await StartDeviceAsync("sender");
         var shareId = ShareId.New();
         await OfferAndWaitAsync(sender, shareId, original);
         var paths = new Paths(Path.Combine(_folder, "receiver"));
-        var first = new MonoTorrentTransferEngine(paths);
+        var first = new MonoTorrentTransferEngine(paths) { WrapWriter = SlowDisk };
         await first.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
         var halfWay = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         first.ReceiveProgressed += progress =>
