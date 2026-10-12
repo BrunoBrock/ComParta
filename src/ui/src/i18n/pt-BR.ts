@@ -57,6 +57,7 @@ export const ptBR: Catalog = {
     'Convite de “{name}” copiado. Cole no WhatsApp ou num e-mail para a pessoa e deixe o ComParta aberto até ela receber o arquivo.',
   'shares.remove': 'Parar de compartilhar',
   'shares.removeFor': 'Parar de compartilhar {name}',
+  'shares.removed': 'Você parou de compartilhar “{name}”. O arquivo continua no seu computador.',
 
   'remove.title': 'Parar de compartilhar “{name}”?',
   'remove.body':

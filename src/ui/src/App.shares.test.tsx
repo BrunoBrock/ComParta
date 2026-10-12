@@ -6,6 +6,7 @@ import {
   album,
   setup,
   sharesSection,
+  railButton,
 } from './test/appHarness.tsx'
 
 describe('the list of my shares', () => {
@@ -48,7 +49,7 @@ describe('adding a file', () => {
     const { bridge, user } = setup()
     bridge.nextPick = { name: 'Recipe.pdf', sizeBytes: 482_113 }
 
-    await user.click(await screen.findByRole('button', { name: en['shares.add'] }))
+    await user.click(await railButton(en['shares.add']))
 
     expect(await screen.findByText('Recipe.pdf')).toBeInTheDocument()
     expect(screen.getByText('471 KB')).toBeInTheDocument()
@@ -58,7 +59,7 @@ describe('adding a file', () => {
     const { bridge, user } = setup({ shares: [video] })
     bridge.nextPick = { name: video.name, sizeBytes: video.sizeBytes }
 
-    await user.click(await screen.findByRole('button', { name: en['shares.add'] }))
+    await user.click(await railButton(en['shares.add']))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(en['error.share.duplicate'])
     expect(within(sharesSection()).getAllByRole('listitem')).toHaveLength(1)
@@ -68,7 +69,7 @@ describe('adding a file', () => {
     const { bridge, user } = setup()
     bridge.nextPick = { name: 'Empty.txt', sizeBytes: 0 }
 
-    await user.click(await screen.findByRole('button', { name: en['shares.add'] }))
+    await user.click(await railButton(en['shares.add']))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(en['error.file.unreadable'])
   })
@@ -77,7 +78,7 @@ describe('adding a file', () => {
     const { bridge, user } = setup()
     bridge.nextPick = null
 
-    await user.click(await screen.findByRole('button', { name: en['shares.add'] }))
+    await user.click(await railButton(en['shares.add']))
 
     expect(await screen.findByText(en['shares.empty'])).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()

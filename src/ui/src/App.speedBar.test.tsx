@@ -8,6 +8,7 @@ import {
   sharesSection,
   transfersSection,
   goToReceived,
+  railButton,
 } from './test/appHarness.tsx'
 
 describe('the speed bar', () => {
@@ -161,7 +162,7 @@ describe('the details of a file', () => {
 
   it('remembers how a download file was received', async () => {
     const { user } = setup()
-    await user.click(await screen.findByRole('button', { name: en['transfers.open'] }))
+    await user.click(await railButton(en['transfers.open']))
     await user.click(screen.getByRole('button', { name: en['receive.openFile'] }))
     await goToReceived(user)
 

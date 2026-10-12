@@ -1,4 +1,4 @@
-import { Check, Copy, Trash2 } from 'lucide-react'
+import { Check, Copy, Plus, Trash2, Upload } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { getComPartaUrl } from '../appLinks.ts'
 import type { Bridge, ErrorCode, ShareDto } from '../bridge/index.ts'
@@ -10,6 +10,8 @@ import ItemView, { type ViewMode } from './ItemView.tsx'
 import type { ChipTone } from './ui/StatusChip.tsx'
 import RemoveShareDialog from './RemoveShareDialog.tsx'
 import SectionHead from './SectionHead.tsx'
+import Button from './ui/Button.tsx'
+import EmptyState from './ui/EmptyState.tsx'
 
 interface SharesSectionProps {
   bridge: Bridge
@@ -28,12 +30,15 @@ interface SharesSectionProps {
   /** Sending is stopped from the speed bar, so every ready share reads "Stopped". */
   stopped: boolean
   onDetails: (item: DetailsOf) => void
+  /** The section's primary action, offered when it is empty. */
+  adding: boolean
+  onAdd: () => void
 }
 
 const tones: Record<ShareDto['status'], ChipTone> = { preparing: 'busy', ready: 'ok', unavailable: 'warn' }
 
 export default function SharesSection(props: SharesSectionProps) {
-  const { bridge, shares, query, view, onViewChange, sort, onSortChange, onError, onInfo, onStart, onClearSearch, stopped, onDetails } =
+  const { bridge, shares, query, view, onViewChange, sort, onSortChange, onError, onInfo, onStart, onClearSearch, stopped, onDetails, adding, onAdd } =
     props
   // View state only: which share the confirmation is open for.
   const [removing, setRemoving] = useState<ShareDto | null>(null)
@@ -66,7 +71,8 @@ export default function SharesSection(props: SharesSectionProps) {
     setRemoving(null)
     onStart()
     const result = await bridge.invoke('shares.remove', { id: share.id })
-    if (!result.ok) onError(result.error.code)
+    if (result.ok) onInfo(t('shares.removed', { name: share.name }))
+    else onError(result.error.code)
   }
 
   const found = shares?.filter((share) => matches(share.name, query))
@@ -80,7 +86,17 @@ export default function SharesSection(props: SharesSectionProps) {
         onSortChange={onSortChange}
       />
 
-      {shares !== null && shares.length === 0 && <p className="empty">{t('shares.empty')}</p>}
+      {shares !== null && shares.length === 0 && (
+        <EmptyState
+          icon={Upload}
+          text={t('shares.empty')}
+          action={
+            <Button variant="primary" icon={Plus} onClick={onAdd} disabled={adding}>
+              {t('shares.add')}
+            </Button>
+          }
+        />
+      )}
       {shares !== null && shares.length > 0 && shown!.length === 0 && (
         <p className="empty">
           {t('search.none', { query: query.trim() })}{' '}

@@ -28,11 +28,14 @@ export const sharesSection = () => screen.getByRole('region', { name: en['shares
 export const transfersSection = () => screen.getByRole('region', { name: en['transfers.heading'] })
 export const navButton = (label: string) =>
   within(screen.getByRole('navigation', { name: en['nav.label'] })).getByRole('button', { name: new RegExp(`^${label}`) })
+/** One of the rail's two actions; empty sections offer the same buttons, so the rail is named. */
+export const railButton = async (label: string) =>
+  within(await screen.findByRole('complementary')).getByRole('button', { name: label })
 export const goToReceived = (user: User) => user.click(navButton(en['nav.received']))
 
 /** Types the text into the receive box and continues; stops at the confirmation or the problem. */
 export async function enterInvite(user: User, invite: string) {
-  await user.click(await screen.findByRole('button', { name: en['transfers.open'] }))
+  await user.click(await railButton(en['transfers.open']))
   const dialog = screen.getByRole('dialog', { name: en['receive.title'] })
   await user.type(within(dialog).getByLabelText(en['transfers.inviteLabel']), invite)
   await user.click(within(dialog).getByRole('button', { name: en['receive.continue'] }))

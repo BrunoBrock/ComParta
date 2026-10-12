@@ -1,4 +1,4 @@
-import { CircleHelp, FolderOpen, Pause, Play, X } from 'lucide-react'
+import { CircleHelp, Download, FolderOpen, Inbox, Pause, Play, X } from 'lucide-react'
 import type { Bridge, ErrorCode, TransferDto } from '../bridge/index.ts'
 import { formatSize, formatTimeLeft, percentOf, t } from '../i18n/index.ts'
 import { inOrder, type SortOrder } from '../order.ts'
@@ -6,6 +6,8 @@ import { matches } from '../search.ts'
 import type { DetailsOf } from './DetailsWindow.tsx'
 import ItemView, { type ViewMode } from './ItemView.tsx'
 import SectionHead from './SectionHead.tsx'
+import Button from './ui/Button.tsx'
+import EmptyState from './ui/EmptyState.tsx'
 import type { ChipTone } from './ui/StatusChip.tsx'
 
 interface TransfersSectionProps {
@@ -26,6 +28,8 @@ interface TransfersSectionProps {
   /** Receiving is stopped from the speed bar, so every unfinished transfer reads "Stopped". */
   stopped: boolean
   onDetails: (item: DetailsOf) => void
+  /** The section's primary action, offered when it is empty. */
+  onReceive: () => void
 }
 
 const tones: Record<TransferDto['state'], ChipTone> = {
@@ -78,6 +82,7 @@ export default function TransfersSection(props: TransfersSectionProps) {
     onHelp,
     stopped,
     onDetails,
+    onReceive,
   } = props
 
   async function remove(transfer: TransferDto) {
@@ -115,7 +120,17 @@ export default function TransfersSection(props: TransfersSectionProps) {
         </button>
       </SectionHead>
 
-      {transfers !== null && transfers.length === 0 && <p className="empty">{t('transfers.empty')}</p>}
+      {transfers !== null && transfers.length === 0 && (
+        <EmptyState
+          icon={Inbox}
+          text={t('transfers.empty')}
+          action={
+            <Button variant="primary" icon={Download} onClick={onReceive}>
+              {t('transfers.open')}
+            </Button>
+          }
+        />
+      )}
       {transfers !== null && transfers.length > 0 && shown!.length === 0 && (
         <p className="empty">
           {t('search.none', { query: query.trim() })}{' '}

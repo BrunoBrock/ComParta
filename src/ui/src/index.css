@@ -1225,3 +1225,10 @@ dialog.sheet {
     white-space: nowrap;
   }
 }
+
+/* On phones the toast sits above the bottom bar and the floating button. */
+@media (max-width: 600px) {
+  .toast {
+    bottom: 176px;
+  }
+}

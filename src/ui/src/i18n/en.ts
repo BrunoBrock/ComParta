@@ -53,6 +53,7 @@ export const en = {
     'Invite for “{name}” copied. Paste it into WhatsApp or an email to the person, and keep ComParta open until they have the file.',
   'shares.remove': 'Stop sharing',
   'shares.removeFor': 'Stop sharing {name}',
+  'shares.removed': 'Stopped sharing “{name}”. The file is still on your computer.',
 
   'remove.title': 'Stop sharing “{name}”?',
   'remove.body':

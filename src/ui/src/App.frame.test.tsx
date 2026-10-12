@@ -2,7 +2,7 @@ import { screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { en } from './i18n/en.ts'
 import { accessibilityProblems } from './test/axe.ts'
-import { setup, transfersSection } from './test/appHarness.tsx'
+import { goToReceived, setup, sharesSection, transfersSection, video } from './test/appHarness.tsx'
 
 const header = () => screen.getByRole('banner')
 const rail = () => screen.getByRole('complementary')
@@ -72,5 +72,28 @@ describe('the frame around the files', () => {
     await user.click(within(rail()).getByRole('button', { name: new RegExp(`^${en['nav.received']}`) }))
 
     expect(transfersSection()).toBeInTheDocument()
+  })
+
+  it('offers each empty section its main action', async () => {
+    const { user } = setup()
+    expect(await screen.findByText(en['shares.empty'])).toBeInTheDocument()
+
+    await user.click(within(sharesSection()).getByRole('button', { name: en['shares.add'] }))
+    expect(await within(sharesSection()).findByText('Birthday party.mp4')).toBeInTheDocument()
+
+    await goToReceived(user)
+    await user.click(within(transfersSection()).getByRole('button', { name: en['transfers.open'] }))
+    expect(screen.getByRole('dialog', { name: en['receive.title'] })).toBeInTheDocument()
+  })
+
+  it('confirms stopping a share with a toast that can be closed', async () => {
+    const { user } = setup({ shares: [video] })
+    await user.click(await screen.findByRole('button', { name: `Stop sharing ${video.name}` }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: en['remove.confirm'] }))
+
+    const toast = await screen.findByRole('status')
+    expect(toast).toHaveTextContent(`Stopped sharing “${video.name}”`)
+    await user.click(within(toast).getByRole('button', { name: en['notice.dismiss'] }))
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 })

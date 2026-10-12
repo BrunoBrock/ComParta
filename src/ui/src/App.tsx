@@ -17,7 +17,7 @@ import ConnectionHelp from './components/ConnectionHelp.tsx'
 import DetailsWindow, { type DetailsOf } from './components/DetailsWindow.tsx'
 import HelpDialog from './components/HelpDialog.tsx'
 import type { ViewMode } from './components/ItemView.tsx'
-import Notice, { type NoticeContent } from './components/Notice.tsx'
+import Notice from './components/Notice.tsx'
 import Rail, { type Section } from './components/Rail.tsx'
 import ReceiveDialog from './components/ReceiveDialog.tsx'
 import SettingsDialog from './components/SettingsDialog.tsx'
@@ -25,6 +25,7 @@ import SharesSection from './components/SharesSection.tsx'
 import SpeedBar from './components/SpeedBar.tsx'
 import TransfersSection from './components/TransfersSection.tsx'
 import IconButton from './components/ui/IconButton.tsx'
+import Toast from './components/ui/Toast.tsx'
 import { errorMessage, getLanguage, type Language, pickLanguage, setLanguage, t } from './i18n/index.ts'
 import type { SortOrder } from './order.ts'
 
@@ -48,7 +49,9 @@ const isWaiting = (transfer: TransferDto) =>
 export default function App({ bridge }: AppProps) {
   const [shares, setShares] = useState<ShareDto[] | null>(null)
   const [transfers, setTransfers] = useState<TransferDto[] | null>(null)
-  const [notice, setNotice] = useState<NoticeContent | null>(null)
+  // Errors stay until dismissed; confirmations are toasts that go by themselves (UX design, Toasts).
+  const [notice, setNotice] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ text: string; id: number } | null>(null)
   const [section, setSection] = useState<Section>('shared')
   const [view, setView] = useState<ViewMode>('grid')
   const [sort, setSort] = useState<SortOrder>('added')
@@ -72,8 +75,9 @@ export default function App({ bridge }: AppProps) {
   // When this screen first saw each transfer waiting for the other computer.
   const waitingSince = useRef(new Map<string, number>())
 
-  const showError = useCallback((code: ErrorCode) => setNotice({ kind: 'error', text: errorMessage(code) }), [])
-  const showInfo = useCallback((text: string) => setNotice({ kind: 'info', text }), [])
+  const showError = useCallback((code: ErrorCode) => setNotice(errorMessage(code)), [])
+  const showInfo = useCallback((text: string) => setToast((current) => ({ text, id: (current?.id ?? 0) + 1 })), [])
+  const clearToast = useCallback(() => setToast(null), [])
   const clearNotice = useCallback(() => setNotice(null), [])
   const clearSearch = useCallback(() => setQuery(''), [])
 
@@ -257,6 +261,8 @@ export default function App({ bridge }: AppProps) {
       onSortChange={changeSort}
       onError={showError}
       onInfo={showInfo}
+      adding={adding}
+      onAdd={add}
       onStart={clearNotice}
       onClearSearch={clearSearch}
       stopped={activity?.sendingStopped ?? false}
@@ -279,6 +285,7 @@ export default function App({ bridge }: AppProps) {
       onHelp={() => setHelping(true)}
       stopped={activity?.receivingStopped ?? false}
       onDetails={setDetails}
+      onReceive={startReceiving}
     />
   )
 
@@ -329,9 +336,11 @@ export default function App({ bridge }: AppProps) {
       <ActionButton adding={adding} onAdd={add} onReceive={startReceiving} />
 
       <main className="content">
-        {notice && <Notice notice={notice} onDismiss={clearNotice} />}
+        {notice && <Notice text={notice} onDismiss={clearNotice} />}
         {section === 'shared' ? shared : received}
       </main>
+
+      {toast && <Toast key={toast.id} text={toast.text} closeLabel={t('notice.dismiss')} onClose={clearToast} />}
 
       {details && (
         <DetailsWindow
