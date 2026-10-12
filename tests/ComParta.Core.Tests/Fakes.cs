@@ -33,6 +33,7 @@ internal sealed class FakeEngine : ITransferEngine
 
     public event Action<ShareId, OfferState>? OfferChanged;
     public event Action<ReceiveProgress>? ReceiveProgressed;
+    public event Action<ReachabilityFacts>? ReachabilityChanged;
 
     public SharingPolicy? Policy { get; private set; }
     public Dictionary<ShareId, string> Offered { get; } = [];
@@ -99,6 +100,8 @@ internal sealed class FakeEngine : ITransferEngine
     public Task ContinueReceivingAsync(TransferId id, CancellationToken ct = default) { Paused.Remove(id); return Task.CompletedTask; }
 
     public void Report(ReceiveProgress progress) => ReceiveProgressed?.Invoke(progress);
+
+    public void Report(ReachabilityFacts facts) => ReachabilityChanged?.Invoke(facts);
 }
 
 internal sealed class FakeFilePicker : IFilePicker

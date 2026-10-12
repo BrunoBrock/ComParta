@@ -27,6 +27,11 @@ public interface ITransferEngine
 {
     event Action<ShareId, OfferState>? OfferChanged;
     event Action<ReceiveProgress>? ReceiveProgressed;
+    /// <summary>
+    /// The engine's current observations about being reachable, raised whenever they differ from the
+    /// last report. Facts only: core decides what they mean (AD-15).
+    /// </summary>
+    event Action<ReachabilityFacts>? ReachabilityChanged;
 
     Task StartAsync(SharingPolicy policy, CancellationToken ct = default);
     Task StopAsync();

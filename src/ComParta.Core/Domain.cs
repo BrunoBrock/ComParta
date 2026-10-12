@@ -1,3 +1,6 @@
+using System.Net;
+using System.Net.Sockets;
+
 namespace ComParta.Core;
 
 public readonly record struct ShareId(Guid Value)
@@ -101,6 +104,89 @@ public sealed record SharingPolicy(
 
     /// <summary>No discovery at all; used by tests that connect two devices by hand.</summary>
     public static SharingPolicy Closed { get; } = new(false, false, false, false, false, false, true, 0);
+}
+
+/// <summary>
+/// How likely it is that another device can reach this computer. There is no value for "not
+/// measured": while nothing is shared or received the health is simply absent (null).
+/// </summary>
+public enum ConnectionHealth
+{
+    /// <summary>Another device can reach this computer.</summary>
+    Good,
+    /// <summary>Only some other devices can, for example when the router shares one address among homes.</summary>
+    Limited,
+    /// <summary>Nothing can reach this computer from outside.</summary>
+    Blocked,
+}
+
+/// <summary>What became of asking the router to let connections in.</summary>
+public enum PortMappingState
+{
+    /// <summary>The policy does not ask the router, or nothing has been asked yet.</summary>
+    NotRequested,
+    /// <summary>The router has not answered yet.</summary>
+    Pending,
+    /// <summary>The router agreed.</summary>
+    Obtained,
+    /// <summary>The router said no, or nothing answered within thirty seconds.</summary>
+    Refused,
+}
+
+/// <summary>
+/// What the engine observes about being reachable, with no judgement attached (AD-15). Core turns
+/// these into a <see cref="ConnectionHealth"/>; the engine never decides what they mean.
+/// </summary>
+/// <param name="Listening">The engine accepts connections on its port.</param>
+/// <param name="ListenPortBusy">Something else already uses the port, so nothing can connect.</param>
+/// <param name="PortMapping">What became of asking the router.</param>
+/// <param name="ExternalPort">The port the router opened to the outside, when it agreed.</param>
+/// <param name="ExternalAddress">The router's address as seen from the internet; null when not read yet.</param>
+/// <param name="GlobalIPv6Present">This computer has an internet-wide IPv6 address.</param>
+/// <param name="ListeningOnIPv6">The engine accepts connections on IPv6 too.</param>
+/// <param name="IncomingConnectionSeenRecently">Another device from outside the local network connected within the last hour.</param>
+public sealed record ReachabilityFacts(
+    bool Listening,
+    bool ListenPortBusy,
+    PortMappingState PortMapping,
+    int? ExternalPort,
+    IPAddress? ExternalAddress,
+    bool GlobalIPv6Present,
+    bool ListeningOnIPv6,
+    bool IncomingConnectionSeenRecently);
+
+/// <summary>Which addresses lead outside the local network.</summary>
+public static class NetworkAddresses
+{
+    /// <summary>
+    /// True for an address that anyone on the internet can use to reach a device. False for this
+    /// computer itself, home and company networks (10/8, 172.16/12, 192.168/16), the range
+    /// internet providers share among homes (100.64/10), self-assigned addresses and addresses
+    /// that are not for one device. IPv6 counts when it is an internet-wide unicast address.
+    /// </summary>
+    public static bool IsPublic(IPAddress address)
+    {
+        if (address.IsIPv4MappedToIPv6)
+            address = address.MapToIPv4();
+
+        var bytes = address.GetAddressBytes();
+        if (address.AddressFamily == AddressFamily.InterNetwork)
+        {
+            return bytes[0] switch
+            {
+                0 or 10 or 127 => false,
+                >= 224 => false,
+                100 => bytes[1] is < 64 or > 127,
+                169 => bytes[1] != 254,
+                172 => bytes[1] is < 16 or > 31,
+                192 => bytes[1] != 168,
+                _ => true,
+            };
+        }
+
+        // Internet-wide IPv6 addresses are handed out from 2000::/3.
+        return address.AddressFamily == AddressFamily.InterNetworkV6 && (bytes[0] & 0xE0) == 0x20;
+    }
 }
 
 public enum ErrorKind

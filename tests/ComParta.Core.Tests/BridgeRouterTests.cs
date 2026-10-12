@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using ComParta.Contracts;
 using ComParta.Core.Ports;
@@ -21,7 +22,7 @@ public sealed class BridgeRouterTests
     {
         var shares = new ShareUseCases(new FakeShareRepository(), _engine, _picker, _files);
         var transfers = new TransferUseCases(new FakeTransferRepository(), _engine, picker: _picker, files: _files);
-        _router = new BridgeRouter(shares, transfers, _shell, _shell);
+        _router = new BridgeRouter(shares, transfers, new ConnectionUseCases(_engine), _shell, _shell);
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
         _picker.NextPick = Video;
@@ -174,6 +175,51 @@ public sealed class BridgeRouterTests
 
         Assert.True((await InvokeAsync(Commands.ReceivedOpenFolder)).GetProperty("ok").GetBoolean());
         Assert.Equal(1, _shell.Opened);
+    }
+
+    [Fact]
+    public async Task The_connection_health_is_null_while_nothing_is_shared_or_received()
+    {
+        var result = await InvokeAsync(Commands.ConnectionGet);
+
+        Assert.True(result.GetProperty("ok").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("value").GetProperty("health").ValueKind);
+    }
+
+    [Theory]
+    [InlineData(PortMappingState.Obtained, null, "good")]
+    [InlineData(PortMappingState.Obtained, "192.168.1.1", "limited")]
+    [InlineData(PortMappingState.Refused, null, "blocked")]
+    public async Task The_connection_health_is_asked_for_and_pushed_as_the_engine_learns_more(
+        PortMappingState mapping, string? externalAddress, string expected)
+    {
+        _engine.Report(new ReachabilityFacts(
+            true, false, mapping, null, externalAddress is null ? null : IPAddress.Parse(externalAddress), false, false, false));
+
+        var asked = await InvokeAsync(Commands.ConnectionGet);
+        Assert.Equal(expected, asked.GetProperty("value").GetProperty("health").GetString());
+
+        var pushed = Assert.Single(_events, e => e.GetProperty("event").GetString() == Events.ConnectionChanged);
+        Assert.Equal(expected, pushed.GetProperty("payload").GetProperty("health").GetString());
+    }
+
+    [Fact]
+    public void Connection_events_are_sent_only_when_the_health_changes_and_when_it_becomes_unknown()
+    {
+        var blocked = new ReachabilityFacts(true, false, PortMappingState.Refused, null, null, false, false, false);
+        var idle = blocked with { Listening = false };
+
+        _engine.Report(blocked);
+        _engine.Report(blocked with { ExternalPort = 1234 });
+        _engine.Report(idle);
+
+        var payloads = _events
+            .Where(e => e.GetProperty("event").GetString() == Events.ConnectionChanged)
+            .Select(e => e.GetProperty("payload").GetProperty("health"))
+            .ToList();
+        Assert.Equal(2, payloads.Count);
+        Assert.Equal("blocked", payloads[0].GetString());
+        Assert.Equal(JsonValueKind.Null, payloads[1].ValueKind);
     }
 
     [Fact]

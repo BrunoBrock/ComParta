@@ -14,17 +14,21 @@ public sealed class BridgeRouter
 {
     private readonly ShareUseCases _shares;
     private readonly TransferUseCases _transfers;
+    private readonly ConnectionUseCases _connection;
     private readonly IClipboard _clipboard;
     private readonly IContentOpener _opener;
 
-    public BridgeRouter(ShareUseCases shares, TransferUseCases transfers, IClipboard clipboard, IContentOpener opener)
+    public BridgeRouter(
+        ShareUseCases shares, TransferUseCases transfers, ConnectionUseCases connection, IClipboard clipboard, IContentOpener opener)
     {
         _shares = shares;
         _transfers = transfers;
+        _connection = connection;
         _clipboard = clipboard;
         _opener = opener;
         _shares.Changed += () => Raise(Events.SharesChanged, _shares.Current().Select(ToDto).ToArray());
         _transfers.Changed += () => Raise(Events.TransfersChanged, _transfers.List().Select(ToDto).ToArray());
+        _connection.Changed += () => Raise(Events.ConnectionChanged, ToDto(_connection.Current()));
     }
 
     /// <summary>An event envelope as JSON, ready to be sent to the UI.</summary>
@@ -106,6 +110,9 @@ public sealed class BridgeRouter
                 await _opener.OpenReceivedFolderAsync();
                 return CommandResult.Success(null);
 
+            case Commands.ConnectionGet:
+                return CommandResult.Success(ToDto(_connection.Current()));
+
             default:
                 return CommandResult.Failure(ErrorCodes.Unexpected);
         }
@@ -153,6 +160,14 @@ public sealed class BridgeRouter
         },
         view.BytesPerSecond,
         view.SecondsLeft);
+
+    public static ConnectionDto ToDto(ConnectionHealth? health) => new(health switch
+    {
+        ConnectionHealth.Good => ConnectionHealthDto.Good,
+        ConnectionHealth.Limited => ConnectionHealthDto.Limited,
+        ConnectionHealth.Blocked => ConnectionHealthDto.Blocked,
+        _ => null,
+    });
 
     public static string ToCode(ErrorKind error) => error switch
     {

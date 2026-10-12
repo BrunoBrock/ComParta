@@ -23,6 +23,7 @@ namespace ComParta.Engine.MonoTorrent;
 public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposable
 {
     private static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan ReachabilityInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan HintRetryInterval = TimeSpan.FromSeconds(20);
 
     // The magnet-link parameter for "a peer address to try directly" (BEP 9).
@@ -42,10 +43,28 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
     private ClientEngine? _engine;
     private SharingPolicy _policy = SharingPolicy.Closed;
     private Timer? _progressTimer;
+    private Timer? _reachabilityTimer;
     private int _reporting;
+    private readonly object _reachabilityGate = new();
+    private ReachabilityFacts? _lastReachability;
+    private readonly Factories _factories;
+    private readonly ReachabilityProbe _probe;
 
     public MonoTorrentTransferEngine(IAppPaths paths)
+        : this(paths, Factories.Default, TimeProvider.System)
     {
+    }
+
+    /// <param name="factories">What the engine builds its parts from; tests swap in a fake router.</param>
+    /// <param name="clock">Times the one-hour window of an incoming connection from outside.</param>
+    /// <param name="isOutsideLocalNetwork">Which addresses count as outside the local network; the usual rule when null.</param>
+    internal MonoTorrentTransferEngine(
+        IAppPaths paths, Factories factories, TimeProvider clock, Func<IPAddress, bool>? isOutsideLocalNetwork = null)
+    {
+        _probe = new ReachabilityProbe(clock, isOutsideLocalNetwork);
+        // Every listener the engine creates is remembered so its status can be read (AD-15).
+        _factories = factories.WithPeerConnectionListenerCreator(
+            endPoint => _probe.Track(endPoint, factories.CreatePeerConnectionListener(endPoint)));
         _sharesFolder = Path.Combine(paths.EngineRoot, "shares");
         _transfersFolder = Path.Combine(paths.EngineRoot, "transfers");
         _cacheFolder = Path.Combine(paths.EngineRoot, "cache");
@@ -56,6 +75,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
 
     public event Action<ShareId, OfferState>? OfferChanged;
     public event Action<ReceiveProgress>? ReceiveProgressed;
+    public event Action<ReachabilityFacts>? ReachabilityChanged;
 
     /// <summary>The endpoint this engine was told to accept connections on. For tests.</summary>
     internal IPEndPoint? ListenEndPoint => _engine?.Settings.ListenEndPoints.Values.FirstOrDefault();
@@ -68,10 +88,44 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
 
         // A port of 0 means "choose one and keep it", so invites given out earlier stay good.
         _policy = policy.ListenPort == 0 ? policy with { ListenPort = LoadOrChoosePort() } : policy;
-        _engine = new ClientEngine(ToEngineSettings(_policy, _cacheFolder));
+        _probe.Reset();
+        lock (_reachabilityGate)
+            _lastReachability = null;
+        _engine = new ClientEngine(ToEngineSettings(_policy, _cacheFolder), _factories);
         _progressTimer = new Timer(_ => ReportProgress(), null, ProgressInterval, ProgressInterval);
+        _reachabilityTimer = new Timer(_ => ReportReachability(), null, ReachabilityInterval, ReachabilityInterval);
         return Task.CompletedTask;
     }
+
+    /// <summary>The facts about being reachable as they are right now. For tests and the report loop.</summary>
+    internal ReachabilityFacts ReadReachability() => _probe.Read(_policy, _engine);
+
+    /// <summary>Raises <see cref="ReachabilityChanged"/> when the facts differ from the last report.</summary>
+    internal void ReportReachability()
+    {
+        // One report at a time, so reports reach listeners in order and a direct call always reports.
+        lock (_reachabilityGate)
+        {
+            try
+            {
+                var facts = ReadReachability();
+                if (facts == _lastReachability)
+                    return;
+                _lastReachability = facts;
+                ReachabilityChanged?.Invoke(facts);
+            }
+            catch (Exception)
+            {
+                // A report must never take the timer down. The facts are stored before the event is
+                // raised and an unchanged answer is not raised again, so a delivery that failed is
+                // dropped, not retried: the bridge's connection.get always has the current answer.
+            }
+        }
+    }
+
+    /// <summary>Tells the probe about connections other devices make to this manager's transfer.</summary>
+    private void WatchIncoming(TorrentManager manager) =>
+        manager.PeerConnected += (_, args) => _probe.NoteConnection(args.Direction, args.Peer.Uri);
 
     /// <summary>The only place network options are set, and only from the policy (AD-8).</summary>
     internal static EngineSettings ToEngineSettings(SharingPolicy policy, string cacheFolder)
@@ -137,6 +191,11 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
             _progressTimer = null;
             await timer.DisposeAsync();
         }
+        if (_reachabilityTimer is { } reachabilityTimer)
+        {
+            _reachabilityTimer = null;
+            await reachabilityTimer.DisposeAsync();
+        }
         foreach (var offer in _offers.Values)
             offer.Cancel.Cancel();
         if (_engine is { } engine)
@@ -180,6 +239,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
 
                 // The save directory is the folder the file already sits in, so it is read where it is (AD-6).
                 var manager = await engine.AddAsync(torrent, Path.GetDirectoryName(offer.FilePath)!, ToTorrentSettings());
+                WatchIncoming(manager);
                 offer.Manager = manager;
                 await manager.HashCheckAsync(false);
                 offer.Cancel.Token.ThrowIfCancellationRequested();
@@ -381,6 +441,7 @@ public sealed class MonoTorrentTransferEngine : ITransferEngine, IAsyncDisposabl
             var incoming = new Incoming(id, manager, folder, hints);
             _incoming[id] = incoming;
             manager.TorrentStateChanged += (_, _) => CheckContained(incoming);
+            WatchIncoming(manager);
             await manager.StartAsync();
             await TryHintsAsync(incoming);
             return true;

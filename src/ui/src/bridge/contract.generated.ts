@@ -4,6 +4,8 @@ export type ShareStatusDto = "preparing" | "ready" | "unavailable";
 
 export type TransferStateDto = "connecting" | "receiving" | "paused" | "done" | "failed";
 
+export type ConnectionHealthDto = "good" | "limited" | "blocked";
+
 export interface ShareDto {
   id: string;
   name: string;
@@ -27,6 +29,10 @@ export interface TransferDto {
 
 export interface ReceiveArgs {
   invite: string;
+}
+
+export interface ConnectionDto {
+  health: ConnectionHealthDto | null;
 }
 
 export const errorCodes = [
@@ -56,11 +62,13 @@ export interface Commands {
   "transfers.pause": { args: IdArgs; result: null };
   "transfers.resume": { args: IdArgs; result: null };
   "received.openFolder": { args: undefined; result: null };
+  "connection.get": { args: undefined; result: ConnectionDto };
 }
 
 export interface Events {
   "shares.changed": ShareDto[];
   "transfers.changed": TransferDto[];
+  "connection.changed": ConnectionDto;
 }
 
 export type CommandResult<T> = { ok: true; value: T } | { ok: false; error: { code: ErrorCode } };

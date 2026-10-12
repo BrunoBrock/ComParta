@@ -1,6 +1,8 @@
 import type { Bridge } from './bridge.ts'
 import type {
   CommandResult,
+  ConnectionDto,
+  ConnectionHealthDto,
   ErrorCode,
   EventEnvelope,
   IdArgs,
@@ -17,6 +19,8 @@ export interface PickedFile {
 export interface FakeBridgeOptions {
   shares?: ShareDto[]
   transfers?: TransferDto[]
+  /** Whether another device can reach this computer; null (the default) while nothing is shared or received. */
+  connection?: ConnectionHealthDto | null
   /** Milliseconds a new share stays "preparing" and between steps of a transfer. 0 means never advance on its own. */
   stepMs?: number
 }
@@ -34,6 +38,11 @@ export interface FakeBridge extends Bridge {
   /** Change state from outside, as the app does when something happens on its own. */
   setShares(shares: ShareDto[]): void
   setTransfers(transfers: TransferDto[]): void
+  /**
+   * Change the connection health, as the app does when it learns more; null means it cannot be told.
+   * Setting the value it already has raises no event, as in the app.
+   */
+  setConnection(health: ConnectionHealthDto | null): void
 }
 
 const invitePrefix = 'comparta-invite:'
@@ -54,6 +63,7 @@ const samplePicks: PickedFile[] = [
 export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   let shares = [...(options.shares ?? [])]
   let transfers = [...(options.transfers ?? [])]
+  let connection: ConnectionHealthDto | null = options.connection ?? null
   let nextId = 1
   let nextSample = 0
   const stepMs = options.stepMs ?? 0
@@ -62,6 +72,8 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   const emit = (event: EventEnvelope) => listeners.forEach((listener) => listener(event))
   const emitShares = () => emit({ event: 'shares.changed', payload: [...shares] })
   const emitTransfers = () => emit({ event: 'transfers.changed', payload: [...transfers] })
+  const connectionDto = (): ConnectionDto => ({ health: connection })
+  const emitConnection = () => emit({ event: 'connection.changed', payload: connectionDto() })
   const newId = () => `fake-${nextId++}`
 
   const updateTransfer = (id: string, change: Partial<TransferDto>) => {
@@ -201,6 +213,8 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       fake.openedFolder++
       return ok(null)
     },
+
+    'connection.get': () => ok(connectionDto()),
   }
 
   const fake = {
@@ -232,6 +246,12 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     setTransfers(next: TransferDto[]) {
       transfers = [...next]
       emitTransfers()
+    },
+
+    setConnection(health: ConnectionHealthDto | null) {
+      if (health === connection) return
+      connection = health
+      emitConnection()
     },
   }
 

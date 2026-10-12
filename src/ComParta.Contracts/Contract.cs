@@ -19,12 +19,14 @@ public static class Commands
     public const string TransfersPause = "transfers.pause";
     public const string TransfersResume = "transfers.resume";
     public const string ReceivedOpenFolder = "received.openFolder";
+    public const string ConnectionGet = "connection.get";
 }
 
 public static class Events
 {
     public const string SharesChanged = "shares.changed";
     public const string TransfersChanged = "transfers.changed";
+    public const string ConnectionChanged = "connection.changed";
 }
 
 /// <summary>Stable codes; the words for them live in the UI's translation catalog (AD-11).</summary>
@@ -51,6 +53,12 @@ public static class ErrorCodes
 public enum ShareStatusDto { Preparing, Ready, Unavailable }
 
 public enum TransferStateDto { Connecting, Receiving, Paused, Done, Failed }
+
+/// <summary>Whether another device can reach this computer. The words for it live in the UI (AD-11).</summary>
+public enum ConnectionHealthDto { Good, Limited, Blocked }
+
+/// <param name="Health">Null while nothing is shared or received, or the router has not answered yet.</param>
+public sealed record ConnectionDto(ConnectionHealthDto? Health);
 
 public sealed record ShareDto(string Id, string Name, long SizeBytes, ShareStatusDto Status);
 
@@ -99,12 +107,14 @@ public static class Contract
         new(Commands.TransfersPause, typeof(IdArgs), null),
         new(Commands.TransfersResume, typeof(IdArgs), null),
         new(Commands.ReceivedOpenFolder, null, null),
+        new(Commands.ConnectionGet, null, typeof(ConnectionDto)),
     ];
 
     public static IReadOnlyList<EventSpec> EventSpecs { get; } =
     [
         new(Events.SharesChanged, typeof(ShareDto[])),
         new(Events.TransfersChanged, typeof(TransferDto[])),
+        new(Events.ConnectionChanged, typeof(ConnectionDto)),
     ];
 
     /// <summary>camelCase JSON with enums as camelCase strings, as the conventions require.</summary>
