@@ -730,19 +730,91 @@ dialog textarea {
   font-variant-numeric: tabular-nums;
 }
 
-/* Medium windows: the rail keeps its buttons but drops the tagline. */
-@media (max-width: 900px) {
+/* Medium windows: the rail shrinks to icons with small labels underneath (UX design, Layout). */
+@media (max-width: 900px) and (min-width: 601px) {
   .app {
-    grid-template-columns: 220px 1fr;
+    grid-template-columns: 104px 1fr;
   }
 
   .brand {
     width: auto;
   }
 
+  .rail {
+    align-items: stretch;
+    gap: calc(var(--space) * 2);
+    padding: calc(var(--space) * 2) var(--space);
+  }
+
   .rail-tagline {
     display: none;
   }
+
+  .rail button.big,
+  .nav-item {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-height: 64px;
+    padding: 6px 4px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .rail button.big span,
+  .nav-label {
+    flex: none;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
+  .nav-count {
+    position: absolute;
+    top: 4px;
+    right: 8px;
+    min-width: 20px;
+    font-size: 11px;
+  }
+
+  .nav-item {
+    position: relative;
+  }
+
+  .connection-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  button.connection {
+    justify-content: center;
+  }
+}
+
+/* Help and Settings sit under a line, apart from the two places. */
+.rail-more {
+  margin-top: var(--space) !important;
+  padding-top: var(--space) !important;
+  border-top: 1px solid var(--color-border);
+}
+
+.help-steps {
+  margin: 0;
+  padding-left: 1.4em;
+}
+
+.help-steps li + li {
+  margin-top: var(--space);
+}
+
+/* The floating ＋ appears only on narrow windows (UX design, Phone). */
+.fab {
+  display: none;
 }
 
 /* Narrow windows and phones: navigation moves to a bar along the bottom (UX design, Phone). */
@@ -782,8 +854,20 @@ dialog textarea {
     background: var(--color-surface);
   }
 
-  .rail-actions {
-    flex-direction: row;
+  /* The floating ＋ takes the two actions; Help stays in the header. */
+  .rail-actions,
+  .rail-help,
+  .rail-tagline {
+    display: none;
+  }
+
+  .rail {
+    z-index: 10;
+  }
+
+  /* Name and tools on the first line, search on the second. */
+  .search {
+    order: 1;
   }
 
   button.connection {
@@ -792,16 +876,20 @@ dialog textarea {
     padding-block: 0;
   }
 
-  .rail-actions button {
-    flex: 1;
-    min-height: var(--target);
-    padding: 0 var(--space);
-    box-shadow: none;
-    font-size: var(--text-sm);
+  .rail nav {
+    display: flex;
   }
 
   .rail nav ul {
+    flex: 2;
     flex-direction: row;
+  }
+
+  .rail nav ul.rail-more {
+    flex: 1;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-top: 0;
   }
 
   .rail nav li {
@@ -809,7 +897,15 @@ dialog textarea {
   }
 
   .nav-item {
+    position: relative;
+    flex-direction: column;
     justify-content: center;
+    min-width: 0;
+    gap: 2px;
+    padding: 4px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    line-height: 1.2;
   }
 
   .nav-label {
@@ -818,10 +914,48 @@ dialog textarea {
     text-align: center;
   }
 
-  .nav-item {
-    min-width: 0;
-    gap: 6px;
-    padding-inline: 6px;
+  .nav-count {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    min-width: 20px;
+    font-size: 11px;
+  }
+
+  .fab {
+    position: fixed;
+    right: calc(var(--space) * 2);
+    bottom: 104px;
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space);
+  }
+
+  .fab-toggle {
+    width: 56px;
+    height: 56px;
+    padding: 0;
+    border-radius: 18px;
+    box-shadow: 0 6px 16px rgb(0 0 0 / 25%);
+  }
+
+  .fab-menu {
+    margin: 0;
+    padding: 4px;
+    list-style: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
+  }
+
+  .fab-menu button {
+    width: 100%;
+    justify-content: flex-start;
+    border: 0;
+    background: transparent;
   }
 
   .items-grid {
@@ -897,15 +1031,14 @@ dialog textarea {
   overflow-wrap: anywhere;
 }
 
-.language-menu {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.header-tools {
+  display: flex;
+  gap: 4px;
   margin-inline-start: auto;
-  color: var(--color-text-muted);
 }
 
-.language-menu select {
+.settings-select {
+  width: 100%;
   font: inherit;
   color: var(--color-text);
   background: transparent;

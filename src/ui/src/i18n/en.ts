@@ -17,6 +17,18 @@ export const en = {
   'view.grid': 'Grid',
   'view.list': 'List',
 
+  'nav.help': 'Help',
+  'nav.settings': 'Settings',
+  'fab.open': 'Share or receive',
+  'settings.title': 'Settings',
+  'settings.languageHint': 'ComParta starts in this language next time too.',
+  'settings.close': 'Close',
+  'help.title': 'How ComParta works',
+  'help.share': 'Choose “Share a file” and pick a file on this computer. It stays where it is.',
+  'help.invite': 'Copy the invite and send it to the person in WhatsApp or an email.',
+  'help.receive': 'They open the invite in ComParta and the file comes straight from your computer. Keep ComParta open until it arrives.',
+  'help.close': 'Close',
+
   'shares.heading': 'Shared by me',
   'shares.add': 'Share a file',
   'shares.empty': 'You are not sharing anything yet. Choose “Share a file” to pick one from this computer.',

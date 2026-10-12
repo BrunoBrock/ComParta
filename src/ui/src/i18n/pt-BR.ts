@@ -18,6 +18,18 @@ export const ptBR: Catalog = {
   'view.grid': 'Grade',
   'view.list': 'Lista',
 
+  'nav.help': 'Ajuda',
+  'nav.settings': 'Configurações',
+  'fab.open': 'Compartilhar ou receber',
+  'settings.title': 'Configurações',
+  'settings.languageHint': 'O ComParta também abre neste idioma da próxima vez.',
+  'settings.close': 'Fechar',
+  'help.title': 'Como o ComParta funciona',
+  'help.share': 'Escolha “Compartilhar um arquivo” e selecione um arquivo deste computador. Ele continua onde está.',
+  'help.invite': 'Copie o convite e envie para a pessoa pelo WhatsApp ou por e-mail.',
+  'help.receive': 'A pessoa abre o convite no ComParta e o arquivo vem direto do seu computador. Deixe o ComParta aberto até ele chegar.',
+  'help.close': 'Fechar',
+
   'shares.heading': 'Compartilhados por mim',
   'shares.add': 'Compartilhar um arquivo',
   'shares.empty':

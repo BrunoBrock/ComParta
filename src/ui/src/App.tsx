@@ -1,4 +1,4 @@
-import { Search, X } from 'lucide-react'
+import { CircleHelp, Search, Settings, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   ActivityDto,
@@ -10,16 +10,19 @@ import type {
   ShareDto,
   TransferDto,
 } from './bridge/index.ts'
+import ActionButton from './components/ActionButton.tsx'
 import ConnectionHelp from './components/ConnectionHelp.tsx'
 import DetailsWindow, { type DetailsOf } from './components/DetailsWindow.tsx'
+import HelpDialog from './components/HelpDialog.tsx'
 import type { ViewMode } from './components/ItemView.tsx'
 import Notice, { type NoticeContent } from './components/Notice.tsx'
 import Rail, { type Section } from './components/Rail.tsx'
 import ReceiveDialog from './components/ReceiveDialog.tsx'
+import SettingsDialog from './components/SettingsDialog.tsx'
 import SharesSection from './components/SharesSection.tsx'
 import SpeedBar from './components/SpeedBar.tsx'
 import TransfersSection from './components/TransfersSection.tsx'
-import LanguageMenu from './components/LanguageMenu.tsx'
+import IconButton from './components/ui/IconButton.tsx'
 import { errorMessage, getLanguage, type Language, pickLanguage, setLanguage, t } from './i18n/index.ts'
 import { loadView, saveView } from './viewPrefs.ts'
 
@@ -55,6 +58,8 @@ export default function App({ bridge }: AppProps) {
   const [language, setShownLanguage] = useState<Language>(getLanguage)
   const [connection, setConnection] = useState<ConnectionHealthDto | null>(null)
   const [helping, setHelping] = useState(false)
+  // Which window the header or rail opened: the short help or the settings.
+  const [opened, setOpened] = useState<'help' | 'settings' | null>(null)
   const [activity, setActivity] = useState<ActivityDto | null>(null)
   const [details, setDetails] = useState<DetailsOf | null>(null)
   const [stuck, setStuck] = useState<ReadonlySet<string>>(() => new Set())
@@ -275,7 +280,10 @@ export default function App({ bridge }: AppProps) {
             </button>
           )}
         </div>
-        <LanguageMenu language={language} onChange={chooseLanguage} />
+        <div className="header-tools">
+          <IconButton icon={CircleHelp} label={t('nav.help')} onClick={() => setOpened('help')} />
+          <IconButton icon={Settings} label={t('nav.settings')} onClick={() => setOpened('settings')} />
+        </div>
       </header>
 
       <SpeedBar activity={activity} onSet={setStopped} />
@@ -290,7 +298,11 @@ export default function App({ bridge }: AppProps) {
         onSection={setSection}
         onAdd={add}
         onReceive={startReceiving}
+        onHelp={() => setOpened('help')}
+        onSettings={() => setOpened('settings')}
       />
+
+      <ActionButton adding={adding} onAdd={add} onReceive={startReceiving} />
 
       <main className="content">
         {notice && <Notice notice={notice} onDismiss={clearNotice} />}
@@ -304,6 +316,20 @@ export default function App({ bridge }: AppProps) {
           stopped={(details.kind === 'share' ? activity?.sendingStopped : activity?.receivingStopped) ?? false}
           onClose={() => setDetails(null)}
         />
+      )}
+
+      {opened === 'help' && (
+        <HelpDialog
+          onConnection={() => {
+            setOpened(null)
+            setHelping(true)
+          }}
+          onClose={() => setOpened(null)}
+        />
+      )}
+
+      {opened === 'settings' && (
+        <SettingsDialog language={language} onLanguage={chooseLanguage} onClose={() => setOpened(null)} />
       )}
 
       {helping && (

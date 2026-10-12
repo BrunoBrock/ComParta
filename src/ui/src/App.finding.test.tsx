@@ -93,13 +93,16 @@ describe('the language', () => {
     const first = render(<App bridge={bridge} />)
     await screen.findByText(ptBR['shares.empty'])
 
+    await user.click(within(screen.getByRole('banner')).getByRole('button', { name: ptBR['nav.settings'] }))
     await user.selectOptions(screen.getByRole('combobox', { name: ptBR['language.label'] }), 'en')
+    await user.click(screen.getByRole('button', { name: en['settings.close'] }))
 
     expect(await screen.findByText(en['shares.empty'])).toBeInTheDocument()
     first.unmount()
     setLanguage('pt-BR')
     render(<App bridge={bridge} />)
     expect(await screen.findByText(en['shares.empty'])).toBeInTheDocument()
+    await user.click(within(screen.getByRole('banner')).getByRole('button', { name: en['nav.settings'] }))
     expect(screen.getByRole('combobox', { name: en['language.label'] })).toHaveValue('en')
   })
 })
