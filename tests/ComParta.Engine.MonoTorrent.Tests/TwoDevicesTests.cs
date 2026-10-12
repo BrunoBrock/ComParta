@@ -502,6 +502,30 @@ public sealed class TwoDevicesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_file_shared_while_sending_is_stopped_waits_for_continue()
+    {
+        var original = CreateFile("later.bin", 300_000);
+        var (sender, _) = await StartDeviceAsync("sender");
+        var (receiver, receiverPaths) = await StartDeviceAsync("receiver");
+        await sender.SetStoppedAsync(sending: true, receiving: false);
+        var shareId = ShareId.New();
+        await OfferAndWaitAsync(sender, shareId, original);
+
+        var transferId = TransferId.New();
+        var done = WhenFinished(receiver);
+        await receiver.ReceiveAsync(transferId, (await sender.GetInviteAsync(shareId))!);
+        await receiver.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        Assert.False(done.Task.IsCompleted);
+
+        await sender.SetStoppedAsync(sending: false, receiving: false);
+        await receiver.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+
+        Assert.True((await done.Task.WaitAsync(Timeout)).Done);
+        Assert.Equal(Checksum(original), Checksum(Path.Combine(receiverPaths.ReceivedRoot, "later.bin")));
+    }
+
+    [Fact]
     public async Task A_transfer_paused_on_its_own_stays_paused_after_receiving_continues()
     {
         var (receiver, _) = await StartDeviceAsync("receiver");

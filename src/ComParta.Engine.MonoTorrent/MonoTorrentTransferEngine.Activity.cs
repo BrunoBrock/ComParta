@@ -40,9 +40,10 @@ public sealed partial class MonoTorrentTransferEngine
                 continue;
             try
             {
-                if (sending && manager.State != TorrentState.Paused)
-                    await manager.PauseAsync();
-                else if (!sending && manager.State == TorrentState.Paused)
+                // Stopping, not pausing: a paused offer still answers the computers already connected.
+                if (sending && manager.State != TorrentState.Stopped)
+                    await manager.StopAsync();
+                else if (!sending && manager.State == TorrentState.Stopped)
                     await manager.StartAsync();
             }
             catch (Exception) { /* the next change tries again */ }
