@@ -1,5 +1,5 @@
 # The epics of initiative-comparta, in build order.
-# Releases (see roadmap-comparta): R1 = epics 1, 2, 9, 6, 8, 4, 14, 10, 3, 12, 5; R2 = 11, 7; R3 = 13.
+# Releases (see roadmap-comparta): R1 = epics 1, 2, 9, 15, 6, 8, 4, 14, 10, 3, 12, 5; R2 = 11, 7; R3 = 13.
 
 [[epic]]
 id = 1
@@ -20,6 +20,13 @@ slug = "epic-connect-between-homes"
 title = "Two people in different homes connect without knowing about networks"
 covers = ["CAP-18"]
 after = [{ epic = 2, needs = "the receive path being measured and improved" }]
+
+[[epic]]
+id = 15
+slug = "epic-speed-bar-and-details"
+title = "A person sees and stops all traffic at once, and the details of any file"
+covers = ["CAP-26", "CAP-27"]
+after = [{ epic = 2, needs = "shares and transfers moving bytes" }, { epic = 6, needs = "the settings store for the remembered stop" }]
 
 [[epic]]
 id = 6

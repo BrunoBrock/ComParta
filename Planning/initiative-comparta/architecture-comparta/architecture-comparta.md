@@ -127,6 +127,12 @@ An arrow means "may depend on". `ComParta.Core` depends on no other project and 
 - **Prevents:** a second, unsafe download path; torrent vocabulary spreading into core and UI because the feature resembles a classic client.
 - **Rule:** A download from a public link or file is a `Transfer` like any other: same use cases, same Received root, same sanitising and containment (AD-6, AD-13), same states plus `paused`. Core passes link text or the bytes of a download file (read through `IFileSystem` after the native picker, AD-7) to the engine as opaque data; only the engine adapter parses them (AD-2). The UI calls them "download link" and "download file"; the extension and the classic words stay out of the catalog (AD-5). Advanced controls live behind one "More options" panel per transfer and are added as commands one at a time.
 
+### AD-22 — Speeds come from the engine; stopping everything is a core decision the engine applies
+
+- **Binds:** engine, core, contracts, UI
+- **Prevents:** the UI adding up speeds itself from stale lists; a global stop that changes or forgets each transfer's own pause; torrent vocabulary in a details window.
+- **Rule:** The engine reports activity (`EngineActivity`: total receiving and sending speed, and per share and per transfer the speeds, the number of other computers connected and the bytes moved since start) through `ITransferEngine`. Core's `ActivityUseCases` owns two flags, sending stopped and receiving stopped, stores them in the settings store (AD-10), and tells the engine with one call; the engine pauses every offer or every transfer while its flag is on, and a transfer's own pause survives a global stop and continue. Totals reach the UI as one `activity.changed` event at most once a second; a details window asks for one item's details while it is open. The UI shows a globally stopped item as "Stopped" without changing its stored state. Added 2026-10-12 for CAP-26 and CAP-27.
+
 ### AD-13 — Received content is marked and checked by Windows, not by us
 
 - **Binds:** core, shell, UI

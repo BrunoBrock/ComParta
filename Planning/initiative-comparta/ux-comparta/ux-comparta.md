@@ -116,6 +116,44 @@ Two primary actions are always visible, like Drive's "New" button:
 - **Drop overlay**: dragging files over the window dims it and shows "Drop to share. The files
   stay where they are."
 
+### Speed bar (CAP-27)
+
+A thin bar runs along the top of the window, under the header, on every screen:
+
+```text
+│  ↓ Receiving 2.4 MB/s   ↑ Sending 650 KB/s                 [ ■ Stop ▾ ]   │
+```
+
+- The two totals always show, 0 included, so the bar never jumps. Narrow windows keep the arrows
+  and numbers and drop the words.
+- **Stop** stops both. Its menu (▾) offers "Stop sending and receiving" (default, first),
+  "Stop sending only" and "Stop receiving only".
+- While something is stopped, the stopped side reads "Receiving stopped" or "Sending stopped",
+  the bar takes the amber tone, and the button becomes **▶ Continue**, which starts everything
+  stopped again.
+- A stopped item shows the chip "Stopped" and the sentence "Stopped with everything else. Choose
+  Continue at the top to go on." Its own Pause and Continue buttons are hidden while stopped.
+
+### Details window (CAP-26)
+
+Every card and row has an **ⓘ** button ("Details of {name}"). It opens a window, a full-screen
+sheet on phones, that updates every second while open:
+
+| Row | Shared file | Received file |
+| --- | --- | --- |
+| Size | 4.2 GB | 4.2 GB, 1.9 GB received (45 %) |
+| State | Ready to send | Receiving |
+| Where | the file's folder on this computer | Received files (the final name when done) |
+| Added | 10 Oct 2026, 14:05 | 10 Oct 2026, 14:07 |
+| Came from | (not shown) | An invite / A download link / A download file |
+| Sending now | 650 KB/s | 0 B/s |
+| Receiving now | (not shown) | 2.4 MB/s, about 12 minutes left |
+| Connected computers | 1 | 3 |
+| Sent since ComParta started | 1.1 GB | 12 MB |
+
+The details panel of epic 8 (story 8.8) later shows the same rows beside the list instead of in a
+window.
+
 ### Phone (Android, and desktop windows < 600 px)
 
 ```text
