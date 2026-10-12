@@ -1,7 +1,17 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { errorCodes } from '../bridge/contract.generated.ts'
 import { en } from './en.ts'
-import { catalogs, formatSize, formatTimeLeft, languages, pickLanguage, setLanguage } from './index.ts'
+import {
+  catalogs,
+  formatDateTime,
+  formatRate,
+  formatSize,
+  formatTimeLeft,
+  languages,
+  percentOf,
+  pickLanguage,
+  setLanguage,
+} from './index.ts'
 
 afterEach(() => setLanguage('en'))
 
@@ -129,5 +139,24 @@ describe('time left', () => {
     [3 * 86400, 'more than a day left'],
   ])('shows %d seconds as %s', (seconds, expected) => {
     expect(formatTimeLeft(seconds)).toBe(expected)
+  })
+})
+
+describe('speeds, progress and dates', () => {
+  it('shows a speed per second', () => {
+    expect(formatRate(2 * 1024 * 1024)).toBe('2.0 MB/s')
+  })
+
+  it('never reads 100% before the last byte, and 0% when the size is not known', () => {
+    expect(percentOf(999, 1000)).toBe(99)
+    expect(percentOf(1000, 1000)).toBe(100)
+    expect(percentOf(10, null)).toBe(0)
+  })
+
+  it('shows dates in the chosen language', () => {
+    const english = formatDateTime('2026-10-10T14:05:00Z')
+    setLanguage('pt-BR')
+    expect(formatDateTime('2026-10-10T14:05:00Z')).not.toBe(english)
+    expect(english).toContain('2026')
   })
 })

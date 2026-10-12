@@ -3,6 +3,7 @@ import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'rea
 import type { Bridge, InvitePreviewDto } from '../bridge/index.ts'
 import { errorMessage, formatSize, t } from '../i18n/index.ts'
 import FileIcon from './FileIcon.tsx'
+import Modal from './Modal.tsx'
 
 interface ReceiveDialogProps {
   bridge: Bridge
@@ -19,7 +20,6 @@ interface ReceiveDialogProps {
  * person has seen what it is and chosen "Get the file" (UX design, Receive a file).
  */
 export default function ReceiveDialog({ bridge, pasted, onStarted, onCancel }: ReceiveDialogProps) {
-  const dialog = useRef<HTMLDialogElement>(null)
   // View state only: the text, a request on its way, the last problem, and what the invite says.
   const [invite, setInvite] = useState(pasted?.text ?? '')
   const [found, setFound] = useState(false)
@@ -27,11 +27,6 @@ export default function ReceiveDialog({ bridge, pasted, onStarted, onCancel }: R
   const [problem, setProblem] = useState<string | null>(null)
   const [preview, setPreview] = useState<InvitePreviewDto | null>(pasted?.preview ?? null)
   const typed = useRef(false)
-
-  useEffect(() => {
-    const element = dialog.current
-    if (element && !element.open) element.showModal()
-  }, [])
 
   useEffect(() => {
     if (pasted) return
@@ -90,14 +85,7 @@ export default function ReceiveDialog({ bridge, pasted, onStarted, onCancel }: R
   )
 
   return (
-    <dialog
-      ref={dialog}
-      aria-labelledby="receive-title"
-      onCancel={(event) => {
-        event.preventDefault()
-        onCancel()
-      }}
-    >
+    <Modal labelledBy="receive-title" onClose={onCancel}>
       {preview ? (
         <Confirmation preview={preview} busy={busy} alert={alert} onReceive={receive} onCancel={onCancel} />
       ) : (
@@ -139,7 +127,7 @@ export default function ReceiveDialog({ bridge, pasted, onStarted, onCancel }: R
           </div>
         </form>
       )}
-    </dialog>
+    </Modal>
   )
 }
 

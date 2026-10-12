@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react'
 import type { ConnectionHealthDto } from '../bridge/index.ts'
 import { t } from '../i18n/index.ts'
+import Modal from './Modal.tsx'
 
 interface ConnectionHelpProps {
   health: ConnectionHealthDto | null
@@ -13,22 +13,9 @@ interface ConnectionHelpProps {
  * "Stuck transfer"). When Windows is in the way, one button opens the place to fix it.
  */
 export default function ConnectionHelp({ health, onOpenSettings, onClose }: ConnectionHelpProps) {
-  const dialog = useRef<HTMLDialogElement>(null)
-
-  useEffect(() => {
-    const element = dialog.current
-    if (element && !element.open) element.showModal()
-  }, [])
 
   return (
-    <dialog
-      ref={dialog}
-      aria-labelledby="connection-title"
-      onCancel={(event) => {
-        event.preventDefault()
-        onClose()
-      }}
-    >
+    <Modal labelledBy="connection-title" onClose={onClose}>
       <h2 id="connection-title">{t('connection.title')}</h2>
       {health !== null && (
         <p className={`connection connection-${health} connection-state`}>
@@ -55,6 +42,6 @@ export default function ConnectionHelp({ health, onOpenSettings, onClose }: Conn
           {t('connection.close')}
         </button>
       </div>
-    </dialog>
+    </Modal>
   )
 }
