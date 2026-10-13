@@ -46,3 +46,4 @@ Downloads started by the person. Not search, RSS or queues (spec non-goals).
 
 - Built 2026-10-10 on the plan branch: stories 1 to 3.
 - Waits on epic-send-to-a-person because: it reuses the receive path.
+- Note 2026-10-13: qBittorrent is the reference for this epic (roadmap, References).

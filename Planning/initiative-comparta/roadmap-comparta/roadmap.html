@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ComParta Roadmap</title>
+<style>
+  /* Layout: one reading column; each drawing sits on its own surface, wide drawings scroll inside it. */
+  :root {
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --text: #0f172a;
+    --muted: #475569;
+    --primary: #0b6e4f;
+    --primary-soft: #e3f2ec;
+    --busy: #1d4ed8;
+    --busy-soft: #e8f0fe;
+    --warn: #b45309;
+    --warn-soft: #fff7ed;
+    --danger: #b91c1c;
+    --border: #cbd5e1;
+    --track: #e2e8f0;
+    --font: 'Segoe UI Variable Text', 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
+    --mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --bg: #0f1418; --surface: #182027; --text: #e8edf2; --muted: #a6b3c0;
+      --primary: #4fc79b; --primary-soft: #173a2e; --busy: #8ab4ff; --busy-soft: #1b2a3d;
+      --warn: #f5b25c; --warn-soft: #33261a; --danger: #ff8f85; --border: #34404b; --track: #26313b;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme='dark'] {
+    --bg: #0f1418; --surface: #182027; --text: #e8edf2; --muted: #a6b3c0;
+    --primary: #4fc79b; --primary-soft: #173a2e; --busy: #8ab4ff; --busy-soft: #1b2a3d;
+    --warn: #f5b25c; --warn-soft: #33261a; --danger: #ff8f85; --border: #34404b; --track: #26313b;
+    color-scheme: dark;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 16px; line-height: 1.55; }
+  .page { max-width: 980px; margin: 0 auto; padding-inline: 20px; padding-block: 32px 64px; display: grid; gap: 40px; }
+  h1, h2, h3 { text-wrap: balance; line-height: 1.2; margin: 0; }
+  h1 { font-size: 34px; letter-spacing: -0.01em; }
+  h2 { font-size: 22px; }
+  h3 { font-size: 16px; }
+  p { margin: 0; max-width: 68ch; }
+  .eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+  header { display: grid; gap: 12px; }
+  .goal { border-left: 4px solid var(--primary); padding: 12px 16px; background: var(--primary-soft); border-radius: 0 10px 10px 0; max-width: 72ch; }
+  section { display: grid; gap: 16px; }
+  .sheet { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .scroll { overflow-x: auto; }
+  svg text { font-family: var(--font); }
+  .s-box { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+  .s-closed { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.5; }
+  .s-helper { fill: var(--primary-soft); stroke: var(--primary); stroke-width: 2; }
+  .s-t { fill: var(--text); font-size: 14px; font-weight: 600; }
+  .s-m { fill: var(--muted); font-size: 12px; }
+  .s-ok { stroke: var(--primary); stroke-width: 2.5; fill: none; }
+  .s-ok-t { fill: var(--primary); font-size: 12px; font-weight: 600; }
+  .s-no { stroke: var(--danger); stroke-width: 2; fill: none; stroke-dasharray: 6 5; }
+  .s-no-t { fill: var(--danger); font-size: 12px; font-weight: 600; }
+  .s-head-ok { fill: var(--primary); }
+  .s-head-no { fill: var(--danger); }
+  .twin { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+  .twin > div { min-width: 0; display: grid; gap: 8px; align-content: start; }
+  .caption { font-size: 14px; color: var(--muted); }
+  /* Releases */
+  .lanes { display: grid; gap: 14px; }
+  .lane { display: grid; grid-template-columns: 150px 1fr; gap: 16px; align-items: start; }
+  .lane-name { display: grid; gap: 2px; }
+  .lane-name strong { font-size: 15px; }
+  .lane-name span { font-size: 13px; color: var(--muted); }
+  .epics { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; min-width: 0; }
+  .epic { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; background: var(--surface); }
+  .epic.next { border-color: var(--primary); border-width: 2px; background: var(--primary-soft); }
+  .epic .row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .epic .name { font-size: 14px; font-weight: 600; }
+  .epic .count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bar { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; display: flex; }
+  .bar i { display: block; height: 100%; }
+  .bar .d { background: var(--primary); }
+  .bar .r { background: var(--busy); }
+  .bar .p { background: var(--warn); }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 12px; height: 6px; border-radius: 3px; display: inline-block; }
+  .tag { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--primary); }
+  /* Steps */
+  .steps { display: grid; gap: 0; counter-reset: s; }
+  .step { display: grid; grid-template-columns: 36px 1fr; gap: 14px; padding-bottom: 18px; position: relative; }
+  .step::before { counter-increment: s; content: counter(s); width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; background: var(--surface); border: 2px solid var(--primary); color: var(--primary); position: relative; z-index: 1; }
+  .step:not(:last-child)::after { content: ''; position: absolute; left: 15px; top: 34px; bottom: 0; width: 2px; background: var(--border); }
+  .step div { display: grid; gap: 2px; min-width: 0; }
+  .step .who { font-size: 12px; color: var(--muted); }
+  /* References and decisions */
+  .refs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+  .ref { display: grid; gap: 6px; align-content: start; border-top: 3px solid var(--primary); padding-top: 10px; }
+  .ref p { font-size: 14px; color: var(--muted); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 12px 10px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+  td:first-child { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+  footer { font-size: 13px; color: var(--muted); }
+  @media (max-width: 560px) {
+    .lane { grid-template-columns: 1fr; gap: 8px; }
+    h1 { font-size: 28px; }
+  }
+
+  /* Whole plan drawing */
+  .s-band { stroke: none; }
+  .s-band-next { fill: var(--primary-soft); }
+  .s-band-r1, .s-band-r3 { fill: var(--track); opacity: 0.55; }
+  .s-band-r2, .s-band-later { fill: var(--busy-soft); }
+  .s-chip-next { fill: var(--surface); stroke: var(--primary); stroke-width: 2.5; }
+  .s-chip-done { fill: var(--surface); stroke: var(--primary); stroke-width: 1.2; stroke-dasharray: 0; }
+  .s-later { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; stroke-dasharray: 5 4; }
+  .s-track { fill: var(--track); }
+  .s-ct { fill: var(--text); font-size: 13px; font-weight: 600; }
+  .s-fill-d { fill: var(--primary); }
+  .s-fill-r { fill: var(--busy); }
+  .s-fill-p { fill: var(--warn); }
+  .s-flow { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+  .s-flow-head { fill: var(--muted); }
+  svg a:hover rect:first-child, svg a:focus rect:first-child { stroke: var(--primary); stroke-width: 2.5; }
+  .plan-scroll svg { min-width: 820px; }
+  /* Story cards */
+  .release-h { font-size: 18px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin-top: 8px; }
+  .release-h span { font-size: 14px; font-weight: 400; color: var(--muted); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; display: grid; gap: 8px; align-content: start; scroll-margin-top: 16px; min-width: 0; }
+  .card.next { border: 2px solid var(--primary); }
+  .card .row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .card h4 { margin: 0; font-size: 15px; }
+  .card .count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .why { font-size: 13px; color: var(--muted); }
+  .stories { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; font-size: 13.5px; }
+  .stories li { display: grid; grid-template-columns: 12px 34px 1fr; gap: 6px; align-items: baseline; }
+  .stories .dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--border); display: inline-block; transform: translateY(1px); }
+  .st-done .dot { background: var(--primary); border-color: var(--primary); }
+  .st-built .dot { background: var(--busy); border-color: var(--busy); }
+  .st-busy .dot { background: var(--warn); border-color: var(--warn); }
+  .st-done .what { color: var(--muted); }
+  .st-dropped .what { text-decoration: line-through; color: var(--muted); }
+  .stories .sref { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .person { font-size: 11px; font-weight: 600; color: var(--warn); white-space: nowrap; }
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <div class="eyebrow">Plan · updated 13 Oct 2026 · main at PR #23</div>
+    <h1>ComParta roadmap</h1>
+    <p class="goal"><strong>First goal:</strong> a file shared from a PC can be downloaded from anywhere, with ComParta or with any other BitTorrent app, on Windows computers and Android phones, and nobody changes a router or opens a port.</p>
+    <p class="caption">53 of 111 stories are done. The written plan is in <code>roadmap-comparta.md</code> next to this page; the spec, architecture and epics sit beside it in <code>Planning/initiative-comparta</code>.</p>
+  </header>
+
+  <section aria-labelledby="plan">
+    <h2 id="plan">The whole plan, in build order</h2>
+    <div class="legend" aria-hidden="true">
+      <span><i style="background: var(--primary)"></i>Done</span>
+      <span><i style="background: var(--busy)"></i>Built, waiting on a person</span>
+      <span><i style="background: var(--warn)"></i>In progress</span>
+      <span><i style="background: var(--track)"></i>Planned</span>
+    </div>
+    <div class="sheet scroll plan-scroll">
+      <svg viewBox="0 0 1038 678" width="100%" role="img" aria-labelledby="tplan">
+<title id="tplan">Every epic in build order: epic 16 next, then the rest of release 1, release 2 and release 3, with later ideas at the end.</title>
+<defs><marker id="hf" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="s-flow-head" /></marker></defs>
+<rect x="0" y="8" width="1038" height="86" rx="12" class="s-band s-band-next" />
+<text x="14" y="34" class="s-t">Next</text>
+<rect x="0" y="104" width="1038" height="278" rx="12" class="s-band s-band-r1" />
+<text x="14" y="130" class="s-t">R1</text>
+<text x="14" y="148" class="s-m">Family pilot</text>
+<rect x="0" y="392" width="1038" height="86" rx="12" class="s-band s-band-r2" />
+<text x="14" y="418" class="s-t">R2</text>
+<text x="14" y="436" class="s-m">Albums and phones</text>
+<rect x="0" y="488" width="1038" height="86" rx="12" class="s-band s-band-r3" />
+<text x="14" y="514" class="s-t">R3</text>
+<text x="14" y="532" class="s-m">People I share with</text>
+<rect x="0" y="584" width="1038" height="86" rx="12" class="s-band s-band-later" />
+<text x="14" y="610" class="s-t">Later</text>
+<line x1="227.0" y1="84" x2="227.0" y2="113" class="s-flow" marker-end="url(#hf)" />
+<line x1="336" y1="147.0" x2="349" y2="147.0" class="s-flow" marker-end="url(#hf)" />
+<line x1="568" y1="147.0" x2="581" y2="147.0" class="s-flow" marker-end="url(#hf)" />
+<line x1="800" y1="147.0" x2="813" y2="147.0" class="s-flow" marker-end="url(#hf)" />
+<line x1="923.0" y1="180" x2="923.0" y2="209" class="s-flow" marker-end="url(#hf)" />
+<line x1="814" y1="243.0" x2="801" y2="243.0" class="s-flow" marker-end="url(#hf)" />
+<line x1="582" y1="243.0" x2="569" y2="243.0" class="s-flow" marker-end="url(#hf)" />
+<line x1="350" y1="243.0" x2="337" y2="243.0" class="s-flow" marker-end="url(#hf)" />
+<line x1="227.0" y1="276" x2="227.0" y2="305" class="s-flow" marker-end="url(#hf)" />
+<line x1="336" y1="339.0" x2="349" y2="339.0" class="s-flow" marker-end="url(#hf)" />
+<line x1="568" y1="339.0" x2="581" y2="339.0" class="s-flow" marker-end="url(#hf)" />
+<line x1="800" y1="339.0" x2="813" y2="339.0" class="s-flow" marker-end="url(#hf)" />
+<line x1="923.0" y1="372" x2="923.0" y2="401" class="s-flow" marker-end="url(#hf)" />
+<line x1="814" y1="435.0" x2="801" y2="435.0" class="s-flow" marker-end="url(#hf)" />
+<line x1="691.0" y1="468" x2="691.0" y2="497" class="s-flow" marker-end="url(#hf)" />
+<line x1="691.0" y1="564" x2="691.0" y2="593" class="s-flow" marker-end="url(#hf)" />
+<a href="#epic-16"><rect x="120" y="20" width="214" height="62" rx="10" class="s-chip-next" />
+<text x="132" y="44" class="s-ct">16 · Reachable anywhere</text>
+<text x="322" y="64" text-anchor="end" class="s-m">0 of 6</text>
+<rect x="132" y="58" width="136" height="7" rx="3.5" class="s-track" />
+</a>
+<a href="#epic-1"><rect x="120" y="116" width="214" height="62" rx="10" class="s-box" />
+<text x="132" y="140" class="s-ct">1 · Share a file</text>
+<text x="322" y="160" text-anchor="end" class="s-m">13 of 14</text>
+<rect x="132" y="154" width="136" height="7" rx="3.5" class="s-track" />
+<rect x="132.0" y="154" width="126.3" height="7" rx="3.5" class="s-fill-d" />
+</a>
+<a href="#epic-2"><rect x="352" y="116" width="214" height="62" rx="10" class="s-box" />
+<text x="364" y="140" class="s-ct">2 · Send to a person</text>
+<text x="554" y="160" text-anchor="end" class="s-m">5 of 7</text>
+<rect x="364" y="154" width="136" height="7" rx="3.5" class="s-track" />
+<rect x="364.0" y="154" width="97.1" height="7" rx="3.5" class="s-fill-d" />
+<rect x="461.1" y="154" width="19.4" height="7" rx="3.5" class="s-fill-r" />
+</a>
+<a href="#epic-9"><rect x="584" y="116" width="214" height="62" rx="10" class="s-box" />
+<text x="596" y="140" class="s-ct">9 · Connect between homes</text>
+<text x="786" y="160" text-anchor="end" class="s-m">5 of 9</text>
+<rect x="596" y="154" width="136" height="7" rx="3.5" class="s-track" />
+<rect x="596.0" y="154" width="75.6" height="7" rx="3.5" class="s-fill-d" />
+<rect x="671.6" y="154" width="15.1" height="7" rx="3.5" class="s-fill-r" />
+</a>
+<a href="#epic-15"><rect x="816" y="116" width="214" height="62" rx="10" class="s-chip-done" />
+<text x="828" y="140" class="s-ct">15 · Speed bar and details</text>
+<text x="1018" y="160" text-anchor="end" class="s-m">4 of 4</text>
+<rect x="828" y="154" width="136" height="7" rx="3.5" class="s-track" />
+<rect x="828.0" y="154" width="136.0" height="7" rx="3.5" class="s-fill-d" />
+</a>
+<a href="#epic-6"><rect x="816" y="212" width="214" height="62" rx="10" class="s-box" />
+<text x="828" y="236" class="s-ct">6 · Brazilian Portuguese</text>
+<text x="1018" y="256" text-anchor="end" class="s-m">4 of 5</text>
+<rect x="828" y="250" width="136" height="7" rx="3.5" class="s-track" />
+<rect x="828.0" y="250" width="108.8" height="7" rx="3.5" class="s-fill-d" />
+</a>
+<a href="#epic-8"><rect x="584" y="212" width="214" height="62" rx="10" class="s-box" />
+<text x="596" y="236" class="s-ct">8 · Drive-like home</text>
+<text x="786" y="256" text-anchor="end" class="s-m">10 of 12</text>
+<rect x="596" y="250" width="136" height="7" rx="3.5" class="s-track" />
+<rect x="596.0" y="250" width="113.3" height="7" rx="3.5" class="s-fill-d" />
+</a>
+<a href="#epic-4"><rect x="352" y="212" width="214" height="62" rx="10" class="s-chip-done" />
+<text x="364" y="236" class="s-ct">4 · Follow a transfer</text>
+<text x="554" y="256" text-anchor="end" class="s-m">5 of 5</text>
+<rect x="364" y="250" width="136" height="7" rx="3.5" class="s-track" />
+<rect x="364.0" y="250" width="136.0" height="7" rx="3.5" class="s-fill-d" />
+</a>
+<a href="#epic-14"><rect x="120" y="212" width="214" height="62" rx="10" class="s-box" />
+<text x="132" y="236" class="s-ct">14 · Download any link</text>
+<text x="322" y="256" text-anchor="end" class="s-m">3 of 5</text>
+<rect x="132" y="250" width="136" height="7" rx="3.5" class="s-track" />
+<rect x="132.0" y="250" width="81.6" height="7" rx="3.5" class="s-fill-d" />
+</a>
+<a href="#epic-10"><rect x="120" y="308" width="214" height="62" rx="10" class="s-chip-done" />
+<text x="132" y="332" class="s-ct">10 · Keep sharing</text>
+<text x="322" y="352" text-anchor="end" class="s-m">4 of 4</text>
+<rect x="132" y="346" width="136" height="7" rx="3.5" class="s-track" />
+<rect x="132.0" y="346" width="136.0" height="7" rx="3.5" class="s-fill-d" />
+</a>
+<a href="#epic-3"><rect x="352" y="308" width="214" height="62" rx="10" class="s-box" />
+<text x="364" y="332" class="s-ct">3 · Safe received files</text>
+<text x="554" y="352" text-anchor="end" class="s-m">0 of 5</text>
+<rect x="364" y="346" width="136" height="7" rx="3.5" class="s-track" />
+<rect x="364.0" y="346" width="27.2" height="7" rx="3.5" class="s-fill-p" />
+</a>
+<a href="#epic-12"><rect x="584" y="308" width="214" height="62" rx="10" class="s-box" />
+<text x="596" y="332" class="s-ct">12 · Help and settings</text>
+<text x="786" y="352" text-anchor="end" class="s-m">0 of 5</text>
+<rect x="596" y="346" width="136" height="7" rx="3.5" class="s-track" />
+</a>
+<a href="#epic-5"><rect x="816" y="308" width="214" height="62" rx="10" class="s-box" />
+<text x="828" y="332" class="s-ct">5 · Install and update</text>
+<text x="1018" y="352" text-anchor="end" class="s-m">0 of 7</text>
+<rect x="828" y="346" width="136" height="7" rx="3.5" class="s-track" />
+</a>
+<a href="#epic-11"><rect x="816" y="404" width="214" height="62" rx="10" class="s-box" />
+<text x="828" y="428" class="s-ct">11 · Share a folder</text>
+<text x="1018" y="448" text-anchor="end" class="s-m">0 of 5</text>
+<rect x="828" y="442" width="136" height="7" rx="3.5" class="s-track" />
+</a>
+<a href="#epic-7"><rect x="584" y="404" width="214" height="62" rx="10" class="s-box" />
+<text x="596" y="428" class="s-ct">7 · Android</text>
+<text x="786" y="448" text-anchor="end" class="s-m">0 of 11</text>
+<rect x="596" y="442" width="136" height="7" rx="3.5" class="s-track" />
+</a>
+<a href="#epic-13"><rect x="584" y="500" width="214" height="62" rx="10" class="s-box" />
+<text x="596" y="524" class="s-ct">13 · Shared with me</text>
+<text x="786" y="544" text-anchor="end" class="s-m">0 of 6</text>
+<rect x="596" y="538" width="136" height="7" rx="3.5" class="s-track" />
+</a>
+<rect x="584" y="596" width="214" height="62" rx="10" class="s-later" />
+<text x="596" y="621" class="s-t">iOS, Mac, Linux</text>
+<text x="596" y="641" class="s-m">watch while it arrives</text>
+</svg>
+    </div>
+    <p class="caption">Follow the arrows: epic 16 comes first, then the rest of R1, then R2 and R3. Each release ends with real people using it, not with a build. Select an epic to jump to its stories.</p>
+  </section>
+
+  <section aria-labelledby="reach">
+    <h2 id="reach">How a file reaches any app</h2>
+    <p>On 13 Oct the ports of both ComParta and qBittorrent timed out when tested from outside the sharing home, and a phone on 4G can never receive connections. When both sides can only connect out, they never meet. A helper that everyone can reach fixes that, and every app already knows how to use it.</p>
+    <div class="twin">
+      <div class="sheet">
+        <h3>Today: both sides closed</h3>
+        <div class="scroll">
+          <svg viewBox="0 0 420 220" width="100%" role="img" aria-labelledby="t1">
+            <title id="t1">The sharing PC and a phone on 4G both refuse incoming connections, so no connection forms.</title>
+            <defs>
+              <marker id="hn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="s-head-no" /></marker>
+            </defs>
+            <rect x="10" y="60" width="150" height="90" rx="12" class="s-closed" />
+            <text x="85" y="95" text-anchor="middle" class="s-t">Sharing PC</text>
+            <text x="85" y="115" text-anchor="middle" class="s-m">ComParta sharing</text>
+            <text x="85" y="133" text-anchor="middle" class="s-m">port closed</text>
+            <rect x="260" y="60" width="150" height="90" rx="12" class="s-closed" />
+            <text x="335" y="95" text-anchor="middle" class="s-t">Phone on 4G</text>
+            <text x="335" y="115" text-anchor="middle" class="s-m">any BitTorrent app</text>
+            <text x="335" y="133" text-anchor="middle" class="s-m">behind the carrier</text>
+            <line x1="164" y1="92" x2="208" y2="92" class="s-no" marker-end="url(#hn)" />
+            <line x1="256" y1="118" x2="212" y2="118" class="s-no" marker-end="url(#hn)" />
+            <text x="210" y="50" text-anchor="middle" class="s-no-t">each call is refused</text>
+            <text x="210" y="190" text-anchor="middle" class="s-m">Public servers help them find each other,</text>
+            <text x="210" y="207" text-anchor="middle" class="s-m">but cannot make either one reachable.</text>
+          </svg>
+        </div>
+      </div>
+      <div class="sheet">
+        <h3>With the helper (epic 16)</h3>
+        <div class="scroll">
+          <svg viewBox="0 0 420 300" width="100%" role="img" aria-labelledby="t2">
+            <title id="t2">The sharing PC connects out to the helper and hands it the file; a PC on another network and a phone on 4G also connect out to the helper and download it.</title>
+            <defs>
+              <marker id="ho" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="s-head-ok" /></marker>
+            </defs>
+            <rect x="135" y="16" width="150" height="86" rx="12" class="s-helper" />
+            <text x="210" y="48" text-anchor="middle" class="s-t">Helper</text>
+            <text x="210" y="67" text-anchor="middle" class="s-m">always reachable</text>
+            <text x="210" y="84" text-anchor="middle" class="s-m">free Oracle machine</text>
+            <rect x="10" y="196" width="125" height="86" rx="12" class="s-closed" />
+            <text x="72" y="228" text-anchor="middle" class="s-t">Sharing PC</text>
+            <text x="72" y="247" text-anchor="middle" class="s-m">ComParta</text>
+            <text x="72" y="264" text-anchor="middle" class="s-m">port still closed</text>
+            <rect x="148" y="196" width="125" height="86" rx="12" class="s-box" />
+            <text x="210" y="228" text-anchor="middle" class="s-t">Another home</text>
+            <text x="210" y="247" text-anchor="middle" class="s-m">qBittorrent</text>
+            <text x="210" y="264" text-anchor="middle" class="s-m">or ComParta</text>
+            <rect x="286" y="196" width="125" height="86" rx="12" class="s-box" />
+            <text x="348" y="228" text-anchor="middle" class="s-t">Phone on 4G</text>
+            <text x="348" y="247" text-anchor="middle" class="s-m">LibreTorrent, Flud</text>
+            <text x="348" y="264" text-anchor="middle" class="s-m">or ComParta</text>
+            <path d="M72,192 C72,140 120,110 150,104" class="s-ok" marker-end="url(#ho)" />
+            <path d="M210,192 L210,108" class="s-ok" marker-end="url(#ho)" />
+            <path d="M348,192 C348,140 300,110 270,104" class="s-ok" marker-end="url(#ho)" />
+            <text x="10" y="122" class="s-ok-t">hands over</text>
+            <text x="10" y="137" class="s-ok-t">the file</text>
+            <text x="218" y="150" class="s-ok-t">downloads</text>
+            <text x="412" y="122" text-anchor="end" class="s-ok-t">downloads</text>
+          </svg>
+        </div>
+        <p class="caption">Every arrow starts on the side that connects out, which always works. The copied link names the helper first, so any app finds it.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="epics">
+    <h2 id="epics">Every epic, story by story</h2>
+    <h3 class="release-h">Next <span>The first goal</span></h3><div class="cards"><article class="card next" id="epic-16"><div class="tag">Start here</div><div class="row"><h4>16 · Reachable from anywhere</h4><span class="count">0 / 6</span></div><div class="bar" role="img" aria-label="0 of 6 stories done"><i class="d" style="width:0.0%"></i><i class="r" style="width:0.0%"></i><i class="p" style="width:0.0%"></i></div><p class="why">A shared file reaches any torrent app on Windows or Android, anywhere, with no router or port setup, through a helper every app can use.</p><ol class="stories"><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">16.1</span><span class="what">Spike: stock apps download through an always-reachable peer <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">16.2</span><span class="what">The helper program</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">16.3</span><span class="what">ComParta uses a helper</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">16.4</span><span class="what">Copy the link, or save a download file, for other apps</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">16.5</span><span class="what">Run your own helper: the guide <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">16.6</span><span class="what">Field test: any app, anywhere <span class="person">needs a person</span></span></li></ol></article></div><h3 class="release-h">R1 · Family pilot <span>Windows, Portuguese, two homes</span></h3><div class="cards"><article class="card" id="epic-1"><div class="row"><h4>1 · Share a file</h4><span class="count">13 / 14</span></div><div class="bar" role="img" aria-label="13 of 14 stories done"><i class="d" style="width:92.9%"></i><i class="r" style="width:0.0%"></i><i class="p" style="width:0.0%"></i></div><p class="why">Add and remove shared files in the real Windows app.</p><ol class="stories"><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">1.1</span><span class="what">Solution scaffold and walking skeleton</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">1.2</span><span class="what">Continuous integration on Windows</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">1.3</span><span class="what">Bridge contract, generated types and fake bridge</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">1.4</span><span class="what">Core: share rules and ports</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">1.5</span><span class="what">Storage: shares in SQLite</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">1.6</span><span class="what">Engine: offer and stop offering a file with MonoTorrent</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">1.7</span><span class="what">UI: the list of my shares</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">1.8</span><span class="what">UI: add a file</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">1.9</span><span class="what">UI: remove a share</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">1.10</span><span class="what">Shell: the real app adds and removes a file</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">1.11</span><span class="what">Notice a shared file that went missing</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">1.12</span><span class="what">Guards for plain language and boundaries</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">1.13</span><span class="what">Refactor sweep</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">1.14</span><span class="what">Check the release build on a second PC <span class="person">needs a person</span></span></li></ol></article><article class="card" id="epic-2"><div class="row"><h4>2 · Send to a person</h4><span class="count">5 / 7</span></div><div class="bar" role="img" aria-label="5 of 7 stories done"><i class="d" style="width:71.4%"></i><i class="r" style="width:14.3%"></i><i class="p" style="width:0.0%"></i></div><p class="why">Copy an invite, send it in any chat, and the other person receives the file.</p><ol class="stories"><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">2.1</span><span class="what">First version: copy an invite and receive the file</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">2.2</span><span class="what">Invites become ComParta links</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">2.3</span><span class="what">Copy a friendly invite message</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">2.4</span><span class="what">Confirm before receiving</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">2.5</span><span class="what">Paste an invite anywhere</span></li><li class="st-built"><span class="dot" aria-label="Built, waiting on a person" title="Built, waiting on a person"></span><span class="sref">2.6</span><span class="what">One running copy, and opening an invite by clicking its link <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">2.7</span><span class="what">Network capture during a real transfer <span class="person">needs a person</span></span></li></ol></article><article class="card" id="epic-9"><div class="row"><h4>9 · Connect between homes</h4><span class="count">5 / 9</span></div><div class="bar" role="img" aria-label="5 of 9 stories done"><i class="d" style="width:55.6%"></i><i class="r" style="width:11.1%"></i><i class="p" style="width:0.0%"></i></div><p class="why">Two homes connect without anyone knowing about networks; measured in the field.</p><ol class="stories"><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">9.1</span><span class="what">Field test: how often do two homes connect today <span class="person">needs a person</span></span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">9.2</span><span class="what">Engine reports reachability facts; core turns them into health</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">9.3</span><span class="what">Connection indicator and help page</span></li><li class="st-built"><span class="dot" aria-label="Built, waiting on a person" title="Built, waiting on a person"></span><span class="sref">9.4</span><span class="what">Windows Firewall rule without a confusing prompt <span class="person">needs a person</span></span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">9.5</span><span class="what">IPv6 everywhere</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">9.6</span><span class="what">Router port mapping that lasts</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">9.7</span><span class="what">Either side reachable is enough</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">9.8</span><span class="what">Field test again <span class="person">needs a person</span></span></li><li class="st-dropped"><span class="dot" aria-label="Dropped" title="Dropped"></span><span class="sref">9.9</span><span class="what">A relay run by someone the family chooses (only if decided)</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">9.10</span><span class="what">Evaluate another engine (only if the field test calls for it)</span></li></ol></article><article class="card" id="epic-15"><div class="row"><h4>15 · Speed bar and details</h4><span class="count">4 / 4</span></div><div class="bar" role="img" aria-label="4 of 4 stories done"><i class="d" style="width:100.0%"></i><i class="r" style="width:0.0%"></i><i class="p" style="width:0.0%"></i></div><p class="why">Total speed and a Stop button on top; an information button on every file.</p><ol class="stories"><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">15.1</span><span class="what">Engine reports speeds, connections and bytes moved</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">15.2</span><span class="what">Stop sending, receiving or both, remembered</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">15.3</span><span class="what">Speed bar with the Stop menu</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">15.4</span><span class="what">Information button and details window</span></li></ol></article><article class="card" id="epic-6"><div class="row"><h4>6 · Brazilian Portuguese</h4><span class="count">4 / 5</span></div><div class="bar" role="img" aria-label="4 of 5 stories done"><i class="d" style="width:80.0%"></i><i class="r" style="width:0.0%"></i><i class="p" style="width:0.0%"></i></div><p class="why">The pilot family speaks Portuguese, so the app does too.</p><ol class="stories"><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">6.1</span><span class="what">A catalog per language with a completeness check</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">6.2</span><span class="what">Settings in the product database</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">6.3</span><span class="what">Choose the language</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">6.4</span><span class="what">The Brazilian Portuguese catalog</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">6.5</span><span class="what">Native speaker review <span class="person">needs a person</span></span></li></ol></article><article class="card" id="epic-8"><div class="row"><h4>8 · Drive-like home</h4><span class="count">10 / 12</span></div><div class="bar" role="img" aria-label="10 of 12 stories done"><i class="d" style="width:83.3%"></i><i class="r" style="width:0.0%"></i><i class="p" style="width:0.0%"></i></div><p class="why">The Google Drive look: grid or list, details panel, search and sort.</p><ol class="stories"><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">8.1</span><span class="what">Design tokens and base components</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">8.2</span><span class="what">App frame: rail, header, sections, phone navigation</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">8.3</span><span class="what">Items as a grid or a list</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">8.4</span><span class="what">Thumbnails for photos and videos</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">8.5</span><span class="what">Use what I received</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">8.6</span><span class="what">Drop files onto the window to share them</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">8.7</span><span class="what">Search and sort</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">8.8</span><span class="what">Details panel</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">8.9</span><span class="what">Guided first send</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">8.10</span><span class="what">Toasts and empty states</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">8.11</span><span class="what">Accessibility pass <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">8.12</span><span class="what">Usability sessions with three people <span class="person">needs a person</span></span></li></ol></article><article class="card" id="epic-4"><div class="row"><h4>4 · Follow a transfer</h4><span class="count">5 / 5</span></div><div class="bar" role="img" aria-label="5 of 5 stories done"><i class="d" style="width:100.0%"></i><i class="r" style="width:0.0%"></i><i class="p" style="width:0.0%"></i></div><p class="why">The sender sees who is getting a file; stuck states explain themselves.</p><ol class="stories"><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">4.1</span><span class="what">The sender sees who is getting a file</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">4.2</span><span class="what">Time left in plain words</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">4.3</span><span class="what">Waiting, no space and blocked states</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">4.4</span><span class="what">Progress that is honest after a restart</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">4.5</span><span class="what">Notifications when the window is not watched</span></li></ol></article><article class="card" id="epic-14"><div class="row"><h4>14 · Download from any link</h4><span class="count">3 / 5</span></div><div class="bar" role="img" aria-label="3 of 5 stories done"><i class="d" style="width:60.0%"></i><i class="r" style="width:0.0%"></i><i class="p" style="width:0.0%"></i></div><p class="why">Paste any public download link or open a download file, like qBittorrent but simpler.</p><ol class="stories"><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">14.1</span><span class="what">Download from a pasted link</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">14.2</span><span class="what">Open a download file</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">14.3</span><span class="what">Pause, continue, speed and time left</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">14.4</span><span class="what">More options: choose files, limit speed, stop sharing when finished</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">14.5</span><span class="what">Open download files and links from Windows and the browser <span class="person">needs a person</span></span></li></ol></article><article class="card" id="epic-10"><div class="row"><h4>10 · Keep sharing in the background</h4><span class="count">4 / 4</span></div><div class="bar" role="img" aria-label="4 of 4 stories done"><i class="d" style="width:100.0%"></i><i class="r" style="width:0.0%"></i><i class="p" style="width:0.0%"></i></div><p class="why">Closing the window does not silently stop a transfer.</p><ol class="stories"><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">10.1</span><span class="what">Stay in the notification area while there is work</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">10.2</span><span class="what">Ask before quitting would cut someone off</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">10.3</span><span class="what">Start with Windows</span></li><li class="st-done"><span class="dot" aria-label="Done" title="Done"></span><span class="sref">10.4</span><span class="what">No sleep in the middle of a transfer</span></li></ol></article><article class="card" id="epic-3"><div class="row"><h4>3 · Safe received files</h4><span class="count">0 / 5</span></div><div class="bar" role="img" aria-label="0 of 5 stories done"><i class="d" style="width:0.0%"></i><i class="r" style="width:0.0%"></i><i class="p" style="width:20.0%"></i></div><p class="why">Nothing from another person reaches the PC without Windows&#x27; own protection.</p><ol class="stories"><li class="st-busy"><span class="dot" aria-label="In progress" title="In progress"></span><span class="sref">3.1</span><span class="what">Hostile names cannot escape or disguise</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">3.2</span><span class="what">Hostile metadata end to end</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">3.3</span><span class="what">Windows marks and checks every received file</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">3.4</span><span class="what">Warn before opening a program</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">3.5</span><span class="what">Nothing opens by itself</span></li></ol></article><article class="card" id="epic-12"><div class="row"><h4>12 · Help, settings, first run</h4><span class="count">0 / 5</span></div><div class="bar" role="img" aria-label="0 of 5 stories done"><i class="d" style="width:0.0%"></i><i class="r" style="width:0.0%"></i><i class="p" style="width:0.0%"></i></div><p class="why">Welcome, settings, help, and a report for whoever helps you.</p><ol class="stories"><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">12.1</span><span class="what">Settings page</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">12.2</span><span class="what">Choose where received files go</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">12.3</span><span class="what">First-run welcome</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">12.4</span><span class="what">Help page</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">12.5</span><span class="what">Copy a report for whoever helps you</span></li></ol></article><article class="card" id="epic-5"><div class="row"><h4>5 · Install and update</h4><span class="count">0 / 7</span></div><div class="bar" role="img" aria-label="0 of 7 stories done"><i class="d" style="width:0.0%"></i><i class="r" style="width:0.0%"></i><i class="p" style="width:0.0%"></i></div><p class="why">One download, signed, that updates without uninstalling.</p><ol class="stories"><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">5.1</span><span class="what">License and third-party notices <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">5.2</span><span class="what">An MSIX package from CI</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">5.3</span><span class="what">Microsoft Store listing <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">5.4</span><span class="what">Release workflow from a tag <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">5.5</span><span class="what">Updating keeps everything</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">5.6</span><span class="what">Signed zip for people without the Store <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">5.7</span><span class="what">Install check on a clean PC <span class="person">needs a person</span></span></li></ol></article></div><h3 class="release-h">R2 · Albums and phones <span>Folders, then Android</span></h3><div class="cards"><article class="card" id="epic-11"><div class="row"><h4>11 · Share a folder</h4><span class="count">0 / 5</span></div><div class="bar" role="img" aria-label="0 of 5 stories done"><i class="d" style="width:0.0%"></i><i class="r" style="width:0.0%"></i><i class="p" style="width:0.0%"></i></div><p class="why">A whole folder or several files with one invite.</p><ol class="stories"><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">11.1</span><span class="what">Share items in core and storage</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">11.2</span><span class="what">Pick a folder or several files</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">11.3</span><span class="what">Offer several items with one invite</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">11.4</span><span class="what">Receive a folder</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">11.5</span><span class="what">Folder cards and wording</span></li></ol></article><article class="card" id="epic-7"><div class="row"><h4>7 · Android</h4><span class="count">0 / 11</span></div><div class="bar" role="img" aria-label="0 of 11 stories done"><i class="d" style="width:0.0%"></i><i class="r" style="width:0.0%"></i><i class="p" style="width:0.0%"></i></div><p class="why">The same app on an Android phone, from its share menu or a chat.</p><ol class="stories"><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">7.1</span><span class="what">Android shell walking skeleton <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">7.2</span><span class="what">Share from a phone without file paths <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">7.3</span><span class="what">Received files on a phone <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">7.4</span><span class="what">Phone layout</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">7.5</span><span class="what">ComParta in the phone&#x27;s share menu <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">7.6</span><span class="what">Open an invite tapped in a chat <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">7.7</span><span class="what">Keep going with the screen off <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">7.8</span><span class="what">Ask before using mobile data</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">7.9</span><span class="what">Pass an invite with a QR code <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">7.10</span><span class="what">Phone and PC field test <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">7.11</span><span class="what">Publish on Google Play and GitHub <span class="person">needs a person</span></span></li></ol></article></div><h3 class="release-h">R3 · People I share with <span>Only chosen people get it</span></h3><div class="cards"><article class="card" id="epic-13"><div class="row"><h4>13 · People and Shared with me</h4><span class="count">0 / 6</span></div><div class="bar" role="img" aria-label="0 of 6 stories done"><i class="d" style="width:0.0%"></i><i class="r" style="width:0.0%"></i><i class="p" style="width:0.0%"></i></div><p class="why">After the first invite, sending to the same person needs no copy and paste.</p><ol class="stories"><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">13.1</span><span class="what">Spike: private sharing between known people <span class="person">needs a person</span></span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">13.2</span><span class="what">Device identity and pairing</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">13.3</span><span class="what">My people</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">13.4</span><span class="what">Send to a person from inside ComParta</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">13.5</span><span class="what">Shared with me</span></li><li class="st-planned"><span class="dot" aria-label="Planned" title="Planned"></span><span class="sref">13.6</span><span class="what">Blinded lookup</span></li></ol></article></div>
+    <p class="caption">Later, not planned yet: iOS, macOS and Linux; a download page on the helper for a browser; watch a video while it arrives (proposed from Stremio).</p>
+  </section>
+
+  <section aria-labelledby="refs">
+    <h2 id="refs">What we measure ourselves against</h2>
+    <div class="refs">
+      <div class="ref"><h3>qBittorrent</h3><p>Works with every other BitTorrent app and opens any public link. Details, pause, speeds. Its power-user screens stay out of the main view.</p></div>
+      <div class="ref"><h3>Stremio</h3><p>Media first, on Windows and Android with the same feel. Proposed: a video plays while it is still arriving (waiting for a yes).</p></div>
+      <div class="ref"><h3>Google Drive</h3><p>The look: a grid or list, a details panel, search and sort, sharing by copying a link, and later "Shared with me".</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="decide">
+    <h2 id="decide">Decisions waiting</h2>
+    <div class="sheet scroll">
+      <table>
+        <thead><tr><th>Id</th><th>Question</th><th>Recommendation</th></tr></thead>
+        <tbody>
+          <tr><td>D-5</td><td>Where does the first helper run?</td><td>The free Oracle Cloud machine; a second PC with one forwarded port for development.</td></tr>
+          <tr><td>D-6</td><td>Does the released app use the project's helper for everyone?</td><td>Yes for the family pilot; decide again before a public release.</td></tr>
+          <tr><td>D-1</td><td>Which open source license?</td><td>Apache-2.0.</td></tr>
+          <tr><td>D-2</td><td>How do Windows users get the app?</td><td>Microsoft Store first, plus a zip on GitHub.</td></tr>
+          <tr><td>CAP-30</td><td>Add "watch while it arrives" from Stremio?</td><td>Yes, in R2 after Android.</td></tr>
+          <tr><td>PR #20</td><td>Keep the paused safe-received-files work?</td><td>Keep it as a draft until epic 16 is done.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>Drawn from <code>Planning/initiative-comparta/tickets.toml</code> and each epic's stories on 13 Oct 2026. Counts change as stories are marked done.</footer>
+</main>
+</body>
+</html>

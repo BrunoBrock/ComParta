@@ -7,7 +7,7 @@ paradigm: 'hexagonal (ports and adapters), web-view UI as a driving adapter'
 scope: 'ComParta whole product: Windows (R1), folders and Android (R2), people I share with (R3)'
 status: final
 created: '2026-10-08'
-updated: '2026-10-12'
+updated: '2026-10-13'
 binds: []
 sources:
   - '../../ReadMe.md'
@@ -96,6 +96,8 @@ An arrow means "may depend on". `ComParta.Core` depends on no other project and 
 - **Rule:** All discovery, encryption and port settings come from one `SharingPolicy` object in core, applied only by the engine adapter. The policy (decided 2026-10-08) allows three ways for two devices to meet, all keyed by the invite: the sender's own network address carried inside the invite, local-network discovery, and the public BitTorrent lookup network (DHT). Peer exchange and trackers stay off, addresses of servers found in a pasted invite are dropped, and connections are encrypted. No other code sets engine network options.
 - **Amended 2026-10-10 (CAP-25):** a *download link* or *download file* the person brings from elsewhere is public content, not an invite. For those only, and only when `SharingPolicy.AllowServersInDownloadLinks` is on, the servers named in the link or file are kept and exchanging addresses with other devices is allowed for that transfer. Invites made by ComParta keep the closed rules above. The engine adapter decides which is which; core never sees the difference.
 - **Rule (decided 2026-10-12):** A share is reachable from the whole internet, not only the local network. How reachability is improved and explained to the person is AD-15.
+- **Amended 2026-10-13 (CAP-29):** trackers stay off unless the person names public servers in Settings (http, https or udp, at most 20). Every shared file then announces to them, files already shared included, and the link carries them as `tr=`. They help others find this computer, not reach it.
+- **Amended 2026-10-13 (CAP-28, AD-23):** when a helper is set, every shared file is also handed to it and announced to its public server, and the link names the helper first.
 - **Accepted trade-off:** the content's fingerprint is announced on the public lookup network, so a share is unlisted, not secret: only someone holding the invite can ask for it, but the fingerprint is not hidden from that network. A stronger model (per-person keys) stays in Deferred.
 - **Accepted trade-off (2026-10-12), for family and friends:** the invite is a bearer key, so anyone holding it can download, it never expires, and removing the share is the only revocation. The sender's public address is visible to anyone who asks for the fingerprint or connects. The encryption hides traffic from casual inspection but is not confidentiality. Uploads are not limited.
 
@@ -104,6 +106,7 @@ An arrow means "may depend on". `ComParta.Core` depends on no other project and 
 - **Binds:** all
 - **Prevents:** a cloud dependency arriving through a convenience feature.
 - **Rule:** No code calls a service operated by the ComParta project or a third-party hosted API, and nothing is collected or sent. There is no sign-in. When identity is needed it is a key pair generated and kept on the device.
+- **Amended 2026-10-13 (the maintainer's goal: any torrent app, anywhere, no router setup):** one exception, the helper (AD-23). It is open source, runs on a computer the project or the family chooses, and is named in Settings, where the person can change it or turn it off. It receives only the files the person shares and their descriptions, never usage data, and needs no account. The public servers the person names (AD-8) are not a service ComParta calls on its own.
 
 ### AD-10 — Each kind of data has one owner
 
@@ -135,6 +138,13 @@ An arrow means "may depend on". `ComParta.Core` depends on no other project and 
 - **Prevents:** the UI adding up speeds itself from stale lists; a global stop that changes or forgets each transfer's own pause; torrent vocabulary in a details window.
 - **Rule:** The engine reports activity (`EngineActivity`: total receiving and sending speed, and per share and per transfer the speeds, the number of other computers connected and the bytes moved since start) through `ITransferEngine`. Core's `ActivityUseCases` owns two flags, sending stopped and receiving stopped, stores them in the settings store (AD-10), and tells the engine with one call; the engine pauses every offer or every transfer while its flag is on, and a transfer's own pause survives a global stop and continue. Totals reach the UI as one `activity.changed` event at most once a second; a details window asks for one item's details while it is open. The UI shows a globally stopped item as "Stopped" without changing its stored state. Added 2026-10-12 for CAP-26 and CAP-27.
 
+### AD-23 — A helper that every torrent app can use makes any share reachable
+
+- **Binds:** engine, core, contracts, UI, and the new `ComParta.Helper` program
+- **Prevents:** a relay only ComParta understands (stock apps such as qBittorrent or µTorrent could not use it); shares that work only when someone opens a router port; a helper that quietly becomes a cloud store.
+- **Rule:** The helper is an ordinary BitTorrent peer with a public server (tracker), built on the same engine as the app, on a computer everyone can reach (the free Oracle Cloud machine, or a PC with one forwarded port). A sharing ComParta that has a helper set connects out to it, hands it the share's description over HTTPS with the helper key, and announces to its server; the helper fetches the bytes over that outgoing connection and serves them to anyone holding the link. The link (AD-16) names the helper's server (`tr=`) and address (`x.pe=`) first, so every torrent app on any device finds it. The helper keeps a full copy only while the share exists, within a set space, dropping the oldest first; stopping a share removes it. Only installs holding the key can add files. The engine adapter is the only code that talks to the helper; core sees a setting and a reachability fact.
+- **Accepted trade-off (2026-10-13), for the family pilot:** the helper holds a copy of what it passes along and whoever runs it could read it; peer connections stay encrypted. The person is told in plain words that a copy passes through their helper computer. Who runs a helper for people outside the maintainer's family is decision D-6.
+
 ### AD-13 — Received content is marked and checked by Windows, not by us
 
 - **Binds:** core, shell, UI
@@ -153,6 +163,7 @@ An arrow means "may depend on". `ComParta.Core` depends on no other project and 
 - **Binds:** engine, core, shell, UI
 - **Prevents:** a hidden hosted relay or "connectivity check" server sneaking in to make home-to-home work; network jargon reaching the person.
 - **Rule:** The engine adapter listens on IPv4 and IPv6, asks the router for a port mapping (UPnP and NAT-PMP/PCP) when `SharingPolicy.AllowPortForwarding` is on, puts every address it has good reason to think is reachable (mapped IPv4, global IPv6) into the invite, and keeps looking for the other side on the lookup network so that a transfer works when *either* device is reachable. It reports neutral facts (`ReachabilityFacts`: mapping obtained, global IPv6 present, listening, firewall rule present, recent incoming connection seen) through `ITransferEngine`; core reduces them to `ConnectionHealth` (`good`, `limited`, `blocked`) and the UI explains that in plain words (UX design, "Stuck transfer"). No code contacts a service to test reachability. A relay, if decision D-3 allows one, is another adapter behind the same port, opt-in, and run by someone the person chooses.
+- **Amended 2026-10-13:** decision D-3 is answered by the maintainer's goal (no router or port setup on either side, any torrent app). When neither side can be reached, the helper (AD-23) carries the file; the facts gain "reachable through the helper", which core counts as `good`. Port mapping, IPv6 and either side connecting out stay first, so a helper is used only for what they cannot do. Field result 2026-10-13: the automatic port opening failed on the maintainer's router and phones on mobile data are never reachable, so the helper is needed in ordinary homes, not only in rare ones.
 
 ### AD-16 — An invite is the engine's own link, opaque to core
 
@@ -268,7 +279,8 @@ Operational envelope: the product is an installed desktop app with no servers an
 | --- | --- | --- |
 | Stronger privacy model: per-person keys so that only chosen people can download, and no fingerprint on the public lookup network | The first release uses the invite-as-secret model in AD-8. A design spike (epic 13 story 1) comes first; one candidate is announcing a value derived from a secret in the invite instead of the content fingerprint. | R3, or before the app is offered outside the maintainer's circle, whichever is first. |
 | Hardening considered and not decided: an upload rate limit and connection cap, invites that expire, an option to turn the public lookup network off | The AD-8 trade-off is accepted for family and friends (2026-10-12). | Before the app is offered outside the maintainer's circle. |
-| A relay for two devices that cannot reach each other | AD-15 covers IPv6, port mapping and either-side-reachable first. Any relay must be opt-in and run by someone the person chooses (decision D-3). | After the epic 9 field test measures how often homes fail to connect. |
+| A relay for two devices that cannot reach each other | Closed 2026-10-13: answered by AD-23, a helper every torrent app can use (epic 16). | Closed. |
+| A helper that serves pieces on demand without keeping a copy, and a browser download page on the helper | AD-23 keeps a full copy while a share exists, which is simpler and enough for the family pilot. | When helper space or privacy becomes the limit. |
 | Another engine with uTP and hole punching | AD-2 keeps a swap cheap; MonoTorrent works on the same network and when one side is reachable. | Only if the field test shows failures a different engine would fix. |
 | Open source license | Does not affect code structure; MonoTorrent's MIT license fits MIT, Apache-2.0 and GPL-3.0. Decision D-1. | Before the repository is made public. |
 | iOS, macOS and Linux shells | AD-1 keeps the path open; not in R1 to R3. | After R3. |

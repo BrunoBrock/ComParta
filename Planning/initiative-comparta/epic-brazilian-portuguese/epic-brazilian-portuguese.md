@@ -49,5 +49,5 @@ The pt-BR catalog and language selection. Not other languages.
 - Built 2026-10-11: stories 1 to 4. The language menu sits in the header until epic 12's Settings screen. Story 5 (native speaker review) is next.
 - Assumption: the app starts in the Windows display language when it is supported, English otherwise.
 - Plan 2026-10-10: moved forward to R1 (decision P-1). Settings are stored in the product database (architecture conventions); story 3 adds the first setting and the commands later settings reuse.
-- Hand-off: Bruno, or another native speaker, reviews the catalog in story 5.
+- Hand-off: The maintainer, or another native speaker, reviews the catalog in story 5.
 - Waits on epic-share-a-file because: it provides the translation catalog and the check that every string goes through it.

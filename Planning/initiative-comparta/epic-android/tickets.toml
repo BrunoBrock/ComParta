@@ -121,6 +121,6 @@ description = "Signs release builds with an upload key kept as a CI secret, publ
 verify = "The app installs from the Play internal-testing link and from the APK on a second phone."
 covers = ["CAP-10", "CAP-11"]
 after = [10]
-hitl = true                 # Bruno's Play developer account
+hitl = true                 # The maintainer's Play developer account
 risk = "medium"
 unknown = "Decision D-4: publish on Google Play."

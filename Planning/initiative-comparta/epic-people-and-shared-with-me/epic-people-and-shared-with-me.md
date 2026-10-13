@@ -26,7 +26,7 @@ Maria sees "Paulo shared Natal 2024 with you" in her ComParta without opening Wh
 
 ## Done when
 
-1. The spike's design is accepted by Bruno and written into the architecture as a revised AD-8 and a new decision.
+1. The spike's design is accepted by the maintainer and written into the architecture as a revised AD-8 and a new decision.
 2. Accepting an invite can add the sender to My people, on both devices, with no account.
 3. A share sent to someone in My people appears in their Shared with me when both devices are on, and they get it with one click.
 4. Only the chosen people's devices can get such a share; a captured invite alone is not enough.

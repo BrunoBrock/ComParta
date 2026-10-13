@@ -3,7 +3,7 @@ title: 'Router port mapping that lasts, with the public address in the invite'
 type: 'feature'
 ticket: '6'
 created: '2026-10-12'
-status: 'ready-for-dev'
+status: done
 baseline_revision: 'f1107973ca9211503d1736a4d9f3cfa681b37bbe'
 route: 'full'
 route_source: 'auto'
