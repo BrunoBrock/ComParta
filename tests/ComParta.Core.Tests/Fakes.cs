@@ -8,6 +8,13 @@ internal sealed class FakeShareRepository : IShareRepository
     public Task<IReadOnlyList<Share>> GetAllAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<Share>>([.. Items]);
     public Task AddAsync(Share share, CancellationToken ct = default) { Items.Add(share); return Task.CompletedTask; }
     public Task RemoveAsync(ShareId id, CancellationToken ct = default) { Items.RemoveAll(s => s.Id == id); return Task.CompletedTask; }
+    public Task SetPausedAsync(ShareId id, bool paused, CancellationToken ct = default)
+    {
+        var index = Items.FindIndex(s => s.Id == id);
+        if (index >= 0)
+            Items[index] = Items[index] with { Paused = paused };
+        return Task.CompletedTask;
+    }
 }
 
 internal sealed class FakeTransferRepository : ITransferRepository
@@ -42,11 +49,15 @@ internal sealed class FakeEngine : ITransferEngine
     public (bool Sending, bool Receiving) StoppedFlags { get; private set; }
     public int StopCalls { get; private set; }
 
-    public Task SetStoppedAsync(bool sending, bool receiving, CancellationToken ct = default)
+    /// <summary>When set, a stop waits for it, like a real engine stopping many files.</summary>
+    public Task? HoldStop { get; set; }
+
+    public async Task SetStoppedAsync(bool sending, bool receiving, CancellationToken ct = default)
     {
-        StoppedFlags = (sending, receiving);
         StopCalls++;
-        return Task.CompletedTask;
+        if (HoldStop is { } hold)
+            await hold;
+        StoppedFlags = (sending, receiving);
     }
 
     /// <summary>Sets new activity and tells whoever listens, as the real engine does every second.</summary>
@@ -73,7 +84,19 @@ internal sealed class FakeEngine : ITransferEngine
         return Task.CompletedTask;
     }
 
-    public Task StopOfferingAsync(ShareId id, CancellationToken ct = default) { Offered.Remove(id); return Task.CompletedTask; }
+    /// <summary>Runs while a share is being let go of, to see what the app shows meanwhile.</summary>
+    public Action? OnStopOffering { get; set; }
+
+    public Task StopOfferingAsync(ShareId id, CancellationToken ct = default)
+    {
+        OnStopOffering?.Invoke();
+        Offered.Remove(id);
+        return Task.CompletedTask;
+    }
+
+    public HashSet<ShareId> PausedOffers { get; } = [];
+    public Task PauseOfferingAsync(ShareId id, CancellationToken ct = default) { PausedOffers.Add(id); return Task.CompletedTask; }
+    public Task ContinueOfferingAsync(ShareId id, CancellationToken ct = default) { PausedOffers.Remove(id); return Task.CompletedTask; }
 
     public Task<string?> GetInviteAsync(ShareId id, CancellationToken ct = default) =>
         Task.FromResult(Offered.ContainsKey(id) ? InvitePrefix + id : null);

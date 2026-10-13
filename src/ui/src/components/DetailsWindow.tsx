@@ -1,7 +1,9 @@
+import { Pause, Play } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Bridge, ErrorCode, ShareDetailsDto, TransferDetailsDto } from '../bridge/index.ts'
 import { formatDateTime, formatRate, formatSize, formatTimeLeft, type MessageKey, percentOf, t } from '../i18n/index.ts'
 import { inviteMessage } from '../invite.ts'
+import type { ItemToggle } from './ItemView.tsx'
 import Dialog from './ui/Dialog.tsx'
 
 export type DetailsOf = { kind: 'share' | 'transfer'; id: string; name: string }
@@ -11,6 +13,8 @@ interface DetailsWindowProps {
   item: DetailsOf
   /** Stopped from the speed bar: the state row says so, as the item does. */
   stopped: boolean
+  /** The file's own pause or play button, as on its card. */
+  toggle?: ItemToggle
   onClose: () => void
   onError: (code: ErrorCode) => void
   onInfo: (text: string) => void
@@ -67,7 +71,7 @@ function transferRows(transfer: TransferDetailsDto, stopped: boolean): [MessageK
  * Everything ComParta knows about one file, refreshed every second while open (CAP-26). Escape or
  * Close shuts it, and focus goes back to the button that opened it.
  */
-export default function DetailsWindow({ bridge, item, stopped, onClose, onError, onInfo }: DetailsWindowProps) {
+export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, onError, onInfo }: DetailsWindowProps) {
   const [details, setDetails] = useState<Details | null>(null)
   const [gone, setGone] = useState(false)
 
@@ -129,6 +133,12 @@ export default function DetailsWindow({ bridge, item, stopped, onClose, onError,
         <button type="button" onClick={onClose} autoFocus>
           {t('details.close')}
         </button>
+        {!gone && toggle && (
+          <button type="button" onClick={toggle.onToggle} aria-label={toggle.label}>
+            {toggle.paused ? <Play size={18} aria-hidden="true" /> : <Pause size={18} aria-hidden="true" />}
+            {t(toggle.paused ? 'transfers.continue' : 'transfers.pause')}
+          </button>
+        )}
         {!gone && details?.kind === 'transfer' && details.value.state === 'done' && (
           <>
             <button type="button" onClick={() => runOnReceived('received.reveal')}>

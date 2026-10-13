@@ -5,6 +5,7 @@ public interface IShareRepository
     Task<IReadOnlyList<Share>> GetAllAsync(CancellationToken ct = default);
     Task AddAsync(Share share, CancellationToken ct = default);
     Task RemoveAsync(ShareId id, CancellationToken ct = default);
+    Task SetPausedAsync(ShareId id, bool paused, CancellationToken ct = default);
 }
 
 public interface ITransferRepository
@@ -81,18 +82,30 @@ public interface ITransferEngine
     /// last report. Facts only: core decides what they mean (AD-15).
     /// </summary>
     event Action<ReachabilityFacts>? ReachabilityChanged;
-
-    /// <summary>Raised about once a second while running, so speeds can be shown (AD-22).</summary>
-    event Action? ActivityChanged;
-
-    /// <summary>The speeds, connections and bytes moved now (AD-22).</summary>
-    EngineActivity GetActivity();
-
-    /// <summary>
-    /// Stops or starts all sending and all receiving (AD-22). A transfer the person paused on its
-    /// own stays paused when receiving starts again.
-    /// </summary>
-    Task SetStoppedAsync(bool sending, bool receiving, CancellationToken ct = default);
+
+
+    /// <summary>Raised about once a second while running, so speeds can be shown (AD-22).</summary>
+
+    event Action? ActivityChanged;
+
+
+
+    /// <summary>The speeds, connections and bytes moved now (AD-22).</summary>
+
+    EngineActivity GetActivity();
+
+
+
+    /// <summary>
+
+    /// Stops or starts all sending and all receiving (AD-22). A transfer the person paused on its
+
+    /// own stays paused when receiving starts again.
+
+    /// </summary>
+
+    Task SetStoppedAsync(bool sending, bool receiving, CancellationToken ct = default);
+
 
     Task StartAsync(SharingPolicy policy, CancellationToken ct = default);
     Task StopAsync();
@@ -101,6 +114,10 @@ public interface ITransferEngine
     Task OfferAsync(ShareId id, string filePath, CancellationToken ct = default);
     /// <summary>Stops offering and forgets the share. Never touches the file.</summary>
     Task StopOfferingAsync(ShareId id, CancellationToken ct = default);
+    /// <summary>Stops sending one shared file; a global continue leaves it paused. Never touches the file.</summary>
+    Task PauseOfferingAsync(ShareId id, CancellationToken ct = default);
+    /// <summary>Sends a paused shared file again, unless all sending is stopped.</summary>
+    Task ContinueOfferingAsync(ShareId id, CancellationToken ct = default);
     /// <summary>The invite text for a share that is ready, or null when it is not.</summary>
     Task<string?> GetInviteAsync(ShareId id, CancellationToken ct = default);
 

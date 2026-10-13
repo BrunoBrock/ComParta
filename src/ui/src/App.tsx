@@ -1,5 +1,5 @@
 import { CircleHelp, Search, Settings, X } from 'lucide-react'
-import { type DragEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { type DragEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ActivityDto,
   Bridge,
@@ -16,7 +16,8 @@ import ActionButton from './components/ActionButton.tsx'
 import ConnectionHelp from './components/ConnectionHelp.tsx'
 import DetailsWindow, { type DetailsOf } from './components/DetailsWindow.tsx'
 import HelpDialog from './components/HelpDialog.tsx'
-import type { ViewMode } from './components/ItemView.tsx'
+import type { ItemSpeed, ViewMode } from './components/ItemView.tsx'
+import { shareToggle, transferToggle } from './components/itemToggles.ts'
 import Notice from './components/Notice.tsx'
 import Rail, { type Section } from './components/Rail.tsx'
 import ReceiveDialog from './components/ReceiveDialog.tsx'
@@ -246,7 +247,30 @@ export default function App({ bridge }: AppProps) {
   }
 
   async function setStopped(stopped: SetActivityArgs) {
+    // The button changes at once; the app's own report follows.
+    setActivity((current) => current && { ...current, ...stopped })
     const result = await bridge.invoke('activity.set', stopped)
+    if (result.ok) return
+    showError(result.error.code)
+    const now = await bridge.invoke('activity.get')
+    if (now.ok) setActivity(now.value)
+  }
+
+  /** Continues one side for a file that was stopped with everything else. */
+  const continueSending = () =>
+    void setStopped({ sendingStopped: false, receivingStopped: activity?.receivingStopped ?? false })
+  const continueReceiving = () =>
+    void setStopped({ sendingStopped: activity?.sendingStopped ?? false, receivingStopped: false })
+
+  async function setSharePaused(id: string, paused: boolean) {
+    clearNotice()
+    const result = await bridge.invoke(paused ? 'shares.pause' : 'shares.resume', { id })
+    if (!result.ok) showError(result.error.code)
+  }
+
+  async function setTransferPaused(id: string, paused: boolean) {
+    clearNotice()
+    const result = await bridge.invoke(paused ? 'transfers.pause' : 'transfers.resume', { id })
     if (!result.ok) showError(result.error.code)
   }
 
@@ -340,6 +364,32 @@ export default function App({ bridge }: AppProps) {
     setPasted(undefined)
   }
 
+  const speeds = useMemo(
+    () =>
+      new Map<string, ItemSpeed>(
+        (activity?.items ?? []).map((item) => [
+          item.id,
+          { receiving: item.receivingBytesPerSecond, sending: item.sendingBytesPerSecond },
+        ]),
+      ),
+    [activity],
+  )
+
+  // The details window offers the same pause or play button as the file's card.
+  const detailsShare = details?.kind === 'share' ? shares?.find((s) => s.id === details.id) : undefined
+  const detailsTransfer = details?.kind === 'transfer' ? transfers?.find((t) => t.id === details.id) : undefined
+  const detailsToggle = detailsShare
+    ? shareToggle(detailsShare, activity?.sendingStopped ?? false, {
+        setPaused: (paused) => void setSharePaused(detailsShare.id, paused),
+        continueAll: continueSending,
+      })
+    : detailsTransfer
+      ? transferToggle(detailsTransfer, activity?.receivingStopped ?? false, {
+          setPaused: (paused) => void setTransferPaused(detailsTransfer.id, paused),
+          continueAll: continueReceiving,
+        })
+      : undefined
+
   const shared = (
     <SharesSection
       bridge={bridge}
@@ -356,6 +406,9 @@ export default function App({ bridge }: AppProps) {
       onStart={clearNotice}
       onClearSearch={clearSearch}
       stopped={activity?.sendingStopped ?? false}
+      speeds={speeds}
+      onSetPaused={(id, paused) => void setSharePaused(id, paused)}
+      onContinueAll={continueSending}
       onDetails={setDetails}
     />
   )
@@ -375,6 +428,9 @@ export default function App({ bridge }: AppProps) {
       stuck={stuck}
       onHelp={() => setHelping(true)}
       stopped={activity?.receivingStopped ?? false}
+      speeds={speeds}
+      onSetPaused={(id, paused) => void setTransferPaused(id, paused)}
+      onContinueAll={continueReceiving}
       onDetails={setDetails}
       onReceive={startReceiving}
     />
@@ -464,6 +520,7 @@ export default function App({ bridge }: AppProps) {
           bridge={bridge}
           item={details}
           stopped={(details.kind === 'share' ? activity?.sendingStopped : activity?.receivingStopped) ?? false}
+          toggle={detailsToggle}
           onClose={() => setDetails(null)}
           onError={showError}
           onInfo={showInfo}

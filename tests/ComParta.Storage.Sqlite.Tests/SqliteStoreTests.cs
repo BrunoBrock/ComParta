@@ -124,7 +124,7 @@ public sealed class SqliteStoreTests : IDisposable
         {
             await connection.OpenAsync();
             var command = connection.CreateCommand();
-            command.CommandText = "DROP TABLE settings; ALTER TABLE transfers DROP COLUMN source; PRAGMA user_version = 2;";
+            command.CommandText = "DROP TABLE settings; ALTER TABLE transfers DROP COLUMN source; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 2;";
             await command.ExecuteNonQueryAsync();
         }
 
@@ -159,12 +159,46 @@ public sealed class SqliteStoreTests : IDisposable
         {
             await connection.OpenAsync();
             var command = connection.CreateCommand();
-            command.CommandText = "ALTER TABLE transfers DROP COLUMN source; PRAGMA user_version = 3;";
+            command.CommandText = "ALTER TABLE transfers DROP COLUMN source; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 3;";
             await command.ExecuteNonQueryAsync();
         }
 
         ITransferRepository store = await SqliteStore.OpenAsync(DatabasePath);
 
         Assert.Equal(TransferSource.Invite, Assert.Single(await store.GetAllAsync()).Source);
+    }
+
+    [Fact]
+    public async Task A_paused_share_is_read_back_paused_and_can_be_continued()
+    {
+        var share = new Share(ShareId.New(), @"C:.txt", "a.txt", 1, DateTimeOffset.UtcNow);
+        IShareRepository store = await SqliteStore.OpenAsync(DatabasePath);
+        await store.AddAsync(share);
+
+        await store.SetPausedAsync(share.Id, true);
+        IShareRepository reopened = await SqliteStore.OpenAsync(DatabasePath);
+        Assert.True(Assert.Single(await reopened.GetAllAsync()).Paused);
+
+        await reopened.SetPausedAsync(share.Id, false);
+        Assert.False(Assert.Single(await reopened.GetAllAsync()).Paused);
+    }
+
+    [Fact]
+    public async Task Shares_from_the_fourth_version_are_not_paused()
+    {
+        var share = new Share(ShareId.New(), @"C:.txt", "a.txt", 1, DateTimeOffset.UtcNow);
+        IShareRepository first = await SqliteStore.OpenAsync(DatabasePath);
+        await first.AddAsync(share);
+        await using (var connection = new SqliteConnection($"Data Source={DatabasePath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            var command = connection.CreateCommand();
+            command.CommandText = "ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 4;";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        IShareRepository store = await SqliteStore.OpenAsync(DatabasePath);
+
+        Assert.Equal([share], await store.GetAllAsync());
     }
 }

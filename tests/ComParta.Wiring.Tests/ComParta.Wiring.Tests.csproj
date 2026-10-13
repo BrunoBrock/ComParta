@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="10.1.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The stand-ins for the window's parts (file dialog, notifications...) the core tests use. -->
+    <Compile Include="..\ComParta.Core.Tests\Fakes.cs" Link="Fakes.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ComParta.Contracts\ComParta.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\ComParta.Core\ComParta.Core.csproj" />
+    <ProjectReference Include="..\..\src\ComParta.Engine.MonoTorrent\ComParta.Engine.MonoTorrent.csproj" />
+    <ProjectReference Include="..\..\src\ComParta.Storage.Sqlite\ComParta.Storage.Sqlite.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,15 +1,4 @@
-import {
-  CircleHelp,
-  Download,
-  ExternalLink,
-  FolderOpen,
-  FolderSearch,
-  Inbox,
-  Pause,
-  Play,
-  Trash2,
-  X,
-} from 'lucide-react'
+import { CircleHelp, Download, ExternalLink, FolderOpen, FolderSearch, Inbox, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import type { Bridge, ErrorCode, TransferDto } from '../bridge/index.ts'
 import { formatSize, formatTimeLeft, percentOf, t } from '../i18n/index.ts'
@@ -19,7 +8,8 @@ import DeleteReceivedDialog from './DeleteReceivedDialog.tsx'
 import type { DetailsOf } from './DetailsWindow.tsx'
 import Thumbnail from './ui/Thumbnail.tsx'
 import { moveBetweenItems } from './itemKeys.ts'
-import ItemView, { type ViewMode } from './ItemView.tsx'
+import { transferToggle } from './itemToggles.ts'
+import ItemView, { type ItemSpeed, type ViewMode } from './ItemView.tsx'
 import SectionHead from './SectionHead.tsx'
 import Button from './ui/Button.tsx'
 import EmptyState from './ui/EmptyState.tsx'
@@ -44,6 +34,12 @@ interface TransfersSectionProps {
   onHelp: () => void
   /** Receiving is stopped from the speed bar, so every unfinished transfer reads "Stopped". */
   stopped: boolean
+  /** How fast each file moves now, by id. */
+  speeds: ReadonlyMap<string, ItemSpeed>
+  /** Pauses one file, or continues it. */
+  onSetPaused: (id: string, paused: boolean) => void
+  /** Continues all receiving, from a file stopped with everything else. */
+  onContinueAll: () => void
   onDetails: (item: DetailsOf) => void
   /** The section's primary action, offered when it is empty. */
   onReceive: () => void
@@ -76,7 +72,6 @@ function describe(transfer: TransferDto): string {
         total: formatSize(transfer.sizeBytes!),
       }),
     ]
-    if (transfer.bytesPerSecond > 0) parts.push(t('transfers.speed', { speed: formatSize(transfer.bytesPerSecond) }))
     if (transfer.secondsLeft !== null) parts.push(formatTimeLeft(transfer.secondsLeft))
     return parts.join(' · ')
   }
@@ -103,6 +98,9 @@ export default function TransfersSection(props: TransfersSectionProps) {
     stuck,
     onHelp,
     stopped,
+    speeds,
+    onSetPaused,
+    onContinueAll,
     onDetails,
     onReceive,
   } = props
@@ -113,12 +111,6 @@ export default function TransfersSection(props: TransfersSectionProps) {
   async function remove(transfer: TransferDto) {
     onStart()
     const result = await bridge.invoke('transfers.remove', { id: transfer.id })
-    if (!result.ok) onError(result.error.code)
-  }
-
-  async function setPaused(transfer: TransferDto, paused: boolean) {
-    onStart()
-    const result = await bridge.invoke(paused ? 'transfers.pause' : 'transfers.resume', { id: transfer.id })
     if (!result.ok) onError(result.error.code)
   }
 
@@ -204,8 +196,6 @@ export default function TransfersSection(props: TransfersSectionProps) {
               const name = transfer.name ?? t('transfers.unnamed')
               const state = shownState(transfer)
               const finished = transfer.state === 'done'
-              const canPause = ['connecting', 'receiving', 'waiting', 'noSpace'].includes(transfer.state)
-              const paused = transfer.state === 'paused'
               const ended = transfer.state === 'failed' || transfer.state === 'blocked'
               const stoppedHere = stopped && !finished && !ended
               const shownProgress = stoppedHere
@@ -226,6 +216,15 @@ export default function TransfersSection(props: TransfersSectionProps) {
                   chip={stoppedHere ? t('stopped.chip') : t(`transfers.chip.${state}`, { percent: percent(transfer) })}
                   note={stoppedHere ? t('stopped.note') : describe(transfer)}
                   progress={shownProgress}
+                  speed={
+                    stoppedHere
+                      ? undefined
+                      : (speeds.get(transfer.id) ?? { receiving: transfer.bytesPerSecond, sending: 0 })
+                  }
+                  toggle={transferToggle(transfer, stopped, {
+                    setPaused: (paused) => onSetPaused(transfer.id, paused),
+                    continueAll: onContinueAll,
+                  })}
                   onDetails={() => onDetails({ kind: 'transfer', id: transfer.id, name })}
                   picture={<Thumbnail bridge={bridge} kind="transfer" id={transfer.id} name={name} ready={finished} />}
                   onMain={finished ? () => runOnReceived('received.open', transfer) : undefined}
@@ -267,17 +266,6 @@ export default function TransfersSection(props: TransfersSectionProps) {
                         >
                           <CircleHelp size={18} aria-hidden="true" />
                           {t('transfers.help')}
-                        </button>
-                      )}
-                      {!stoppedHere && (canPause || paused) && (
-                        <button
-                          type="button"
-                          className="quiet"
-                          onClick={() => setPaused(transfer, canPause)}
-                          aria-label={t(paused ? 'transfers.continueFor' : 'transfers.pauseFor', { name })}
-                        >
-                          {paused ? <Play size={18} aria-hidden="true" /> : <Pause size={18} aria-hidden="true" />}
-                          {t(paused ? 'transfers.continue' : 'transfers.pause')}
                         </button>
                       )}
                       <button

@@ -256,6 +256,35 @@ internal sealed class PortMapper : IPortForwarder, IDisposable
 
     private void Changed() => MappingsChanged?.Invoke(this, EventArgs.Empty);
 
+    /// <summary>
+    /// What MonoTorrent is given. MonoTorrent stops its network side, router mapping included, each
+    /// time the last running file stops, and waits for the router while it does: Stop, pausing a file
+    /// or Stop sharing the last file then hung on a slow router, and the mapping that invites rely on
+    /// was gone. Through this view MonoTorrent can only ask for ports; the mapping is removed when the
+    /// app quits, by the engine itself.
+    /// </summary>
+    public IPortForwarder ForEngine => _forEngine ??= new EngineView(this);
+
+    private IPortForwarder? _forEngine;
+
+    private sealed class EngineView(PortMapper mapper) : IPortForwarder
+    {
+        public bool Active => mapper.Active;
+        public Mappings Mappings => mapper.Mappings;
+
+        public event EventHandler MappingsChanged
+        {
+            add => mapper.MappingsChanged += value;
+            remove => mapper.MappingsChanged -= value;
+        }
+
+        public Task RegisterMappingAsync(Mapping mapping) => mapper.RegisterMappingAsync(mapping);
+        public Task UnregisterMappingAsync(Mapping mapping, CancellationToken token) => Task.CompletedTask;
+        public Task StartAsync(CancellationToken token) => mapper.StartAsync(token);
+        public Task StopAsync(CancellationToken token) => Task.CompletedTask;
+        public Task StopAsync(bool removeExistingMappings, CancellationToken token) => Task.CompletedTask;
+    }
+
     public void Dispose()
     {
         _renewal?.Dispose();

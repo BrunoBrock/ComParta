@@ -12,6 +12,8 @@ public static class Commands
     public const string SharesAdd = "shares.add";
     public const string SharesRemove = "shares.remove";
     public const string SharesCopyInvite = "shares.copyInvite";
+    public const string SharesPause = "shares.pause";
+    public const string SharesResume = "shares.resume";
     public const string TransfersList = "transfers.list";
     public const string TransfersPreview = "transfers.preview";
     public const string TransfersReceive = "transfers.receive";
@@ -103,9 +105,10 @@ public enum TransferSourceDto { Invite, DownloadLink, DownloadFile }
 /// <param name="Percent">How much of it they have, on average, 0 to 100.</param>
 /// <param name="FinishedCount">How many devices got all of it since the app started.</param>
 /// <param name="SecondsLeft">Roughly how long until they have all of it, or null when it cannot be told.</param>
+/// <param name="Paused">The person paused sending this file on its own.</param>
 public sealed record ShareDto(
     string Id, string Name, long SizeBytes, ShareStatusDto Status,
-    ShareActivityDto Activity, int ReceiverCount, int Percent, int FinishedCount, long? SecondsLeft);
+    ShareActivityDto Activity, int ReceiverCount, int Percent, int FinishedCount, long? SecondsLeft, bool Paused);
 
 public enum ShareActivityDto { Idle, Sending, Sent }
 
@@ -161,7 +164,12 @@ public sealed record QuitAnswerDto(bool Quitting, string[] Moving);
 public sealed record ConnectionDto(ConnectionHealthDto? Health);
 
 /// <summary>The speed bar: total speeds and the two Stop flags (CAP-27, AD-22).</summary>
-public sealed record ActivityDto(long ReceivingBytesPerSecond, long SendingBytesPerSecond, bool SendingStopped, bool ReceivingStopped);
+/// <param name="Items">The speeds of each file moving now, for its card; files standing still are left out.</param>
+public sealed record ActivityDto(
+    long ReceivingBytesPerSecond, long SendingBytesPerSecond, bool SendingStopped, bool ReceivingStopped, ItemSpeedDto[] Items);
+
+/// <param name="Id">A share's or a transfer's id.</param>
+public sealed record ItemSpeedDto(string Id, long ReceivingBytesPerSecond, long SendingBytesPerSecond);
 
 public sealed record SetActivityArgs(bool SendingStopped, bool ReceivingStopped);
 
@@ -209,6 +217,8 @@ public static class Contract
         new(Commands.SharesAdd, null, typeof(ShareDto), ResultMayBeNull: true),
         new(Commands.SharesRemove, typeof(IdArgs), null),
         new(Commands.SharesCopyInvite, typeof(CopyInviteArgs), null),
+        new(Commands.SharesPause, typeof(IdArgs), null),
+        new(Commands.SharesResume, typeof(IdArgs), null),
         new(Commands.TransfersList, null, typeof(TransferDto[])),
         new(Commands.TransfersPreview, typeof(ReceiveArgs), typeof(InvitePreviewDto)),
         new(Commands.TransfersReceive, typeof(ReceiveArgs), typeof(TransferDto)),

@@ -56,8 +56,25 @@ public sealed class NativeFilePicker : Ports.IFilePicker
 
 public sealed class NativeClipboard : Ports.IClipboard
 {
-	public Task SetTextAsync(string text, CancellationToken ct = default) =>
-		MainThread.InvokeOnMainThreadAsync(() => Clipboard.Default.SetTextAsync(text));
+	/// <summary>
+	/// Windows refuses the clipboard while another program has it open, which clipboard managers and
+	/// remote desktop do for a moment now and then; Copy invite then failed. It is asked again a few times.
+	/// </summary>
+	public async Task SetTextAsync(string text, CancellationToken ct = default)
+	{
+		for (var attempt = 1; ; attempt++)
+		{
+			try
+			{
+				await MainThread.InvokeOnMainThreadAsync(() => Clipboard.Default.SetTextAsync(text));
+				return;
+			}
+			catch (System.Runtime.InteropServices.COMException) when (attempt < 5)
+			{
+				await Task.Delay(100 * attempt, ct);
+			}
+		}
+	}
 
 	public Task<string?> GetTextAsync(CancellationToken ct = default) =>
 		MainThread.InvokeOnMainThreadAsync(() => Clipboard.Default.HasText ? Clipboard.Default.GetTextAsync() : Task.FromResult<string?>(null));

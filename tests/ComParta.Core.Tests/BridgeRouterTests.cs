@@ -490,6 +490,68 @@ public sealed class BridgeRouterTests
     }
 
     [Fact]
+    public async Task Stop_reports_the_new_state_before_the_engine_has_finished()
+    {
+        var hold = new TaskCompletionSource();
+        _engine.HoldStop = hold.Task;
+
+        var stopping = InvokeAsync(Commands.ActivitySet, new { sendingStopped = true, receivingStopped = true });
+
+        var changed = _events.Last(e => e.GetProperty("event").GetString() == Events.ActivityChanged).GetProperty("payload");
+        Assert.True(changed.GetProperty("sendingStopped").GetBoolean());
+        hold.SetResult();
+        Assert.True((await stopping).GetProperty("ok").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Each_moving_file_has_its_speeds_in_the_speed_report()
+    {
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString()!;
+        ShareId.TryParse(id, out var shareId);
+
+        _engine.Move(EngineActivity.None with
+        {
+            SendingBytesPerSecond = 900,
+            Shares = new Dictionary<ShareId, ItemActivity> { [shareId] = new(0, 900, 2, 0, 4_000) },
+        });
+
+        var item = Assert.Single(_events.Last(e => e.GetProperty("event").GetString() == Events.ActivityChanged)
+            .GetProperty("payload").GetProperty("items").EnumerateArray());
+        Assert.Equal(id, item.GetProperty("id").GetString());
+        Assert.Equal(900, item.GetProperty("sendingBytesPerSecond").GetInt64());
+        Assert.Equal(0, item.GetProperty("receivingBytesPerSecond").GetInt64());
+    }
+
+    [Fact]
+    public async Task A_shared_file_can_be_paused_and_continued()
+    {
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString()!;
+
+        Assert.True((await InvokeAsync(Commands.SharesPause, new { id })).GetProperty("ok").GetBoolean());
+        var shares = _events.Last(e => e.GetProperty("event").GetString() == Events.SharesChanged).GetProperty("payload");
+        Assert.True(shares[0].GetProperty("paused").GetBoolean());
+        Assert.Single(_engine.PausedOffers);
+
+        Assert.True((await InvokeAsync(Commands.SharesResume, new { id })).GetProperty("ok").GetBoolean());
+        Assert.False((await InvokeAsync(Commands.SharesList)).GetProperty("value")[0].GetProperty("paused").GetBoolean());
+        Assert.Empty(_engine.PausedOffers);
+
+        Assert.Equal(ErrorCodes.ShareNotFound, ErrorCode(await InvokeAsync(Commands.SharesPause, new { id = "nope" })));
+    }
+
+    [Fact]
+    public async Task A_command_that_fails_unexpectedly_says_why_to_the_app_log()
+    {
+        Exception? logged = null;
+        _router.CommandFailed += (_, e) => logged = e;
+        _engine.OnStopOffering = () => throw new InvalidOperationException("router gone");
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString()!;
+
+        Assert.Equal(ErrorCodes.Unexpected, ErrorCode(await InvokeAsync(Commands.SharesRemove, new { id })));
+        Assert.Equal("router gone", logged?.Message);
+    }
+
+    [Fact]
     public async Task A_shared_file_has_details_with_its_folder_and_what_it_sends()
     {
         var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString()!;

@@ -10,6 +10,7 @@ import type {
   CopyInviteArgs,
   IdArgs,
   InvitePreviewDto,
+  ItemSpeedDto,
   ReceiveArgs,
   SetActivityArgs,
   QuitArgs,
@@ -99,6 +100,7 @@ export const notSending = {
   finishedCount: 0,
   secondsLeft: null,
   neededBytes: null,
+  paused: false,
 } as const
 
 /** Roughly what one ready share sends while someone is getting it, in the moving fake. */
@@ -150,16 +152,28 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   const addedAt = new Map<string, string>()
   const sources = new Map<string, TransferSourceDto>()
 
-  const activity = (): ActivityDto => ({
-    ...stopped,
-    receivingBytesPerSecond: stopped.receivingStopped
-      ? 0
-      : transfers.filter((t) => t.state === 'receiving').reduce((sum, t) => sum + t.bytesPerSecond, 0),
-    sendingBytesPerSecond:
-      stopped.sendingStopped || stepMs === 0
-        ? 0
-        : shares.filter((s) => s.status === 'ready').length * fakeSendingPerShare,
-  })
+  // In the moving fake every ready share that is not paused sends a little; files that do not move are left out.
+  const itemSpeeds = (): ItemSpeedDto[] => [
+    ...(stopped.sendingStopped || stepMs === 0
+      ? []
+      : shares
+          .filter((s) => s.status === 'ready' && !s.paused)
+          .map((s) => ({ id: s.id, receivingBytesPerSecond: 0, sendingBytesPerSecond: fakeSendingPerShare }))),
+    ...(stopped.receivingStopped
+      ? []
+      : transfers
+          .filter((t) => t.state === 'receiving' && t.bytesPerSecond > 0)
+          .map((t) => ({ id: t.id, receivingBytesPerSecond: t.bytesPerSecond, sendingBytesPerSecond: 0 }))),
+  ]
+  const activity = (): ActivityDto => {
+    const items = itemSpeeds()
+    return {
+      ...stopped,
+      receivingBytesPerSecond: items.reduce((sum, i) => sum + i.receivingBytesPerSecond, 0),
+      sendingBytesPerSecond: items.reduce((sum, i) => sum + i.sendingBytesPerSecond, 0),
+      items,
+    }
+  }
   const emitActivity = () => emit({ event: 'activity.changed', payload: activity() })
   const emitShares = () => {
     emit({ event: 'shares.changed', payload: [...shares] })
@@ -249,6 +263,13 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     if (transfer.state === 'done' || transfer.state === 'failed') return fail('transfer.finished')
     if (paused) updateTransfer(id, { state: 'paused', bytesPerSecond: 0, secondsLeft: null, neededBytes: null })
     else if (transfer.state === 'paused') updateTransfer(id, { state: transfer.sizeBytes ? 'receiving' : 'connecting' })
+    return ok(null)
+  }
+
+  const setSharePaused = (id: string, paused: boolean) => {
+    if (!shares.some((s) => s.id === id)) return fail('share.notFound')
+    shares = shares.map((s) => (s.id === id ? { ...s, paused } : s))
+    emitShares()
     return ok(null)
   }
 
@@ -349,6 +370,10 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       emitShares()
       return ok(null)
     },
+
+    'shares.pause': (args) => setSharePaused((args as IdArgs).id, true),
+
+    'shares.resume': (args) => setSharePaused((args as IdArgs).id, false),
 
     'shares.copyInvite': (args) => {
       const { id, message } = args as CopyInviteArgs
@@ -462,7 +487,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     'shares.details': (args) => {
       const share = shares.find((s) => s.id === (args as IdArgs).id)
       if (!share) return fail('share.notFound')
-      const sending = share.status === 'ready' && !stopped.sendingStopped && stepMs > 0
+      const sending = share.status === 'ready' && !share.paused && !stopped.sendingStopped && stepMs > 0
       const details: ShareDetailsDto = {
         ...share,
         folder: 'C:\\Users\\Ana\\Videos',
@@ -578,7 +603,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
         const share = shares.find((s) => s.id === shareId)
         if (!share) return
         if (percent >= 100) {
-          update({ ...notSending, activity: 'sent', finishedCount: share.finishedCount + 1 })
+          update({ ...notSending, paused: share.paused, activity: 'sent', finishedCount: share.finishedCount + 1 })
           return
         }
         const left = (share.sizeBytes * (100 - percent)) / 100

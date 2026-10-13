@@ -77,6 +77,7 @@ public sealed class AppServices
 			var router = new BridgeRouter(
 				shares, transfers, settings, connection, Opened, activity, received, new NativeClipboard(), opener, thumbnails, Dropped,
 				sending, notifications, background);
+			router.CommandFailed += (_, e) => Log(e);
 
 			// Written at every start so a clicked link finds the app even after its folder moved.
 			LinkScheme.Register(executable);

@@ -743,6 +743,51 @@ dialog textarea {
   background: var(--color-surface);
 }
 
+/* A file's own pause or play button: over the picture's other corner on a card, shown while the
+   pointer or focus is on the card and always while the file is paused, so play is easy to find. */
+.item-toggle {
+  flex-shrink: 0;
+}
+
+.items-grid .item-toggle {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.items-grid .item:hover .item-toggle,
+.items-grid .item:focus-within .item-toggle,
+.items-grid .item-paused .item-toggle {
+  opacity: 1;
+}
+
+/* Touch screens have no hover: the button always shows. */
+@media (hover: none) {
+  .items-grid .item-toggle {
+    opacity: 1;
+  }
+}
+
+/* What a moving file does each second, under its state. */
+.item-speed {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px calc(var(--space) * 1.5);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.item-speed > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 /* Details window: label and value side by side, stacked on phones. */
 .details-rows {
   margin: 0;

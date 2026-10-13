@@ -24,6 +24,7 @@ export interface ShareDto {
   percent: number;
   finishedCount: number;
   secondsLeft: number | null;
+  paused: boolean;
 }
 
 export interface IdArgs {
@@ -85,6 +86,13 @@ export interface ActivityDto {
   sendingBytesPerSecond: number;
   sendingStopped: boolean;
   receivingStopped: boolean;
+  items: ItemSpeedDto[];
+}
+
+export interface ItemSpeedDto {
+  id: string;
+  receivingBytesPerSecond: number;
+  sendingBytesPerSecond: number;
 }
 
 export interface SetActivityArgs {
@@ -174,6 +182,8 @@ export interface Commands {
   "shares.add": { args: undefined; result: ShareDto | null };
   "shares.remove": { args: IdArgs; result: null };
   "shares.copyInvite": { args: CopyInviteArgs; result: null };
+  "shares.pause": { args: IdArgs; result: null };
+  "shares.resume": { args: IdArgs; result: null };
   "transfers.list": { args: undefined; result: TransferDto[] };
   "transfers.preview": { args: ReceiveArgs; result: InvitePreviewDto };
   "transfers.receive": { args: ReceiveArgs; result: TransferDto };
