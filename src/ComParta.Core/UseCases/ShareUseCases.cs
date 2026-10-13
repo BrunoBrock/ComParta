@@ -37,7 +37,7 @@ public sealed class ShareUseCases
                 var available = _files.FileExists(share.FilePath);
                 Set(share, available ? ShareStatus.Preparing : ShareStatus.Unavailable);
                 if (available)
-                    await _engine.OfferAsync(share.Id, share.FilePath, ct);
+                    await OfferAsync(share, ct);
             }
         }
         finally { _gate.Release(); }
@@ -61,7 +61,7 @@ public sealed class ShareUseCases
                 else if (exists && view.Status == ShareStatus.Unavailable)
                 {
                     Set(view.Share, ShareStatus.Preparing);
-                    await _engine.OfferAsync(view.Share.Id, view.Share.FilePath, ct);
+                    await OfferAsync(view.Share, ct);
                 }
             }
             return Snapshot();
@@ -143,13 +143,53 @@ public sealed class ShareUseCases
                 if (!_shares.Remove(id))
                     return Result.Fail(ErrorKind.ShareNotFound);
             }
-            await _engine.StopOfferingAsync(id, ct);
+            // Gone from the screen at once; the engine lets go of the file behind it.
+            Changed?.Invoke();
             await _repository.RemoveAsync(id, ct);
+            await _engine.StopOfferingAsync(id, ct);
         }
         finally { _gate.Release(); }
-
-        Changed?.Invoke();
         return Result.Success;
+    }
+
+    /// <summary>Stops sending one file, also after a restart, until it is continued (epic 15).</summary>
+    public Task<Result> PauseAsync(ShareId id, CancellationToken ct = default) => SetPausedAsync(id, true, ct);
+
+    /// <summary>Sends a paused file again.</summary>
+    public Task<Result> ContinueAsync(ShareId id, CancellationToken ct = default) => SetPausedAsync(id, false, ct);
+
+    private async Task<Result> SetPausedAsync(ShareId id, bool paused, CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            ShareView? view;
+            lock (_shares)
+            {
+                if (!_shares.TryGetValue(id, out view))
+                    return Result.Fail(ErrorKind.ShareNotFound);
+                if (view.Share.Paused == paused)
+                    return Result.Success;
+                // Shown at once; the engine catches up behind it.
+                _shares[id] = view with { Share = view.Share with { Paused = paused } };
+            }
+            await _repository.SetPausedAsync(id, paused, ct);
+            Changed?.Invoke();
+            if (paused)
+                await _engine.PauseOfferingAsync(id, ct);
+            else
+                await _engine.ContinueOfferingAsync(id, ct);
+        }
+        finally { _gate.Release(); }
+        return Result.Success;
+    }
+
+    /// <summary>Offers a share, still paused when the person paused it.</summary>
+    private async Task OfferAsync(Share share, CancellationToken ct)
+    {
+        await _engine.OfferAsync(share.Id, share.FilePath, ct);
+        if (share.Paused)
+            await _engine.PauseOfferingAsync(share.Id, ct);
     }
 
     /// <summary>

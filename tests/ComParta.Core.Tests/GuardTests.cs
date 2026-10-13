@@ -14,6 +14,8 @@ public sealed partial class GuardTests
     [
         Path.Combine("src", "ComParta.Engine.MonoTorrent"),
         Path.Combine("tests", "ComParta.Engine.MonoTorrent.Tests"),
+        // Drives the real engine through the whole app, so it hands it a download link of its own.
+        Path.Combine("tests", "ComParta.Wiring.Tests"),
     ];
 
     // The two files that have to spell the words out in order to forbid them.

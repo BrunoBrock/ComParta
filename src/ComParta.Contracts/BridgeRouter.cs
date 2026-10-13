@@ -71,6 +71,9 @@ public sealed class BridgeRouter
     /// <summary>An event envelope as JSON, ready to be sent to the UI.</summary>
     public event Action<string>? EventRaised;
 
+    /// <summary>A command failed unexpectedly; the UI only hears "unexpected", so this is where the cause goes.</summary>
+    public event Action<string, Exception>? CommandFailed;
+
     /// <summary>Runs one command and returns its result as JSON. Never throws.</summary>
     public async Task<string> InvokeAsync(string command, string? argsJson)
     {
@@ -79,9 +82,11 @@ public sealed class BridgeRouter
         {
             result = await RunAsync(command, argsJson);
         }
-        catch (Exception)
+        catch (Exception e)
         {
             result = CommandResult.Failure(ErrorCodes.Unexpected);
+            try { CommandFailed?.Invoke(command, e); }
+            catch (Exception) { /* a listener's problem must not change the answer */ }
         }
         return JsonSerializer.Serialize(result, Contract.Json);
     }
@@ -102,6 +107,16 @@ public sealed class BridgeRouter
             case Commands.SharesRemove:
                 return ShareId.TryParse(Args<IdArgs>(argsJson)?.Id, out var removeId)
                     ? ToResult(await _shares.RemoveAsync(removeId))
+                    : CommandResult.Failure(ErrorCodes.ShareNotFound);
+
+            case Commands.SharesPause:
+                return ShareId.TryParse(Args<IdArgs>(argsJson)?.Id, out var pauseShareId)
+                    ? ToResult(await _shares.PauseAsync(pauseShareId))
+                    : CommandResult.Failure(ErrorCodes.ShareNotFound);
+
+            case Commands.SharesResume:
+                return ShareId.TryParse(Args<IdArgs>(argsJson)?.Id, out var resumeShareId)
+                    ? ToResult(await _shares.ContinueAsync(resumeShareId))
                     : CommandResult.Failure(ErrorCodes.ShareNotFound);
 
             case Commands.SharesCopyInvite:
@@ -316,7 +331,8 @@ public sealed class BridgeRouter
         sending.ReceiverCount,
         sending.Percent,
         sending.FinishedCount,
-        sending.SecondsLeft);
+        sending.SecondsLeft,
+        view.Share.Paused);
 
     public static TransferDto ToDto(TransferView view) => new(
         view.Transfer.Id.ToString(),
@@ -344,7 +360,8 @@ public sealed class BridgeRouter
     public static QuitAnswerDto ToDto(QuitAnswer answer) => new(answer.Quitting, [.. answer.Moving]);
 
     public static ActivityDto ToDto(Activity activity) => new(
-        activity.ReceivingBytesPerSecond, activity.SendingBytesPerSecond, activity.SendingStopped, activity.ReceivingStopped);
+        activity.ReceivingBytesPerSecond, activity.SendingBytesPerSecond, activity.SendingStopped, activity.ReceivingStopped,
+        [.. activity.Items.Select(i => new ItemSpeedDto(i.Id, i.ReceivingBytesPerSecond, i.SendingBytesPerSecond))]);
 
     public static ShareDetailsDto ToDetails(ShareView view, ItemActivity activity)
     {

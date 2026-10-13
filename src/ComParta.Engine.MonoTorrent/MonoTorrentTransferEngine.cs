@@ -13,6 +13,7 @@ using MonoTorrent.Connections.Peer;
 using MonoTorrent.PieceWriter;
 
 [assembly: InternalsVisibleTo("ComParta.Engine.MonoTorrent.Tests")]
+[assembly: InternalsVisibleTo("ComParta.Wiring.Tests")]
 
 namespace ComParta.Engine.MonoTorrent;
 
@@ -29,6 +30,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
     private static readonly TimeSpan HintRetryInterval = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan ReachabilityInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan ActivityInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan QuitWait = TimeSpan.FromSeconds(5);
 
     // The magnet-link parameter for "a peer address to try directly" (BEP 9).
     private const string AddressHint = "x.pe";
@@ -132,7 +134,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         {
             var mapper = _portMapper = new PortMapper(discovery, _policy.AllowPortForwarding, RouterTimeout);
             mapper.MappingsChanged += (_, _) => ReportReachability();
-            factories = factories.WithPortForwarderCreator(() => mapper);
+            factories = factories.WithPortForwarderCreator(() => mapper.ForEngine);
         }
         factories = factories
             .WithPieceWriterCreator(maxOpenFiles => WrapWriter(_baseFactories.CreatePieceWriter(maxOpenFiles)))
@@ -249,9 +251,14 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         if (_portMapper is { } portMapper)
         {
             // Takes the router mapping away again, so nothing stays open after the app quits.
-            try { await portMapper.StopAsync(removeExisting: true, CancellationToken.None); }
+            // A router that does not answer must not keep the app from quitting.
+            var unmapped = portMapper.StopAsync(removeExisting: true, CancellationToken.None);
+            try
+            {
+                await unmapped.WaitAsync(QuitWait);
+                portMapper.Dispose();
+            }
             catch (Exception) { /* the router lets it expire */ }
-            portMapper.Dispose();
             _portMapper = null;
         }
         _probe.Reset();
@@ -348,6 +355,8 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         public Task Work { get; set; } = Task.CompletedTask;
         public volatile TorrentManager? Manager;
         public volatile string? Invite;
+        /// <summary>The person paused this file on its own; a global continue leaves it paused.</summary>
+        public volatile bool Paused;
         /// <summary>Devices getting the file now, and their average percentage; refreshed each activity tick.</summary>
         public volatile ReceiverCount Receivers = ReceiverCount.None;
         /// <summary>Devices that got all of the file from this one, by their session id.</summary>

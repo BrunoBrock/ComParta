@@ -68,9 +68,9 @@ describe('downloading from a link or a download file', () => {
     const { user } = setup({ transfers: [downloading] })
     await goToReceived(user)
 
-    expect(
-      await screen.findByText('Receiving: 50% (500.0 MB of 1,000.0 MB) · 2.0 MB per second · about 4 minutes left'),
-    ).toBeInTheDocument()
+    const note = await screen.findByText('Receiving: 50% (500.0 MB of 1,000.0 MB) · about 4 minutes left')
+    // The speed has its own line on the card, in grid and list alike.
+    expect(note.closest('li')).toHaveTextContent('Receiving 2.0 MB/s')
   })
 
   it('pauses and continues a download', async () => {

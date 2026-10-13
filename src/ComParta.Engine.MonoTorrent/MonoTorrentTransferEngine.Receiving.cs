@@ -312,7 +312,7 @@ public sealed partial class MonoTorrentTransferEngine
     {
         try
         {
-            await manager.StopAsync();
+            await manager.StopAsync(StopWait);
             if (_engine is { } engine)
                 await engine.RemoveAsync(manager);
         }

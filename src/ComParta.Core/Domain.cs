@@ -28,7 +28,8 @@ public readonly record struct TransferId(Guid Value)
 }
 
 /// <summary>A file a person offers. The file stays where it is (AD-6).</summary>
-public sealed record Share(ShareId Id, string FilePath, string Name, long SizeBytes, DateTimeOffset AddedAt);
+/// <param name="Paused">The person paused sending this file on its own; it stays paused across restarts.</param>
+public sealed record Share(ShareId Id, string FilePath, string Name, long SizeBytes, DateTimeOffset AddedAt, bool Paused = false);
 
 public enum ShareStatus
 {

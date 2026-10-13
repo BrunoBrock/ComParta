@@ -8,7 +8,8 @@ import { matches } from '../search.ts'
 import type { DetailsOf } from './DetailsWindow.tsx'
 import Thumbnail from './ui/Thumbnail.tsx'
 import { moveBetweenItems } from './itemKeys.ts'
-import ItemView, { type ViewMode } from './ItemView.tsx'
+import { shareToggle } from './itemToggles.ts'
+import ItemView, { type ItemSpeed, type ViewMode } from './ItemView.tsx'
 import type { ChipTone } from './ui/StatusChip.tsx'
 import RemoveShareDialog from './RemoveShareDialog.tsx'
 import SectionHead from './SectionHead.tsx'
@@ -31,6 +32,12 @@ interface SharesSectionProps {
   onClearSearch: () => void
   /** Sending is stopped from the speed bar, so every ready share reads "Stopped". */
   stopped: boolean
+  /** How fast each file moves now, by id. */
+  speeds: ReadonlyMap<string, ItemSpeed>
+  /** Pauses one file, or continues it. */
+  onSetPaused: (id: string, paused: boolean) => void
+  /** Continues all sending, from a file stopped with everything else. */
+  onContinueAll: () => void
   onDetails: (item: DetailsOf) => void
   /** The section's primary action, offered when it is empty. */
   adding: boolean
@@ -41,6 +48,7 @@ const tones: Record<ShareDto['status'], ChipTone> = { preparing: 'busy', ready: 
 
 /** A ready share's chip and sentence say whether someone is getting it or has it (CAP-8). */
 function chipOf(share: ShareDto): string {
+  if (share.status === 'ready' && share.paused) return t('shares.chip.paused')
   if (share.status === 'ready' && share.activity === 'sending')
     return t('shares.chip.sending', { count: share.receiverCount })
   if (share.status === 'ready' && share.activity === 'sent')
@@ -49,6 +57,7 @@ function chipOf(share: ShareDto): string {
 }
 
 function noteOf(share: ShareDto): string | undefined {
+  if (share.status === 'ready' && share.paused) return t('shares.status.paused')
   if (share.status === 'ready' && share.activity === 'sending') {
     const count = share.receiverCount
     const parts = [
@@ -80,6 +89,9 @@ export default function SharesSection(props: SharesSectionProps) {
     onStart,
     onClearSearch,
     stopped,
+    speeds,
+    onSetPaused,
+    onContinueAll,
     onDetails,
     adding,
     onAdd,
@@ -157,13 +169,14 @@ export default function SharesSection(props: SharesSectionProps) {
         <ul className={`items items-${view}`} onKeyDown={moveBetweenItems}>
           {shown.map((share) => {
             const stoppedHere = stopped && share.status === 'ready'
-            const sending = share.status === 'ready' && share.activity === 'sending'
+            const sending = share.status === 'ready' && share.activity === 'sending' && !share.paused
+            const pausedHere = !stoppedHere && share.status === 'ready' && share.paused
             return (
               <ItemView
                 key={share.id}
                 name={share.name}
                 size={formatSize(share.sizeBytes)}
-                tone={stoppedHere ? 'paused' : sending ? 'busy' : tones[share.status]}
+                tone={stoppedHere || pausedHere ? 'paused' : sending ? 'busy' : tones[share.status]}
                 chip={stoppedHere ? t('stopped.chip') : chipOf(share)}
                 note={stoppedHere ? t('stopped.note') : noteOf(share)}
                 progress={
@@ -173,6 +186,11 @@ export default function SharesSection(props: SharesSectionProps) {
                       ? { value: share.percent, max: 100 }
                       : undefined
                 }
+                speed={stoppedHere || pausedHere ? undefined : speeds.get(share.id)}
+                toggle={shareToggle(share, stopped, {
+                  setPaused: (paused) => onSetPaused(share.id, paused),
+                  continueAll: onContinueAll,
+                })}
                 onDetails={() => onDetails({ kind: 'share', id: share.id, name: share.name })}
                 onMain={share.status === 'ready' ? () => copyInvite(share) : undefined}
                 onRemove={() => setRemoving(share)}

@@ -1,5 +1,6 @@
 using ComParta.Core;
 using ComParta.Core.Ports;
+using MonoTorrent;
 using MonoTorrent.Client;
 
 namespace ComParta.Engine.MonoTorrent;
@@ -41,43 +42,53 @@ public sealed partial class MonoTorrentTransferEngine
         manager.Monitor.DataBytesReceived,
         manager.Monitor.DataBytesSent);
 
+    /// <summary>
+    /// How long a stop waits for the servers a public download names to hear goodbye. Without a limit
+    /// MonoTorrent waits for each of them, one file after another, and Stop looks broken.
+    /// </summary>
+    private static readonly TimeSpan StopWait = TimeSpan.FromSeconds(2);
+
     public async Task SetStoppedAsync(bool sending, bool receiving, CancellationToken ct = default)
     {
         _sendingStopped = sending;
         _receivingStopped = receiving;
+        // Every file at once, so many files stop as quickly as one.
+        var work = new List<Task>();
         foreach (var offer in _offers.Values)
         {
             if (offer.Manager is not { } manager || offer.Invite is null)
                 continue;
-            try
-            {
-                // Stopping, not pausing: a paused offer still answers the computers already connected.
-                if (sending)
-                    await StopFullyAsync(manager);
-                else if (!sending && manager.State == TorrentState.Stopped)
-                    await manager.StartAsync();
-            }
-            catch (Exception) { /* the next change tries again */ }
+            // Stopping, not pausing: a paused offer still answers the computers already connected.
+            if (sending)
+                work.Add(StopFullyAsync(manager));
+            else if (!offer.Paused && manager.State == TorrentState.Stopped)
+                work.Add(manager.StartAsync());
         }
         foreach (var incoming in _incoming.Values)
         {
             if (incoming.Finishing)
                 continue;
-            try
+            // Stopping, not pausing: a transfer still fetching the file's details cannot pause.
+            if (receiving)
+                work.Add(StopFullyAsync(incoming.Manager));
+            else if (!incoming.Paused)
             {
-                // Stopping, not pausing: a transfer still fetching the file's details cannot pause.
-                if (receiving)
-                    await StopFullyAsync(incoming.Manager);
-                else if (!receiving && !incoming.Paused)
-                {
-                    // A transfer the person paused on its own stays paused.
-                    await incoming.Manager.StartAsync();
-                    await TryHintsAsync(incoming);
-                }
+                // A transfer the person paused on its own stays paused.
+                work.Add(StartIncomingAgainAsync(incoming));
             }
+        }
+        foreach (var task in work)
+        {
+            try { await task; }
             catch (Exception) { /* the next change tries again */ }
         }
         RaiseActivityChanged();
+    }
+
+    private async Task StartIncomingAgainAsync(Incoming incoming)
+    {
+        await incoming.Manager.StartAsync();
+        await TryHintsAsync(incoming);
     }
 
     /// <summary>
@@ -88,8 +99,9 @@ public sealed partial class MonoTorrentTransferEngine
     {
         for (var attempt = 0; attempt < 5 && manager.State != TorrentState.Stopped; attempt++)
         {
-            try { await manager.StopAsync(); }
+            try { await manager.StopAsync(StopWait); }
             catch (ObjectDisposedException) { await Task.Delay(100); }
+            catch (TorrentException) { await Task.Delay(100); }
         }
     }
 

@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using ComParta.Core;
 using ComParta.Core.Ports;
 using MonoTorrent;
+using MonoTorrent.Client;
 
 namespace ComParta.Engine.MonoTorrent;
 
@@ -45,8 +46,9 @@ public sealed partial class MonoTorrentTransferEngine
                 if (manager.Complete)
                 {
                     // Complete means every piece matched, so the engine only ever reads the original.
-                    // While sending is stopped the offer waits, ready, until Continue starts it.
-                    if (!_sendingStopped)
+                    // While sending is stopped, or this file is paused, the offer waits, ready, until
+                    // Continue starts it.
+                    if (!_sendingStopped && !offer.Paused)
                         await manager.StartAsync();
                     offer.Invite = new MagnetLink(torrent.InfoHashes, torrent.Name, size: torrent.Size).ToV1String();
                     OfferChanged?.Invoke(offer.Id, OfferState.Ready);
@@ -94,7 +96,7 @@ public sealed partial class MonoTorrentTransferEngine
             {
                 try
                 {
-                    await manager.StopAsync();
+                    await manager.StopAsync(StopWait);
                     await engine.RemoveAsync(manager);
                 }
                 catch (Exception) { /* it is gone either way */ }
@@ -102,6 +104,40 @@ public sealed partial class MonoTorrentTransferEngine
         }
         if (forget)
             DeleteQuietly(Path.Combine(_sharesFolder, id + ".torrent"));
+    }
+
+    /// <summary>For tests: what the engine is doing with a shared file.</summary>
+    internal TorrentState OfferStateOf(ShareId id) => _offers[id].Manager!.State;
+
+    public async Task PauseOfferingAsync(ShareId id, CancellationToken ct = default)
+    {
+        if (!_offers.TryGetValue(id, out var offer))
+            return;
+        offer.Paused = true;
+        // A file still being read is not started once it is ready; the flag is enough.
+        if (offer.Manager is { } manager && offer.Invite is not null)
+        {
+            try { await StopFullyAsync(manager); }
+            catch (Exception) { /* the next change tries again */ }
+        }
+        RaiseActivityChanged();
+    }
+
+    public async Task ContinueOfferingAsync(ShareId id, CancellationToken ct = default)
+    {
+        if (!_offers.TryGetValue(id, out var offer))
+            return;
+        offer.Paused = false;
+        // While all sending is stopped it stays still; the global continue starts it.
+        if (_sendingStopped || offer.Manager is not { } manager || offer.Invite is null)
+            return;
+        try
+        {
+            if (manager.State == TorrentState.Stopped)
+                await manager.StartAsync();
+        }
+        catch (Exception) { /* the next change tries again */ }
+        RaiseActivityChanged();
     }
 
     public Task<string?> GetInviteAsync(ShareId id, CancellationToken ct = default)

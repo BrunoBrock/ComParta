@@ -196,4 +196,63 @@ public sealed class ShareUseCasesTests
         Assert.False(policy.AllowAnnounceServers);
         Assert.True(policy.RequireEncryption);
     }
+
+    [Fact]
+    public async Task Pausing_a_share_is_stored_shown_and_applied_and_continue_undoes_it()
+    {
+        var shares = Create();
+        var added = await AddVideoAsync(shares);
+        var changes = 0;
+        shares.Changed += () => changes++;
+
+        Assert.True((await shares.PauseAsync(added.Share.Id)).Ok);
+
+        Assert.True(Assert.Single(shares.Current()).Share.Paused);
+        Assert.True(Assert.Single(_repository.Items).Paused);
+        Assert.Contains(added.Share.Id, _engine.PausedOffers);
+        Assert.Equal(1, changes);
+
+        Assert.True((await shares.ContinueAsync(added.Share.Id)).Ok);
+
+        Assert.False(Assert.Single(shares.Current()).Share.Paused);
+        Assert.False(Assert.Single(_repository.Items).Paused);
+        Assert.Empty(_engine.PausedOffers);
+    }
+
+    [Fact]
+    public async Task A_share_paused_before_a_restart_is_offered_paused()
+    {
+        _files.Files[Video] = 5_000;
+        var share = new Share(ShareId.New(), Video, "birthday.mp4", 5_000, DateTimeOffset.UnixEpoch, Paused: true);
+        _repository.Items.Add(share);
+
+        var shares = Create();
+        await shares.StartAsync();
+
+        Assert.Equal(Video, _engine.Offered[share.Id]);
+        Assert.Contains(share.Id, _engine.PausedOffers);
+        Assert.True(Assert.Single(shares.Current()).Share.Paused);
+    }
+
+    [Fact]
+    public async Task Pausing_an_unknown_share_reports_not_found()
+    {
+        Assert.Equal(ErrorKind.ShareNotFound, (await Create().PauseAsync(ShareId.New())).Error);
+    }
+
+    [Fact]
+    public async Task Stop_sharing_leaves_the_list_before_the_engine_has_let_go()
+    {
+        var shares = Create();
+        var added = await AddVideoAsync(shares);
+        var shownWhileStopping = -1;
+        _engine.OnStopOffering = () => shownWhileStopping = shares.Current().Count;
+        var changes = 0;
+        shares.Changed += () => changes++;
+
+        Assert.True((await shares.RemoveAsync(added.Share.Id)).Ok);
+
+        Assert.Equal(0, shownWhileStopping);
+        Assert.Equal(1, changes);
+    }
 }

@@ -10,7 +10,7 @@ namespace ComParta.Storage.Sqlite;
 /// </summary>
 public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettingsRepository
 {
-    private const int SchemaVersion = 4;
+    private const int SchemaVersion = 5;
     private readonly string _connectionString;
 
     private SqliteStore(string databasePath)
@@ -66,6 +66,11 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
             // Where each transfer came from; older ones were all invites.
             await Command(connection, "ALTER TABLE transfers ADD COLUMN source INTEGER NOT NULL DEFAULT 0", transaction).ExecuteNonQueryAsync(ct);
         }
+        if (version < 5)
+        {
+            // Shared files paused one by one; older ones were all sending.
+            await Command(connection, "ALTER TABLE shares ADD COLUMN paused INTEGER NOT NULL DEFAULT 0", transaction).ExecuteNonQueryAsync(ct);
+        }
         await Command(connection, $"PRAGMA user_version = {SchemaVersion}", transaction).ExecuteNonQueryAsync(ct);
         await transaction.CommitAsync(ct);
     }
@@ -73,7 +78,7 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
     async Task<IReadOnlyList<Share>> IShareRepository.GetAllAsync(CancellationToken ct)
     {
         await using var connection = await ConnectAsync(ct);
-        await using var reader = await Command(connection, "SELECT id, file_path, name, size_bytes, added_at FROM shares ORDER BY added_at").ExecuteReaderAsync(ct);
+        await using var reader = await Command(connection, "SELECT id, file_path, name, size_bytes, added_at, paused FROM shares ORDER BY added_at").ExecuteReaderAsync(ct);
         var shares = new List<Share>();
         while (await reader.ReadAsync(ct))
         {
@@ -82,7 +87,8 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
                 reader.GetString(1),
                 reader.GetString(2),
                 reader.GetInt64(3),
-                ParseTime(reader.GetString(4))));
+                ParseTime(reader.GetString(4)),
+                reader.GetInt64(5) != 0));
         }
         return shares;
     }
@@ -90,12 +96,22 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
     public async Task AddAsync(Share share, CancellationToken ct = default)
     {
         await using var connection = await ConnectAsync(ct);
-        var command = Command(connection, "INSERT INTO shares (id, file_path, name, size_bytes, added_at) VALUES ($id, $path, $name, $size, $added)");
+        var command = Command(connection, "INSERT INTO shares (id, file_path, name, size_bytes, added_at, paused) VALUES ($id, $path, $name, $size, $added, $paused)");
         command.Parameters.AddWithValue("$id", share.Id.ToString());
         command.Parameters.AddWithValue("$path", share.FilePath);
         command.Parameters.AddWithValue("$name", share.Name);
         command.Parameters.AddWithValue("$size", share.SizeBytes);
         command.Parameters.AddWithValue("$added", FormatTime(share.AddedAt));
+        command.Parameters.AddWithValue("$paused", share.Paused ? 1 : 0);
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task SetPausedAsync(ShareId id, bool paused, CancellationToken ct = default)
+    {
+        await using var connection = await ConnectAsync(ct);
+        var command = Command(connection, "UPDATE shares SET paused = $paused WHERE id = $id");
+        command.Parameters.AddWithValue("$id", id.ToString());
+        command.Parameters.AddWithValue("$paused", paused ? 1 : 0);
         await command.ExecuteNonQueryAsync(ct);
     }
 
