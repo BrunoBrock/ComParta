@@ -2,7 +2,7 @@ import { act, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import App from './App.tsx'
 import type { TransferDto } from './bridge/contract.generated.ts'
-import { createFakeBridge, sampleFakeInvite } from './bridge/fakeBridge.ts'
+import { createFakeBridge, sampleFakeInvite, sampleFakeLinkInvite } from './bridge/fakeBridge.ts'
 import { en } from './i18n/en.ts'
 import {
   setup,
@@ -140,6 +140,19 @@ describe('confirming before receiving', () => {
     const dialog = screen.getByRole('dialog', { name: en['receive.title'] })
     expect(await within(dialog).findByText(en['receive.found'])).toBeInTheDocument()
     expect(within(dialog).getByLabelText(en['transfers.inviteLabel'])).toHaveValue(sampleFakeInvite)
+  })
+
+  it('reads the link the app hands out now, from a whole message and from the clipboard', async () => {
+    const { bridge, user } = setup()
+    bridge.clipboardText = `Paulo sent you this: ${sampleFakeLinkInvite} See you`
+
+    await user.click(await railButton(en['transfers.open']))
+
+    const dialog = screen.getByRole('dialog', { name: en['receive.title'] })
+    expect(await within(dialog).findByText(en['receive.found'])).toBeInTheDocument()
+    expect(within(dialog).getByLabelText(en['transfers.inviteLabel'])).toHaveValue(sampleFakeLinkInvite)
+    const preview = await bridge.invoke('transfers.preview', { invite: bridge.clipboardText })
+    expect(preview).toMatchObject({ ok: true, value: { name: 'Birthday party.mp4', sizeBytes: 250_000_000, isInvite: false } })
   })
 
   it('leaves the box empty when the clipboard holds no invite', async () => {

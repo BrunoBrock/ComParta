@@ -123,8 +123,13 @@ public interface ITransferEngine
     /// then on, and every invite carries them. An empty list stops using them.
     /// </summary>
     Task SetPublicServersAsync(IReadOnlyList<Uri> servers, CancellationToken ct = default);
-    /// <summary>The invite text for a share that is ready, or null when it is not.</summary>
+    /// <summary>
+    /// The invite text for a share that is ready, or null when it is not. It is a link the person
+    /// can send as it is, and that other apps of the engine's kind open too (AD-16, amended).
+    /// </summary>
     Task<string?> GetInviteAsync(ShareId id, CancellationToken ct = default);
+    /// <summary>The first invite inside any text, such as a whole chat message, or null.</summary>
+    string? FindInvite(string text);
 
     /// <summary>A stable key for the content an invite points to, or null when the text is not an invite.</summary>
     string? ReadInviteKey(string inviteText);

@@ -112,6 +112,9 @@ internal sealed class FakeEngine : ITransferEngine
     public Task<string?> GetInviteAsync(ShareId id, CancellationToken ct = default) =>
         Task.FromResult(Offered.ContainsKey(id) ? InvitePrefix + id : null);
 
+    public string? FindInvite(string text) =>
+        System.Text.RegularExpressions.Regex.Match(text, InvitePrefix + @"\S+") is { Success: true } found ? found.Value : null;
+
     public string? ReadInviteKey(string inviteText) =>
         inviteText.StartsWith(InvitePrefix, StringComparison.Ordinal) ? inviteText[InvitePrefix.Length..] : null;
 

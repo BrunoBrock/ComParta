@@ -301,6 +301,22 @@ public sealed class TransferUseCasesTests
     }
 
     [Fact]
+    public async Task The_engines_own_link_in_a_message_is_received_and_previewed()
+    {
+        _engine.Announced["abc"] = new InviteSummary("Natal.mp4", 4_200);
+        var transfers = Create();
+        var message = $"Oi! Abra isto: {FakeEngine.InvitePrefix}abc\nBeijos";
+
+        var preview = transfers.Preview(message);
+        var result = await transfers.ReceiveAsync(message);
+
+        Assert.Equal("Natal.mp4", preview.Value!.Hints.Name);
+        Assert.Equal(4_200, preview.Value.Hints.SizeBytes);
+        Assert.True(result.Ok);
+        Assert.Equal("abc", _engine.Receiving[result.Value!.Transfer.Id]);
+    }
+
+    [Fact]
     public async Task A_link_with_a_broken_payload_is_refused()
     {
         var result = await Create().ReceiveAsync("comparta://receive/v1/broken!");

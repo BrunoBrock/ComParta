@@ -138,7 +138,7 @@ public sealed class BridgeRouter
             }
 
             case Commands.ClipboardFindInvite:
-                return CommandResult.Success(TransferUseCases.FindInvite(await _clipboard.GetTextAsync()));
+                return CommandResult.Success(_transfers.FindInvite(await _clipboard.GetTextAsync()));
 
             case Commands.TransfersList:
                 return CommandResult.Success(_transfers.List().Select(ToDto).ToArray());

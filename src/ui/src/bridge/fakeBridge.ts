@@ -110,9 +110,13 @@ export const notSending = {
 export const fakeSendingPerShare = 180_000
 const addedLongAgo = '2026-10-10T14:05:00.000Z'
 
-// The fake's invites look like the app's ComParta links (AD-16) but carry the share id in the clear.
-const invitePrefix = 'comparta://receive/v1/'
-const invitePattern = /comparta:\/\/receive\/v1\/([A-Za-z0-9_-]+)/i
+// The fake's invites are shaped like the engine's links (AD-16, amended: an address, then the name
+// and size) but carry the share id in the clear.
+// The ComParta links of earlier builds are still read.
+const invitePrefix = 'link:?id='
+const invitePattern = /link:\?id=([A-Za-z0-9_-]+)[^\s"'<>]*/i
+const oldInvitePrefix = 'comparta://receive/v1/'
+const oldInvitePattern = /comparta:\/\/receive\/v1\/([A-Za-z0-9_-]+)/i
 const downloadLinkPrefix = 'https://example.org/download/'
 const demoInvite = { senderName: 'Paulo', name: 'Birthday party.mp4', sizeBytes: 250_000_000 }
 /** A made-up picture for a photo or video, coloured from its name, so the browser preview shows thumbnails. */
@@ -304,11 +308,21 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
 
   /** Reads text the way the app's invite codec and engine do, or null when it is neither. */
   const read = (text: string): { key: string; preview: InvitePreviewDto } | null => {
+    const old = oldInvitePattern.exec(text)
+    if (old) {
+      const share = shares.find((s) => s.id === old[1])
+      const hints = share ? { senderName: null, name: share.name, sizeBytes: share.sizeBytes } : demoInvite
+      return { key: `from-${old[1]}`, preview: { ...hints, itemCount: 1, isInvite: true, freeBytes } }
+    }
+    // The app's own link reads like any download link: the name and size are the ones it carries.
     const found = invitePattern.exec(text)
     if (found) {
       const share = shares.find((s) => s.id === found[1])
-      const hints = share ? { senderName: null, name: share.name, sizeBytes: share.sizeBytes } : demoInvite
-      return { key: `from-${found[1]}`, preview: { ...hints, itemCount: 1, isInvite: true, freeBytes } }
+      const { name, sizeBytes } = share ?? demoInvite
+      return {
+        key: `from-${found[1]}`,
+        preview: { senderName: null, name, sizeBytes, itemCount: null, isInvite: false, freeBytes },
+      }
     }
     const trimmed = text.trim()
     if (trimmed.startsWith(downloadLinkPrefix)) {
@@ -384,7 +398,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       const share = shares.find((s) => s.id === id)
       if (!share) return fail('share.notFound')
       if (share.status !== 'ready') return fail('share.notReady')
-      const link = invitePrefix + share.id
+      const link = `${invitePrefix}${share.id}&dn=${encodeURIComponent(share.name)}&xl=${share.sizeBytes}`
       fake.copiedInvite = message
         ? message.includes('{link}')
           ? message.replace('{link}', link)
@@ -416,7 +430,8 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     },
 
     'clipboard.findInvite': () => {
-      const found = invitePattern.exec(fake.clipboardText ?? '')
+      const text = fake.clipboardText ?? ''
+      const found = oldInvitePattern.exec(text) ?? invitePattern.exec(text)
       return ok(found ? found[0] : null)
     },
 
@@ -646,8 +661,11 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   return fake as unknown as FakeBridge
 }
 
-/** An invite the fake accepts, for trying the receive flow in a browser. */
-export const sampleFakeInvite = `${invitePrefix}demo`
+/** An invite from an earlier build, which the fake accepts as the app does. */
+export const sampleFakeInvite = `${oldInvitePrefix}demo`
+
+/** An invite as the app hands it out now, for trying the receive flow in a browser. */
+export const sampleFakeLinkInvite = `${invitePrefix}demo&dn=Birthday%20party.mp4&xl=250000000`
 
 /** A download link the fake accepts. */
 export const sampleFakeDownloadLink = `${downloadLinkPrefix}Open%20film.mkv`

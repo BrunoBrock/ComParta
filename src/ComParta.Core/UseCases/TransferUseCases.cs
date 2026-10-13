@@ -120,16 +120,21 @@ public sealed class TransferUseCases
     }
 
     /// <summary>
-    /// The clipboard's ComParta invite, if it holds one. The clipboard is read only when the person
-    /// opens the receive dialog, and nothing is kept.
+    /// The clipboard's invite, if it holds one: a ComParta link from an earlier build, or the
+    /// engine's own link. The clipboard is read only when the person opens the receive dialog, and
+    /// nothing is kept.
     /// </summary>
-    public static string? FindInvite(string? clipboardText) => InviteCodec.FindLink(clipboardText);
+    public string? FindInvite(string? clipboardText) =>
+        InviteCodec.FindLink(clipboardText) ?? (string.IsNullOrEmpty(clipboardText) ? null : _engine.FindInvite(clipboardText));
 
     private bool TryReadInvite(string? text, out Invite invite, out InviteSummary summary)
     {
         summary = null!;
         if (!InviteCodec.TryRead(text, out invite))
             return false;
+        // The engine's own link may sit inside a whole chat message, as a ComParta link may.
+        if (!invite.IsLink && _engine.FindInvite(invite.EngineText) is { } found)
+            invite = invite with { EngineText = found };
         var described = _engine.DescribeInvite(invite.EngineText);
         if (described is null)
             return false;

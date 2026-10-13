@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using ComParta.Core;
 using ComParta.Core.Ports;
 using MonoTorrent;
@@ -326,6 +327,10 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         && !endPoint.Address.Equals(IPAddress.Any) && !endPoint.Address.Equals(IPAddress.IPv6Any)
         && !endPoint.Address.Equals(IPAddress.Broadcast) && !endPoint.Address.IsIPv6Multicast
         && !(endPoint.AddressFamily == AddressFamily.InterNetwork && endPoint.Address.GetAddressBytes()[0] is >= 224 and <= 239);
+
+    // A magnet link ends at the first blank, quote or bracket of the message around it.
+    [GeneratedRegex(@"magnet:\?[^\s""'<>]+", RegexOptions.IgnoreCase)]
+    private static partial Regex MagnetInText();
 
     private static string KeyOf(InfoHashes hashes) => hashes.V1OrV2.ToHex();
 

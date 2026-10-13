@@ -15,9 +15,6 @@ interface SendStepsProps {
   onClose: (outcome: { shared: boolean; hide: boolean }) => void
 }
 
-/** How the invite looks in the preview; the app puts the real link in when it copies. */
-const linkPreview = 'comparta://receive/…'
-
 /**
  * The guided first send (UX design, "Send a file, first time"): choose, getting ready, send the
  * invite. The file dialog opens as soon as this does; cancelling it closes the steps.
@@ -91,7 +88,7 @@ export default function SendSteps({ bridge, shares, onError, onInfo, onClose }: 
             {t('steps.messageLabel')}
           </p>
           <p className="steps-message" aria-labelledby="steps-message-label">
-            {inviteMessage(share).replace('{link}', linkPreview)}
+            {inviteMessage(share).replace('{link}', t('steps.linkPreview'))}
           </p>
           <p>{t('steps.after')}</p>
         </>

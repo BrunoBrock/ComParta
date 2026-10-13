@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -52,7 +53,10 @@ public sealed partial class MonoTorrentTransferEngine
                     await UsePublicServersAsync(manager, _publicServers);
                     if (!_sendingStopped && !offer.Paused)
                         await manager.StartAsync();
-                    offer.Invite = new MagnetLink(torrent.InfoHashes, torrent.Name, size: torrent.Size).ToV1String();
+                    // The size is written by hand: the library reads it from a link but does not write it,
+                    // and the person receiving sees it before they agree.
+                    offer.Invite = new MagnetLink(torrent.InfoHashes, torrent.Name).ToV1String()
+                        + string.Create(CultureInfo.InvariantCulture, $"&xl={torrent.Size}");
                     OfferChanged?.Invoke(offer.Id, OfferState.Ready);
                     return;
                 }
