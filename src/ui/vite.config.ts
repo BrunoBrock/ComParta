@@ -13,6 +13,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test-setup.ts'],
     restoreMocks: true,
+    // The first test in each file also starts the page environment, which takes over 5 seconds
+    // on the Windows CI runner; 15 seconds still catches a test that hangs.
+    testTimeout: 15_000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
