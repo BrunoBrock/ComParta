@@ -55,7 +55,7 @@ public sealed class AppServices
 			var shares = new ShareUseCases(store, _engine, new NativeFilePicker(), new LocalFileSystem());
 			var transfers = new TransferUseCases(
 				store, _engine, picker: new NativeFilePicker(), files: new LocalFileSystem(), storage: new LocalStorageInfo(_paths));
-			var settings = new SettingsUseCases(store, new SystemInfo());
+			var settings = new SettingsUseCases(store, new SystemInfo(), _engine);
 			var executable = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "ComParta.exe");
 			var connection = new ConnectionUseCases(_engine, new WindowsFirewall(executable));
 			var activity = new ActivityUseCases(_engine, store);
@@ -83,6 +83,8 @@ public sealed class AppServices
 			LinkScheme.Register(executable);
 
 			await _engine.StartAsync(SharingPolicy.Default);
+			// The public servers the person named reach the engine before any file is shared again.
+			await settings.StartAsync();
 			// A stop chosen before the app last closed holds before anything starts moving (AD-22).
 			await activity.StartAsync();
 			await shares.StartAsync();

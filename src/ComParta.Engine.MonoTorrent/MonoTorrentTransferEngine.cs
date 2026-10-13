@@ -20,7 +20,7 @@ namespace ComParta.Engine.MonoTorrent;
 /// <summary>
 /// <see cref="ITransferEngine"/> on MonoTorrent. Everything torrent-shaped stays in this project (AD-2):
 /// a share is a single-file torrent seeded in place, an invite is its magnet link, and a transfer
-/// is a download of that magnet link. A "download link" is any other magnet link and a "download
+/// is a download of that magnet link, with the trackers the person named, if any. A "download link" is any other magnet link and a "download
 /// file" is a .torrent file (AD-21); for those the trackers they name are kept (AD-8, amended).
 /// The class is split by area: Offering, Receiving, Activity and Reachability each have their own file.
 /// </summary>
@@ -54,6 +54,8 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
     private ClientEngine? _engine;
     private PortMapper? _portMapper;
     private SharingPolicy _policy = SharingPolicy.Closed;
+    // Trackers the person named for what they share (AD-8); kept across a restart of the engine.
+    private volatile IReadOnlyList<Uri> _publicServers = [];
     private Timer? _progressTimer;
     private Timer? _reachabilityTimer;
     private Timer? _activityTimer;
@@ -273,8 +275,8 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
     /// <summary>
     /// Reads an invite and drops everything except the content identity, name and size, so an invite
     /// can never make the app contact a server the policy did not allow. A link that names trackers
-    /// is a public download link, not a ComParta invite (ComParta never puts trackers in its
-    /// invites); it keeps them when the policy allows servers in download links (AD-8, amended).
+    /// keeps them when the policy allows servers in download links (AD-8, amended): a public download
+    /// link, or a ComParta invite whose sender named public servers.
     /// </summary>
     private bool TryReadInvite(string? inviteText, out MagnetLink link, out IReadOnlyList<IPEndPoint> hints)
     {

@@ -31,7 +31,7 @@ public sealed class BridgeRouterTests
     {
         var shares = new ShareUseCases(new FakeShareRepository(), _engine, _picker, _files);
         var transfers = new TransferUseCases(new FakeTransferRepository(), _engine, _clock, picker: _picker, files: _files);
-        var settings = new SettingsUseCases(_settings, new FakeSystem("pt-BR"));
+        var settings = new SettingsUseCases(_settings, new FakeSystem("pt-BR"), _engine);
         var connection = new ConnectionUseCases(_engine, _firewall);
         var activity = new ActivityUseCases(_engine, _settings);
         var received = new ReceivedUseCases(transfers, new FakePaths(Path.GetTempPath()), _shell, _files);
@@ -379,6 +379,48 @@ public sealed class BridgeRouterTests
         Assert.True((await InvokeAsync(Commands.SettingsSet, new { startWithWindows = true })).GetProperty("ok").GetBoolean());
 
         Assert.True((await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("startWithWindows").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Public_servers_are_stored_checked_and_handed_to_the_engine()
+    {
+        Assert.Equal(0, (await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("publicServers").GetArrayLength());
+
+        var ok = await InvokeAsync(Commands.SettingsSet, new
+        {
+            language = "en",
+            publicServers = new[] { " udp://open.example.org:1337/announce ", "", "https://example.net/announce", "udp://open.example.org:1337/announce" },
+        });
+
+        Assert.True(ok.GetProperty("ok").GetBoolean());
+        var stored = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("publicServers");
+        Assert.Equal(["udp://open.example.org:1337/announce", "https://example.net/announce"], stored.EnumerateArray().Select(s => s.GetString()));
+        Assert.Equal([new Uri("udp://open.example.org:1337/announce"), new Uri("https://example.net/announce")], _engine.PublicServers);
+
+        // Changing another choice does not hand the same servers over again.
+        var calls = _engine.PublicServerCalls;
+        await InvokeAsync(Commands.SettingsSet, new { language = "pt-BR", publicServers = stored });
+        Assert.Equal(calls, _engine.PublicServerCalls);
+
+        foreach (var bad in new[] { "ftp://example.org/x", "udp://example.org", "not an address", "https://user:secret@example.org/a", "file:///C:/x" })
+            Assert.Equal(ErrorCodes.SettingsInvalid, ErrorCode(await InvokeAsync(Commands.SettingsSet, new { publicServers = new[] { bad } })));
+        var tooMany = Enumerable.Range(0, SettingsUseCases.MaxPublicServers + 1).Select(i => $"udp://s{i}.example.org:80").ToArray();
+        Assert.Equal(ErrorCodes.SettingsInvalid, ErrorCode(await InvokeAsync(Commands.SettingsSet, new { publicServers = tooMany })));
+        Assert.Equal(2, _engine.PublicServers.Count);
+
+        Assert.True((await InvokeAsync(Commands.SettingsSet, new { language = "en" })).GetProperty("ok").GetBoolean());
+        Assert.Empty(_engine.PublicServers);
+    }
+
+    [Fact]
+    public async Task Stored_public_servers_reach_the_engine_at_start()
+    {
+        await new SettingsUseCases(_settings, new FakeSystem("en")).SetAsync(null, null, null, publicServers: ["udp://open.example.org:6969"]);
+        var engine = new FakeEngine();
+
+        await new SettingsUseCases(_settings, new FakeSystem("en"), engine).StartAsync();
+
+        Assert.Equal([new Uri("udp://open.example.org:6969")], engine.PublicServers);
     }
 
     [Fact]

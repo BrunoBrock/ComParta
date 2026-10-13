@@ -30,6 +30,13 @@ export const en = {
   'settings.close': 'Close',
   'settings.startWithWindows': 'Start ComParta when Windows starts',
   'settings.startWithWindowsHint': 'It waits quietly next to the clock, so people can get your files.',
+  'settings.servers': 'Public servers',
+  'settings.serversHint':
+    'Optional. Each file you share is announced to these servers, and your invites carry them, so other apps can find your files. One address per line, such as udp://open.example.org:1337/announce.',
+  'settings.serversSave': 'Save servers',
+  'settings.serversSaved': 'Servers saved.',
+  'settings.serversInvalid': 'This line is not a server address: {line}',
+  'settings.serversTooMany': 'Use at most {count} servers.',
   'help.title': 'How ComParta works',
   'help.share': 'Choose “Share a file” and pick a file on this computer. It stays where it is.',
   'help.invite': 'Copy the invite and send it to the person in WhatsApp or an email.',

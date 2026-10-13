@@ -31,6 +31,13 @@ export const ptBR: Catalog = {
   'settings.close': 'Fechar',
   'settings.startWithWindows': 'Abrir o ComParta quando o Windows iniciar',
   'settings.startWithWindowsHint': 'Ele espera discretamente perto do relógio, para que as pessoas recebam seus arquivos.',
+  'settings.servers': 'Servidores públicos',
+  'settings.serversHint':
+    'Opcional. Cada arquivo que você compartilha é anunciado a esses servidores, e seus convites os levam junto, para que outros programas encontrem seus arquivos. Um endereço por linha, como udp://open.example.org:1337/announce.',
+  'settings.serversSave': 'Salvar servidores',
+  'settings.serversSaved': 'Servidores salvos.',
+  'settings.serversInvalid': 'Esta linha não é um endereço de servidor: {line}',
+  'settings.serversTooMany': 'Use no máximo {count} servidores.',
   'help.title': 'Como o ComParta funciona',
   'help.share': 'Escolha “Compartilhar um arquivo” e selecione um arquivo deste computador. Ele continua onde está.',
   'help.invite': 'Copie o convite e envie para a pessoa pelo WhatsApp ou por e-mail.',

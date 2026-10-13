@@ -118,6 +118,11 @@ public interface ITransferEngine
     Task PauseOfferingAsync(ShareId id, CancellationToken ct = default);
     /// <summary>Sends a paused shared file again, unless all sending is stopped.</summary>
     Task ContinueOfferingAsync(ShareId id, CancellationToken ct = default);
+    /// <summary>
+    /// Public servers the person named (AD-8): every shared file is announced to them, now and from
+    /// then on, and every invite carries them. An empty list stops using them.
+    /// </summary>
+    Task SetPublicServersAsync(IReadOnlyList<Uri> servers, CancellationToken ct = default);
     /// <summary>The invite text for a share that is ready, or null when it is not.</summary>
     Task<string?> GetInviteAsync(ShareId id, CancellationToken ct = default);
 
