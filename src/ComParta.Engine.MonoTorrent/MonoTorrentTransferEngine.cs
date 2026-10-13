@@ -109,6 +109,9 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
     /// <summary>For tests: wraps the disk writer, for example to stand for a full disk.</summary>
     internal Func<IPieceWriter, IPieceWriter> WrapWriter { get; init; } = writer => writer;
 
+    /// <summary>For tests: how long one request to the router may take.</summary>
+    internal TimeSpan RouterTimeout { get; init; } = PortMapper.DefaultRouterTimeout;
+
     /// <summary>For tests: the router port mapping this engine uses.</summary>
     internal PortMapper? PortMapper => _portMapper;
 
@@ -127,7 +130,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         _portMapper = null;
         if (_natDiscovery is { } discovery)
         {
-            var mapper = _portMapper = new PortMapper(discovery, _policy.AllowPortForwarding);
+            var mapper = _portMapper = new PortMapper(discovery, _policy.AllowPortForwarding, RouterTimeout);
             mapper.MappingsChanged += (_, _) => ReportReachability();
             factories = factories.WithPortForwarderCreator(() => mapper);
         }
