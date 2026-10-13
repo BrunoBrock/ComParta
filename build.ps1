@@ -52,8 +52,15 @@ function Assert-Prerequisites {
     }
 }
 
+# Installs when the packages are missing or older than package-lock.json (a pull that added a package),
+# so tests do not fail on an import that is not on disk yet. npm writes node_modules\.package-lock.json
+# on every install.
 function Install-UiPackages {
-    if (-not (Test-Path (Join-Path $root 'src\ui\node_modules'))) { Invoke-Step 'Install UI packages' 'src\ui' { npm ci } }
+    $installed = Join-Path $root 'src\ui\node_modules\.package-lock.json'
+    $wanted = Join-Path $root 'src\ui\package-lock.json'
+    $upToDate = (Test-Path $installed) -and
+                ((Get-Item $installed).LastWriteTimeUtc -ge (Get-Item $wanted).LastWriteTimeUtc)
+    if (-not $upToDate) { Invoke-Step 'Install UI packages' 'src\ui' { npm ci } }
 }
 
 function Test-Ui {
