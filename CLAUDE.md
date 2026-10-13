@@ -14,6 +14,15 @@
 This rule exists because work was once built twice: a branch with Bruno's own commits
 (reachability facts, the `build.ps1` menu) was missed while epics were stacked on `main`.
 
+## Testing every feature end to end
+
+Core tests and UI tests with the fake bridge are not enough: buttons have shipped that did nothing
+in the real app (the speed bar's Stop, "Stop sharing"). Every feature also needs a test that drives
+it through the real wiring: the bridge command as JSON, the router, the use cases and the real
+engine and storage, and back to the event the screen shows. These tests run in the Windows CI job.
+The fake bridge must behave like the real router; when they differ, the real one wins and the
+fake is fixed. Whatever still needs a person at a Windows PC is listed in the pull request.
+
 ## Standing rules
 
 - Never merge a pull request; Bruno merges. Open new work as a draft pull request.
