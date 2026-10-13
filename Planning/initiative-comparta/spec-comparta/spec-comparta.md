@@ -16,7 +16,7 @@ sources:
 
 A vision to realize, answering a pain. Sharing large personal files (family videos, photo albums, documents) today means uploading them to a cloud provider, with storage limits, subscriptions, privacy trade-offs and dependence on a third party. Peer-to-peer transfer removes all of that, but existing torrent programs are built for power users and are confusing and unsafe for everyday people. ComParta lets parents, grandparents, relatives and friends, people who can use a smartphone and email but nothing more complex, send files directly to each other.
 
-Bruno's first goal (2026-10-13): a file shared from a PC can be downloaded from anywhere, with ComParta or with any other torrent app, on Windows computers and Android phones, and nobody has to change a router or open a port.
+The maintainer's first goal (2026-10-13): a file shared from a PC can be downloaded from anywhere, with ComParta or with any other torrent app, on Windows computers and Android phones, and nobody has to change a router or open a port.
 
 ## References
 
@@ -105,23 +105,23 @@ Capabilities marked **[MVP]** form the first build (Windows desktop: add or remo
   - **success:** Base text is at least 16 px, touch and click targets are at least 44 px, contrast meets WCAG 2.2 AA, every action works by keyboard with a visible focus, every control has a screen-reader name, and the layout still works at 200 % text size. An automated accessibility check runs in the UI tests.
 - **CAP-25 [R1] Download from any link**
   - **intent:** A person downloads things published on the internet the way they would with qBittorrent, without learning its vocabulary.
-  - **success:** Pasting a download link from a website, or opening a download file a website gave them, adds it to Received next to files from people; it shows progress, speed and time left; the person can pause and continue it; the file lands in the Received folder under the same safety rules (CAP-9). Advanced controls (choosing which files of a download to get, speed limits, how long to keep sharing after it finishes) sit under "More options", never on the main screen. Added 2026-10-10 after Bruno chose "Both" (roadmap decision P-10).
+  - **success:** Pasting a download link from a website, or opening a download file a website gave them, adds it to Received next to files from people; it shows progress, speed and time left; the person can pause and continue it; the file lands in the Received folder under the same safety rules (CAP-9). Advanced controls (choosing which files of a download to get, speed limits, how long to keep sharing after it finishes) sit under "More options", never on the main screen. Added 2026-10-10 after the maintainer chose "Both" (roadmap decision P-10).
 - **CAP-26 [R1] Details of any file**
   - **intent:** A person, or the relative helping them, can see everything ComParta knows about one file without it crowding the main screen.
-  - **success:** Every shared and received file shows an information button. It opens a details window with the name, size, where the file is on this computer, its state, when it was added, how fast it is sending and receiving now, how many other computers are connected for it, and how much has gone each way. The numbers update while the window is open. No technical file-sharing word appears (AD-5). Added 2026-10-12 at Bruno's request (roadmap decision P-11).
+  - **success:** Every shared and received file shows an information button. It opens a details window with the name, size, where the file is on this computer, its state, when it was added, how fast it is sending and receiving now, how many other computers are connected for it, and how much has gone each way. The numbers update while the window is open. No technical file-sharing word appears (AD-5). Added 2026-10-12 at the maintainer's request (roadmap decision P-11).
 - **CAP-27 [R1] See and stop all the traffic at once**
   - **intent:** A person sees at a glance how fast ComParta is using their internet and can stop it in one click, for example before a video call.
-  - **success:** A bar along the top of the window always shows the total speed of everything being received and everything being sent. Next to it, a Stop button stops both at once; its menu also offers stopping only sending or only receiving. While something is stopped, the bar says so and the button becomes Continue. The choice is remembered after a restart. Stopping never cancels a transfer or removes a share. Added 2026-10-12 at Bruno's request (roadmap decision P-11).
+  - **success:** A bar along the top of the window always shows the total speed of everything being received and everything being sent. Next to it, a Stop button stops both at once; its menu also offers stopping only sending or only receiving. While something is stopped, the bar says so and the button becomes Continue. The choice is remembered after a restart. Stopping never cancels a transfer or removes a share. Added 2026-10-12 at the maintainer's request (roadmap decision P-11).
   - **amended 2026-10-13:** each file also shows its own receive and send speed, and has its own pause/play button on its card and in its details window; a paused shared file stays paused after a restart (PR #19, roadmap decision P-15).
 - **CAP-28 [R1] Publish to any torrent app, anywhere**
   - **intent:** A person puts a file on the internet from their PC, and anyone with the link gets it, from another home or from a phone on mobile data, with ComParta or with the torrent app they already have.
-  - **success:** With no router or port changed on either side, the copied link opened in qBittorrent on a Windows PC on another network, and in a stock torrent app on an Android phone on mobile data, delivers the file byte-identical, and the original is untouched. The person can also save a download file for apps that do not open links. Built on the helper (AD-23, epic 16). Added 2026-10-13 at Bruno's request (roadmap decision P-17).
+  - **success:** With no router or port changed on either side, the copied link opened in qBittorrent on a Windows PC on another network, and in a stock torrent app on an Android phone on mobile data, delivers the file byte-identical, and the original is untouched. The person can also save a download file for apps that do not open links. Built on the helper (AD-23, epic 16). Added 2026-10-13 at the maintainer's request (roadmap decision P-17).
 - **CAP-29 [R1] Name public servers**
   - **intent:** A person who knows public torrent servers adds them, so other apps find what they share the way they find any public torrent.
   - **success:** Settings holds a list of server addresses (one per line, checked, at most 20); every shared file is announced to them, including files already shared, and the copied link carries them. They help others find the computer, not reach it (CAP-28 does that). Built 2026-10-13 (PR #21, roadmap decision P-12).
 - **CAP-30 [R2, proposed] Watch while it arrives**
   - **intent:** Like Stremio, a person starts a received video before the whole file is in.
-  - **success:** A video that is arriving shows Play once its start is in; playing fetches the next part first, and seeking far ahead waits plainly instead of failing. Proposed 2026-10-13 from the Stremio reference; Bruno confirms before an epic is written.
+  - **success:** A video that is arriving shows Play once its start is in; playing fetches the next part first, and seeking far ahead waits plainly instead of failing. Proposed 2026-10-13 from the Stremio reference; the maintainer confirms before an epic is written.
 - **CAP-24 [R3] People I share with**
   - **intent:** After the first invite, a person sends to the same person again without copying anything, and only the people a share was sent to can get it.
   - **success:** Accepting an invite can also add the sender to "My people"; later shares sent to someone in "My people" appear in their "Shared with me" view when both devices are on; the content's fingerprint is no longer announced in the clear on the public lookup network. The design is settled by the spike in epic 13 before stories are written.
@@ -148,14 +148,14 @@ Capabilities marked **[MVP]** form the first build (Windows desktop: add or remo
 - An update check, crash reporting or usage statistics of any kind (AD-9, AD-17).
 - iOS, macOS and Linux before R3.
 - Editing, previewing or syncing files inside ComParta. It looks like a file drive, but it is not a sync service: a share is a snapshot sent to people, not a folder kept in step.
-- A hosted relay run by the project. Superseded 2026-10-13: Bruno's goal needs a helper on an always-reachable computer (AD-23); who runs it beyond his family is decision D-6.
+- A hosted relay run by the project. Superseded 2026-10-13: The maintainer's goal needs a helper on an always-reachable computer (AD-23); who runs it beyond the maintainer's family is decision D-6.
 
 ## Success signal
 
 - **MVP:** a person who has never used a torrent program adds a file on Windows, sends its invite to someone, and that person receives the file on their own PC; the original file is untouched.
 - **Product:** two people in different homes move a large family video directly between their devices with no account and no hosted service.
 - **R1 family pilot:** three non-technical relatives in at least two homes install ComParta from a link, send and receive a large file in Portuguese without help, and at least one transfer crosses two homes.
-- **R1 publish check (2026-10-13):** a file shared from Bruno's PC, with no router or port setting changed, is downloaded by qBittorrent on another home's PC and by a torrent app on an Android phone on 4G.
+- **R1 publish check (2026-10-13):** a file shared from the maintainer's PC, with no router or port setting changed, is downloaded by qBittorrent on another home's PC and by a torrent app on an Android phone on 4G.
 - **R2:** a folder of 200 photos goes from a PC to an Android phone and back, started from the phone's share menu or a chat link.
 
 ## Assumptions
@@ -177,4 +177,4 @@ Capabilities marked **[MVP]** form the first build (Windows desktop: add or remo
 - OQ-4: Answered in part by AD-17: no in-app update check; updates come from the store. The channel (Microsoft Store recommended, or paid code signing) is decision D-2 in the roadmap.
 - OQ-5: Answered 2026-10-10: folders and several files are CAP-19, in R2, before Android.
 - OQ-6: What success rate between homes is good enough to call CAP-18 met? Set from the epic 9 field test.
-- OQ-7: Who runs the helper, and pays for it, once people outside Bruno's family use ComParta? Decisions D-5 and D-6 in the roadmap.
+- OQ-7: Who runs the helper, and pays for it, once people outside the maintainer's family use ComParta? Decisions D-5 and D-6 in the roadmap.

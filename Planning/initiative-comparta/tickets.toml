@@ -1,6 +1,6 @@
 # The epics of initiative-comparta, in build order.
 # Releases (see roadmap-comparta): R1 = epics 1, 2, 9, 16, 15, 6, 8, 4, 14, 10, 3, 12, 5; R2 = 11, 7; R3 = 13.
-# Epic 16 (added 2026-10-13) is the next work: Bruno's first goal is a file any torrent app gets from anywhere.
+# Epic 16 (added 2026-10-13) is the next work: The maintainer's first goal is a file any torrent app gets from anywhere.
 
 [[epic]]
 id = 1

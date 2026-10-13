@@ -55,5 +55,5 @@ Tracer path: a file picked in the Windows dialog appears in the list, survives a
 - Decision 2026-10-12 (maintainer): shared files are reachable from the whole internet, with the limits stated in AD-8; epic 9 builds and explains the reachability.
 - Decision 2026-10-12 (maintainer): Done when 3 allows the public lookup network's well-known entry nodes (`router.bittorrent.com` is in the MonoTorrent DHT library).
 - Parked: edge cases and small items set aside on 2026-10-12 are listed in `todo-later.md` in this folder.
-- Decision 2026-10-13 (Bruno): published files must be consumable by any torrent app on Windows and Android with no router or port setup on either side; references are qBittorrent, Stremio and Google Drive. CAP-28 to CAP-30, AD-23 and epic 16 added; D-3 answered.
-- Working rules 2026-10-13 (CLAUDE.md): check every branch against main before new work; every feature gets a test through the real wiring in Windows CI; new work is a draft PR; only Bruno merges.
+- Decision 2026-10-13 (the maintainer): published files must be consumable by any torrent app on Windows and Android with no router or port setup on either side; references are qBittorrent, Stremio and Google Drive. CAP-28 to CAP-30, AD-23 and epic 16 added; D-3 answered.
+- Working rules 2026-10-13 (CLAUDE.md): check every branch against main before new work; every feature gets a test through the real wiring in Windows CI; new work is a draft PR; only the maintainer merges.

@@ -8,7 +8,7 @@ description = "Adds the chosen LICENSE file, a header policy in CONTRIBUTING, a 
 verify = "The build step lists MonoTorrent, React, Lucide and the rest with their licenses; adding a package with no license fails it; About shows the notices."
 covers = ["CAP-11"]
 after = ["1.14"]
-hitl = true                 # Bruno chooses the license
+hitl = true                 # The maintainer chooses the license
 risk = "low"
 unknown = "Decision D-1: which license (recommendation Apache-2.0)."
 
@@ -32,7 +32,7 @@ description = "Reserves the name ComParta in Partner Center, writes the listing 
 verify = "The app is live in the Store (private audience or public); installing it from the Store link on a clean PC shows no unknown-publisher warning."
 covers = ["CAP-11"]
 after = [2]
-hitl = true                 # needs Bruno's Partner Center account
+hitl = true                 # needs the maintainer's Partner Center account
 risk = "medium"
 unknown = "Decision D-2: Microsoft Store as the main channel."
 
@@ -40,11 +40,11 @@ unknown = "Decision D-2: Microsoft Store as the main channel."
 id = 4
 type = "story"
 title = "Release workflow from a tag"
-description = "Adds a GitHub Actions workflow that, on a version tag, builds and tests, produces the MSIX and the zip, writes release notes from the commits, attaches both to a GitHub Release, and submits the MSIX to the Store with the Store's submission tool using secrets Bruno adds."
+description = "Adds a GitHub Actions workflow that, on a version tag, builds and tests, produces the MSIX and the zip, writes release notes from the commits, attaches both to a GitHub Release, and submits the MSIX to the Store with the Store's submission tool using secrets the maintainer adds."
 verify = "Pushing a test tag creates a draft GitHub Release with both files; a Store submission appears in Partner Center."
 covers = ["CAP-11"]
 after = [2, 3]
-hitl = true                 # Bruno adds the Store secrets
+hitl = true                 # The maintainer adds the Store secrets
 risk = "medium"
 unknown = "Decision D-2."
 

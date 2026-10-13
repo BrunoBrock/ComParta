@@ -12,9 +12,9 @@ risk: high
 
 ## Description
 
-Bruno's first goal (2026-10-13): put a file on the open internet from his PC and download it from anywhere, on a Windows PC or an Android phone, with ComParta or with any ordinary torrent app (qBittorrent, µTorrent, LibreTorrent, Flud), and nobody changes a router or a port.
+The maintainer's first goal (2026-10-13): put a file on the open internet from their PC and download it from anywhere, on a Windows PC or an Android phone, with ComParta or with any ordinary torrent app (qBittorrent, µTorrent, LibreTorrent, Flud), and nobody changes a router or a port.
 
-The field test of 2026-10-13 showed why that does not work today. ComParta's port (54759) and qBittorrent's port (3225) both timed out when tested from outside Bruno's home, so his PC cannot receive connections, and a phone on 4G or 5G never can (carrier-grade NAT). Two sides that can only connect out never meet. Public servers (CAP-29) help them find each other, not connect.
+The field test of 2026-10-13 showed why that does not work today. The ports of both ComParta and qBittorrent timed out when tested from outside the maintainer's home, so that PC cannot receive connections, and a phone on 4G or 5G never can (carrier-grade NAT). Two sides that can only connect out never meet. Public servers (CAP-29) help them find each other, not connect.
 
 The fix is a **helper**: a small open-source program on an always-on computer that everyone can reach. The sharing ComParta connects out to it and hands it the file; the helper then serves the file to every app that asks, as an ordinary BitTorrent peer with its own public server. Because the helper speaks the normal protocol, any torrent app works, and so does ComParta itself on a PC or a phone. AD-23 holds the design.
 
@@ -56,6 +56,6 @@ The helper program, ComParta's side of it, the link a person copies, and the gui
 - Fact (2026-10-13): MonoTorrent 3.0.2 ships a tracker server (`MonoTorrent.TrackerServer`, HTTP and UDP), proven in `PublicServersTests`, so the helper needs no second library.
 - Assumption: a stock app finds the helper from the link's `tr=` (the helper's server) and `x.pe=` (the helper's address). Story 1 checks this with qBittorrent and two Android apps before anything else is built.
 - Assumption: the helper keeps a full copy of each file while it is shared. Serving pieces on demand without a copy is harder and waits for a need.
-- Risk: the helper sees what it passes along. For the family pilot it is run by Bruno; the trade-off is stated in AD-23.
+- Risk: the helper sees what it passes along. For the family pilot it is run by the maintainer; the trade-off is stated in AD-23.
 - Risk: a helper that accepts anything can be abused. Only ComParta installs holding the helper's key can add files, with a size limit per file and in total (story 2).
 - Later, not planned: a browser download page on the helper (`https://helper/f/<id>`), so a phone needs no torrent app at all.

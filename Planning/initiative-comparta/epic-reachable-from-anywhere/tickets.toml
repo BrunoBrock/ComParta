@@ -4,7 +4,7 @@
 id = 1
 type = "story"
 title = "Spike: stock apps download through an always-reachable peer"
-description = "Runs a plain MonoTorrent seeder and tracker on a reachable computer (Bruno's second PC with one forwarded port, or the free Oracle machine). The sharing ComParta, with port mapping off, names that server under public servers (CAP-29) and connects out to it. Checks that qBittorrent on Windows on another network, and LibreTorrent and Flud on an Android phone on mobile data, download the file from the copied link. Records what each app needed (tr=, x.pe=, a download file) in `spike-helper.md` in this folder."
+description = "Runs a plain MonoTorrent seeder and tracker on a reachable computer (the maintainer's second PC with one forwarded port, or the free Oracle machine). The sharing ComParta, with port mapping off, names that server under public servers (CAP-29) and connects out to it. Checks that qBittorrent on Windows on another network, and LibreTorrent and Flud on an Android phone on mobile data, download the file from the copied link. Records what each app needed (tr=, x.pe=, a download file) in `spike-helper.md` in this folder."
 verify = "`spike-helper.md` records, for each app, whether the file arrived and from which link form; the epic's assumptions are confirmed or corrected."
 covers = ["CAP-28"]
 after = []
@@ -50,7 +50,7 @@ id = 5
 type = "story"
 title = "Run your own helper: the guide"
 description = "A short guide in `docs/helper.md`: run the helper on the free Oracle Cloud machine (São Paulo region, Arm, about 10 TB a month out at no cost), or on a spare Windows PC with one forwarded port for development. Includes a ready service file for Linux and the release build in GitHub Releases."
-verify = "Bruno, or someone following only the guide, has a helper running on Oracle and a ComParta using it."
+verify = "The maintainer, or someone following only the guide, has a helper running on Oracle and a ComParta using it."
 covers = ["CAP-28"]
 after = [2]
 hitl = true                 # needs an Oracle account and a person following the guide
@@ -60,7 +60,7 @@ risk = "medium"
 id = 6
 type = "story"
 title = "Field test: any app, anywhere"
-description = "Repeats epic 9's matrix with the helper on: the sharing PC behind Bruno's router with no forwarded port, and receivers on another home network (qBittorrent and ComParta on Windows) and on 4G or 5G (a stock Android app). Records results in epic 9's `field-test.md`."
+description = "Repeats epic 9's matrix with the helper on: the sharing PC behind the maintainer's router with no forwarded port, and receivers on another home network (qBittorrent and ComParta on Windows) and on 4G or 5G (a stock Android app). Records results in epic 9's `field-test.md`."
 verify = "`field-test.md` holds the helper rows; the epic's Done when 1 and 2 pass; OQ-6 and the roadmap risk table are updated."
 covers = ["CAP-28", "CAP-18"]
 after = [3, 4, 5]

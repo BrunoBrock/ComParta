@@ -6,10 +6,10 @@ id = 1
 type = "story"
 title = "Spike: private sharing between known people"
 description = "Designs pairing, device keys, private delivery and blinded lookup within AD-2 and AD-9, tests the riskiest part (blinded announce with MonoTorrent) in a throwaway branch, sketches the My people and Shared with me screens in the UX design, and proposes the architecture changes."
-verify = "A design note in this folder, a working prototype of the riskiest part, and a draft architecture update Bruno accepts or rejects."
+verify = "A design note in this folder, a working prototype of the riskiest part, and a draft architecture update the maintainer accepts or rejects."
 covers = ["CAP-24"]
 after = ["7.1"]
-hitl = true                 # Bruno accepts the design
+hitl = true                 # The maintainer accepts the design
 risk = "high"
 
 [[entry]]

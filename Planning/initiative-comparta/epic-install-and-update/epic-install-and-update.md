@@ -20,7 +20,7 @@ A grandparent installs ComParta from a link a relative sent, without help.
 
 ## Requirements
 
-The spec is the source: CAP-11 (install and stay current). AD-17 answers most of OQ-4: an MSIX package through the Microsoft Store, which signs and updates it; the same build as a zip on GitHub Releases; no update check in the app; releases built only by CI from a tag. Decision D-1 (license) and D-2 (channel) are Bruno's.
+The spec is the source: CAP-11 (install and stay current). AD-17 answers most of OQ-4: an MSIX package through the Microsoft Store, which signs and updates it; the same build as a zip on GitHub Releases; no update check in the app; releases built only by CI from a tag. Decision D-1 (license) and D-2 (channel) are the maintainer's.
 
 ## Done when
 

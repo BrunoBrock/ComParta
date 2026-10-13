@@ -21,7 +21,7 @@ the translation catalog.
 
 | Who | Example | What they know | What scares them |
 | --- | --- | --- | --- |
-| **Maria, 68, the receiver** | Bruno's aunt. Uses WhatsApp on her phone and a laptop for email and YouTube. | Tapping links, attaching a photo to a message. | "Installing things", warnings, English words, anything that might "break the computer". |
+| **Maria, 68, the receiver** | The maintainer's aunt. Uses WhatsApp on her phone and a laptop for email and YouTube. | Tapping links, attaching a photo to a message. | "Installing things", warnings, English words, anything that might "break the computer". |
 | **Paulo, 45, the sender** | Filmed a birthday, has a 4 GB video. Uses Google Drive at work. | Files and folders, drag and drop, "share with". | Wasting an evening when it does not work and not knowing why. |
 | **Ana, 30, the family helper** | The one who gets called when something does not work. | Enough to install apps and read a report. | Debugging over the phone without seeing the screen. |
 

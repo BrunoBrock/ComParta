@@ -46,8 +46,8 @@ Totals and per-file details. Not speed limits (epic 14 story 4, "More options"),
 
 ## Notes
 
-- Requested by Bruno on 2026-10-12, to be built next, on its own branch for him to review.
+- Requested by the maintainer on 2026-10-12, to be built next, on its own branch for them to review.
 - The details window is a window for now; epic 8 story 8 shows the same rows in the details panel.
 - Waits on epic-send-to-a-person because: it needs shares and transfers that move bytes.
 - Built 2026-10-12: all four stories. Receiving is stopped with the engine's full stop, not pause, because a transfer still fetching its details cannot pause; a transfer's own Pause survives Continue. Each transfer now remembers where it came from (database version 4). In the browser, `?stopped=both`, `sending` or `receiving` starts with Stop already chosen.
-- Fixed 2026-10-13 (PR #19, Bruno's report that Stop did nothing): stopping the last running file waited for the home router to close a port, so the button never answered. The mapping now stays open while the app runs. Same PR added, at Bruno's request: each card shows its own receive and send speed, and a pause/play button over each card and in the ⓘ window; shared files pause one by one and stay paused after a restart. Every button is now tested through the real wiring (`tests/ComParta.Wiring.Tests`).
+- Fixed 2026-10-13 (PR #19, the maintainer's report that Stop did nothing): stopping the last running file waited for the home router to close a port, so the button never answered. The mapping now stays open while the app runs. Same PR added, at the maintainer's request: each card shows its own receive and send speed, and a pause/play button over each card and in the ⓘ window; shared files pause one by one and stay paused after a restart. Every button is now tested through the real wiring (`tests/ComParta.Wiring.Tests`).
