@@ -36,8 +36,15 @@ internal sealed class PortMapper : IPortForwarder, IDisposable
     /// <summary>How long each mapping is asked for; it is renewed at half of that.</summary>
     public static readonly TimeSpan Lifetime = TimeSpan.FromHours(2);
 
+    /// <summary>
+    /// How long one request to a router may take. Some routers, and other devices that answer the
+    /// same search, never answer a request; without a limit that held up sharing and quitting.
+    /// </summary>
+    public static readonly TimeSpan DefaultRouterTimeout = TimeSpan.FromSeconds(10);
+
     private readonly INatDiscovery _discovery;
     private readonly bool _enabled;
+    private readonly TimeSpan _routerTimeout;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly List<INatGateway> _gateways = [];
     private readonly HashSet<Mapping> _registered = [];
@@ -45,10 +52,11 @@ internal sealed class PortMapper : IPortForwarder, IDisposable
     private readonly HashSet<Mapping> _failed = [];
     private Timer? _renewal;
 
-    public PortMapper(INatDiscovery discovery, bool enabled)
+    public PortMapper(INatDiscovery discovery, bool enabled, TimeSpan? routerTimeout = null)
     {
         _discovery = discovery;
         _enabled = enabled;
+        _routerTimeout = routerTimeout ?? DefaultRouterTimeout;
     }
 
     public event EventHandler? MappingsChanged;
@@ -120,7 +128,7 @@ internal sealed class PortMapper : IPortForwarder, IDisposable
             try
             {
                 foreach (var (mapping, created) in Snapshot())
-                    await UnmapQuietlyAsync(created.Gateway, mapping, created.PublicPort);
+                    await UnmapQuietlyAsync(created.Gateway, mapping, created.PublicPort, _routerTimeout);
                 lock (_registered)
                     _created.Clear();
             }
@@ -129,21 +137,26 @@ internal sealed class PortMapper : IPortForwarder, IDisposable
         }
     }
 
-    public async Task RegisterMappingAsync(Mapping mapping)
+    /// <summary>
+    /// Asks the routers already found to open the port, without waiting for them: MonoTorrent waits
+    /// for this before a share starts, and a share must not wait on a router (AD-15).
+    /// </summary>
+    public Task RegisterMappingAsync(Mapping mapping)
     {
         lock (_registered)
         {
             if (!_registered.Add(mapping))
-                return;
+                return Task.CompletedTask;
         }
         Changed();
         if (!Active)
-            return;
+            return Task.CompletedTask;
         INatGateway[] gateways;
         lock (_gateways)
             gateways = [.. _gateways];
         foreach (var gateway in gateways)
-            await MapAsync(gateway, mapping);
+            _ = MapAsync(gateway, mapping);
+        return Task.CompletedTask;
     }
 
     public async Task UnregisterMappingAsync(Mapping mapping, CancellationToken token)
@@ -157,7 +170,7 @@ internal sealed class PortMapper : IPortForwarder, IDisposable
             wasCreated = _created.Remove(mapping, out created);
         }
         if (wasCreated)
-            await UnmapQuietlyAsync(created.Gateway, mapping, created.PublicPort);
+            await UnmapQuietlyAsync(created.Gateway, mapping, created.PublicPort, _routerTimeout);
         Changed();
     }
 
@@ -169,7 +182,11 @@ internal sealed class PortMapper : IPortForwarder, IDisposable
         {
             foreach (var (mapping, created) in Snapshot())
             {
-                try { await created.Gateway.MapAsync(mapping.Protocol, mapping.PrivatePort, created.PublicPort, Lifetime); }
+                try
+                {
+                    await created.Gateway.MapAsync(mapping.Protocol, mapping.PrivatePort, created.PublicPort, Lifetime)
+                        .WaitAsync(_routerTimeout);
+                }
                 catch (Exception)
                 {
                     lock (_registered)
@@ -200,7 +217,7 @@ internal sealed class PortMapper : IPortForwarder, IDisposable
     {
         try
         {
-            var address = await gateway.GetExternalAddressAsync();
+            var address = await gateway.GetExternalAddressAsync().WaitAsync(_routerTimeout);
             if (address is { AddressFamily: AddressFamily.InterNetwork } && !address.Equals(IPAddress.Any))
                 ExternalAddress = address;
         }
@@ -225,7 +242,8 @@ internal sealed class PortMapper : IPortForwarder, IDisposable
             }
             try
             {
-                var publicPort = await gateway.MapAsync(mapping.Protocol, mapping.PrivatePort, mapping.PublicPort, Lifetime);
+                var publicPort = await gateway.MapAsync(mapping.Protocol, mapping.PrivatePort, mapping.PublicPort, Lifetime)
+                    .WaitAsync(_routerTimeout);
                 lock (_registered)
                 {
                     _failed.Remove(mapping);
@@ -248,9 +266,9 @@ internal sealed class PortMapper : IPortForwarder, IDisposable
             return [.. _created.Select(c => (c.Key, c.Value))];
     }
 
-    private static async Task UnmapQuietlyAsync(INatGateway gateway, Mapping mapping, int publicPort)
+    private static async Task UnmapQuietlyAsync(INatGateway gateway, Mapping mapping, int publicPort, TimeSpan timeout)
     {
-        try { await gateway.UnmapAsync(mapping.Protocol, mapping.PrivatePort, publicPort); }
+        try { await gateway.UnmapAsync(mapping.Protocol, mapping.PrivatePort, publicPort).WaitAsync(timeout); }
         catch (Exception) { /* the router lets it expire */ }
     }
 
