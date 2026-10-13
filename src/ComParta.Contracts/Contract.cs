@@ -148,11 +148,15 @@ public sealed record InvitePreviewDto(
 /// <param name="View">"grid" or "list", or null for the default.</param>
 /// <param name="Sort">"added", "name" or "size", or null for the default.</param>
 /// <param name="StartWithWindows">Start hidden in the notification area when the person signs in.</param>
-public sealed record SettingsDto(string? Language, string SystemLanguage, string? View, string? Sort, int SendStepsSeen, bool StartWithWindows);
+/// <param name="PublicServers">Addresses of public servers that help others find what is shared; empty for none.</param>
+public sealed record SettingsDto(
+    string? Language, string SystemLanguage, string? View, string? Sort, int SendStepsSeen, bool StartWithWindows, string[] PublicServers);
 
 /// <summary>Every choice at once; the UI sends what it has, with the one it changed.</summary>
 /// <param name="Language">A language tag, or null to follow the system again.</param>
-public sealed record SetSettingsArgs(string? Language, string? View, string? Sort, int? SendStepsSeen, bool? StartWithWindows);
+/// <param name="PublicServers">Addresses of public servers, one per entry; null or empty for none.</param>
+public sealed record SetSettingsArgs(
+    string? Language, string? View, string? Sort, int? SendStepsSeen, bool? StartWithWindows, string[]? PublicServers);
 
 /// <param name="Force">True once the person confirmed quitting although files are moving.</param>
 public sealed record QuitArgs(bool Force);

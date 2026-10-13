@@ -48,6 +48,8 @@ public sealed partial class MonoTorrentTransferEngine
                     // Complete means every piece matched, so the engine only ever reads the original.
                     // While sending is stopped, or this file is paused, the offer waits, ready, until
                     // Continue starts it.
+                    // Added before it starts, so the first announcement already reaches them.
+                    await UsePublicServersAsync(manager, _publicServers);
                     if (!_sendingStopped && !offer.Paused)
                         await manager.StartAsync();
                     offer.Invite = new MagnetLink(torrent.InfoHashes, torrent.Name, size: torrent.Size).ToV1String();
@@ -145,6 +147,10 @@ public sealed partial class MonoTorrentTransferEngine
         if (!_offers.TryGetValue(id, out var offer) || offer.Invite is not { } invite)
             return Task.FromResult<string?>(null);
 
+        // The public servers the person named let any torrent app find this computer from the link alone.
+        foreach (var server in _publicServers)
+            invite += $"&tr={Uri.EscapeDataString(server.OriginalString)}";
+
         // The addresses are read now, not when the share was added: a laptop changes networks.
         if (_policy.AllowAddressInInvite)
         {
@@ -153,6 +159,38 @@ public sealed partial class MonoTorrentTransferEngine
         }
         return Task.FromResult<string?>(invite);
     }
+
+    public async Task SetPublicServersAsync(IReadOnlyList<Uri> servers, CancellationToken ct = default)
+    {
+        _publicServers = [.. servers];
+        foreach (var offer in _offers.Values)
+        {
+            if (offer.Manager is not { } manager || offer.Invite is null)
+                continue;
+            try
+            {
+                await UsePublicServersAsync(manager, _publicServers);
+                // A running share tells the new servers about itself now, not at its next turn.
+                if (manager.State is TorrentState.Seeding or TorrentState.Downloading && _publicServers.Count > 0)
+                    await manager.TrackerManager.AnnounceAsync(ct);
+            }
+            catch (Exception) { /* the next change tries again */ }
+        }
+    }
+
+    /// <summary>Makes the trackers of a shared file exactly the public servers the person named.</summary>
+    private static async Task UsePublicServersAsync(TorrentManager manager, IReadOnlyList<Uri> servers)
+    {
+        var current = manager.TrackerManager.Tiers.SelectMany(tier => tier.Trackers).ToList();
+        foreach (var tracker in current.Where(t => !servers.Contains(t.Uri)))
+            await manager.TrackerManager.RemoveTrackerAsync(tracker);
+        foreach (var server in servers.Where(s => !current.Any(t => t.Uri == s)))
+            await manager.TrackerManager.AddTrackerAsync(server);
+    }
+
+    /// <summary>For tests: the trackers a shared file announces to.</summary>
+    internal IReadOnlyList<Uri> PublicServersOf(ShareId id) =>
+        [.. _offers[id].Manager!.TrackerManager.Tiers.SelectMany(tier => tier.Trackers).Select(t => t.Uri)];
 
     /// <summary>
     /// Every address this computer has good reason to think others can use, best first: the one the

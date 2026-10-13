@@ -25,6 +25,7 @@ import type {
   TransferSourceDto,
 } from './contract.generated.ts'
 import { isPicture } from '../fileNames.ts'
+import { readPublicServers } from '../publicServers.ts'
 
 export interface PickedFile {
   name: string
@@ -53,6 +54,8 @@ export interface FakeBridgeOptions {
   sendStepsSeen?: number
   /** Whether the person chose to start with Windows. */
   startWithWindows?: boolean
+  /** The public servers the person named, as the app stored them. */
+  publicServers?: string[]
 }
 
 export interface FakeBridge extends Bridge {
@@ -290,6 +293,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     sort: options.sort ?? null,
     sendStepsSeen: options.sendStepsSeen ?? 0,
     startWithWindows: options.startWithWindows ?? false,
+    publicServers: options.publicServers ?? [],
   }
   // What quitting would stop: shares someone is getting and files arriving, as the app counts them.
   const moving = () => [
@@ -451,7 +455,11 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       )
         return fail('settings.invalid')
       const startWithWindows = (args as SetSettingsArgs).startWithWindows ?? false
-      settings = { ...settings, language, view, sort, sendStepsSeen, startWithWindows }
+      // As core: the same rules, blank lines and repeats dropped.
+      const entries = (args as SetSettingsArgs).publicServers ?? []
+      const read = readPublicServers(entries.join('\n'))
+      if (!('servers' in read) || entries.some((entry) => entry.includes('\n'))) return fail('settings.invalid')
+      settings = { ...settings, language, view, sort, sendStepsSeen, startWithWindows, publicServers: read.servers }
       emit({ event: 'settings.changed', payload: { ...settings } })
       return ok(null)
     },

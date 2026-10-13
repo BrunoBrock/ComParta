@@ -98,6 +98,17 @@ internal sealed class FakeEngine : ITransferEngine
     public Task PauseOfferingAsync(ShareId id, CancellationToken ct = default) { PausedOffers.Add(id); return Task.CompletedTask; }
     public Task ContinueOfferingAsync(ShareId id, CancellationToken ct = default) { PausedOffers.Remove(id); return Task.CompletedTask; }
 
+    /// <summary>The public servers the engine was last told to use.</summary>
+    public IReadOnlyList<Uri> PublicServers { get; private set; } = [];
+    public int PublicServerCalls { get; private set; }
+
+    public Task SetPublicServersAsync(IReadOnlyList<Uri> servers, CancellationToken ct = default)
+    {
+        PublicServers = servers;
+        PublicServerCalls++;
+        return Task.CompletedTask;
+    }
+
     public Task<string?> GetInviteAsync(ShareId id, CancellationToken ct = default) =>
         Task.FromResult(Offered.ContainsKey(id) ? InvitePrefix + id : null);
 

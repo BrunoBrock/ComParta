@@ -10,7 +10,9 @@ using ComParta.Core.Tests;
 using ComParta.Core.UseCases;
 using ComParta.Engine.MonoTorrent;
 using ComParta.Storage.Sqlite;
+using MonoTorrent.Connections.TrackerServer;
 using MonoTorrent.PortForwarding;
+using MonoTorrent.TrackerServer;
 
 namespace ComParta.Wiring.Tests;
 
@@ -68,7 +70,7 @@ public sealed class ButtonsTests : IAsyncLifetime
         // As in AppServices.StartAsync.
         var shares = new ShareUseCases(store, _engine, _picker, _files);
         var transfers = new TransferUseCases(store, _engine, picker: _picker, files: _files, storage: new FakeStorage());
-        var settings = new SettingsUseCases(store, new FakeSystem("en"));
+        var settings = new SettingsUseCases(store, new FakeSystem("en"), _engine);
         var connection = new ConnectionUseCases(_engine, new FakeFirewall());
         var activity = new ActivityUseCases(_engine, store);
         var opener = new FakeOpener();
@@ -84,6 +86,7 @@ public sealed class ButtonsTests : IAsyncLifetime
         _router.CommandFailed += (_, e) => _failure = e;
 
         await _engine.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort(), AllowPortForwarding = true });
+        await settings.StartAsync();
         await activity.StartAsync();
         await shares.StartAsync();
         await transfers.StartAsync();
@@ -242,5 +245,39 @@ public sealed class ButtonsTests : IAsyncLifetime
         await ClickAsync(Commands.SharesPause, new IdArgs(id));
         await ClickAsync(Commands.SharesCopyInvite, message);
         Assert.Contains("comparta://", _clipboard.Text);
+    }
+
+    [Fact]
+    public async Task Public_servers_chosen_in_settings_announce_the_shared_file_and_go_in_its_invite()
+    {
+        using var tracker = new TrackerServer { AllowUnregisteredTorrents = true };
+        int port;
+        using (var probe = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)))
+            port = ((IPEndPoint)probe.Client.LocalEndPoint!).Port;
+        var listener = TrackerListenerFactory.CreateUdp(IPAddress.Loopback, port);
+        tracker.RegisterListener(listener);
+        listener.Start();
+        try
+        {
+            var server = $"udp://127.0.0.1:{port}";
+            await ClickAsync(Commands.SettingsSet, new SetSettingsArgs(null, null, null, 0, false, [server]));
+            await ScreenShowsAsync(Events.SettingsChanged, s => s.GetProperty("publicServers").GetArrayLength() == 1);
+
+            var id = await ShareAFileAsync("public.bin");
+
+            var until = DateTime.UtcNow + Timeout;
+            while (tracker.GetTrackerItems().Sum(item => item.Count) == 0)
+            {
+                Assert.True(DateTime.UtcNow < until, "The shared file was never announced to the public server.");
+                await Task.Delay(100);
+            }
+            await ClickAsync(Commands.SharesCopyInvite, new CopyInviteArgs(id, null));
+            Assert.True(InviteCodec.TryRead(_clipboard.Text, out var invite));
+            Assert.Contains("tr=" + Uri.EscapeDataString(server), invite.EngineText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            listener.Stop();
+        }
     }
 }

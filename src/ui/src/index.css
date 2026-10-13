@@ -1445,3 +1445,9 @@ dialog.sheet {
   font-weight: 600;
   color: var(--color-text);
 }
+
+.settings-problem {
+  margin: 0 0 var(--space);
+  color: var(--color-danger);
+  overflow-wrap: anywhere;
+}

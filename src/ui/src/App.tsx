@@ -71,8 +71,10 @@ export default function App({ bridge }: AppProps) {
     sort: null,
     sendStepsSeen: 0,
     startWithWindows: false,
+    publicServers: [],
   })
   const [startWithWindows, setStartWithWindows] = useState(false)
+  const [publicServers, setPublicServers] = useState<readonly string[]>([])
   // Files that would stop moving if the app quit now; the person confirms first (AD-14).
   const [quitting, setQuitting] = useState<readonly string[] | null>(null)
   const [query, setQuery] = useState('')
@@ -126,8 +128,10 @@ export default function App({ bridge }: AppProps) {
         sort: stored.sort,
         sendStepsSeen: stored.sendStepsSeen,
         startWithWindows: stored.startWithWindows,
+        publicServers: stored.publicServers,
       }
       setStartWithWindows(stored.startWithWindows)
+      setPublicServers(stored.publicServers)
       setView(stored.view === 'list' ? 'list' : 'grid')
       setSort(stored.sort === 'name' || stored.sort === 'size' ? stored.sort : 'added')
       const chosen = pickLanguage(stored.language, stored.systemLanguage)
@@ -287,6 +291,20 @@ export default function App({ bridge }: AppProps) {
   function chooseStartWithWindows(on: boolean) {
     setStartWithWindows(on)
     void saveSettings({ startWithWindows: on })
+  }
+
+  async function choosePublicServers(servers: string[]) {
+    const before = choices.current
+    choices.current = { ...before, publicServers: servers }
+    const result = await bridge.invoke('settings.set', choices.current)
+    if (!result.ok) {
+      choices.current = before
+      showError(result.error.code)
+      return false
+    }
+    setPublicServers(servers)
+    showInfo(t('settings.serversSaved'))
+    return true
   }
 
   async function quitAnyway() {
@@ -543,6 +561,8 @@ export default function App({ bridge }: AppProps) {
           onLanguage={chooseLanguage}
           startWithWindows={startWithWindows}
           onStartWithWindows={chooseStartWithWindows}
+          publicServers={publicServers}
+          onPublicServers={choosePublicServers}
           onClose={() => setOpened(null)}
         />
       )}

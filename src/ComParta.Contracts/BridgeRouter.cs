@@ -198,7 +198,8 @@ public sealed class BridgeRouter
             case Commands.SettingsSet:
             {
                 var args = Args<SetSettingsArgs>(argsJson);
-                return ToResult(await _settings.SetAsync(args?.Language, args?.View, args?.Sort, args?.SendStepsSeen ?? 0, args?.StartWithWindows ?? false));
+                return ToResult(await _settings.SetAsync(args?.Language, args?.View, args?.Sort, args?.SendStepsSeen ?? 0, args?.StartWithWindows ?? false,
+                    args?.PublicServers));
             }
 
             case Commands.ConnectionGet:
@@ -355,7 +356,8 @@ public sealed class BridgeRouter
         view.NeededBytes);
 
     public static SettingsDto ToDto(Settings settings) =>
-        new(settings.Language, settings.SystemLanguage, settings.View, settings.Sort, settings.SendStepsSeen, settings.StartWithWindows);
+        new(settings.Language, settings.SystemLanguage, settings.View, settings.Sort, settings.SendStepsSeen, settings.StartWithWindows,
+            [.. settings.PublicServers]);
 
     public static QuitAnswerDto ToDto(QuitAnswer answer) => new(answer.Quitting, [.. answer.Moving]);
 

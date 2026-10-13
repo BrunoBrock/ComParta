@@ -67,6 +67,7 @@ export interface SettingsDto {
   sort: string | null;
   sendStepsSeen: number;
   startWithWindows: boolean;
+  publicServers: string[];
 }
 
 export interface SetSettingsArgs {
@@ -75,6 +76,7 @@ export interface SetSettingsArgs {
   sort: string | null;
   sendStepsSeen: number | null;
   startWithWindows: boolean | null;
+  publicServers: string[] | null;
 }
 
 export interface ConnectionDto {
