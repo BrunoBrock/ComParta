@@ -88,6 +88,7 @@ export const en = {
   'steps.reading': 'Reading “{name}”… The file stays where it is.',
   'steps.send': 'Send the invite',
   'steps.messageLabel': 'The message to send',
+  'steps.linkPreview': '(the link to your file)',
   'steps.copy': 'Copy message',
   'steps.copied': 'Copied',
   'steps.after': 'Paste it into WhatsApp or an email to the person. Keep ComParta open until they have the file.',

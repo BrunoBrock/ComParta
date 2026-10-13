@@ -92,6 +92,7 @@ export const ptBR: Catalog = {
   'steps.reading': 'Lendo “{name}”… O arquivo fica onde está.',
   'steps.send': 'Envie o convite',
   'steps.messageLabel': 'A mensagem para enviar',
+  'steps.linkPreview': '(o link do seu arquivo)',
   'steps.copy': 'Copiar mensagem',
   'steps.copied': 'Copiada',
   'steps.after': 'Cole no WhatsApp ou num e-mail para a pessoa. Deixe o ComParta aberto até ela receber o arquivo.',

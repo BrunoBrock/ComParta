@@ -10,6 +10,9 @@ namespace ComParta.Engine.MonoTorrent;
 // Receiving of the engine; the class is split by area, see MonoTorrentTransferEngine.cs.
 public sealed partial class MonoTorrentTransferEngine
 {
+    public string? FindInvite(string text) =>
+        MagnetInText().Match(text) is { Success: true } found && TryReadInvite(found.Value, out _, out _) ? found.Value : null;
+
     public string? ReadInviteKey(string inviteText) =>
         TryReadInvite(inviteText, out var link, out _) ? KeyOf(link.InfoHashes) : null;
 

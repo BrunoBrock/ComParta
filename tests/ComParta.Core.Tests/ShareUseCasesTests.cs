@@ -156,10 +156,8 @@ public sealed class ShareUseCasesTests
     {
         var shares = Create();
         var ready = await AddVideoAsync(shares);
-        Assert.True(InviteCodec.TryRead((await shares.GetInviteAsync(ready.Share.Id)).Value, out var invite));
-        Assert.Equal(FakeEngine.InvitePrefix + ready.Share.Id, invite.EngineText);
-        Assert.Equal(ready.Share.Name, invite.Hints.Name);
-        Assert.Equal(ready.Share.SizeBytes, invite.Hints.SizeBytes);
+        // The engine's own link, as it is, so that other apps can open it too (AD-16, amended).
+        Assert.Equal(FakeEngine.InvitePrefix + ready.Share.Id, (await shares.GetInviteAsync(ready.Share.Id)).Value);
 
         _engine.OfferOutcome = OfferState.Preparing;
         var big = Path.Combine(Path.GetTempPath(), "big.iso");

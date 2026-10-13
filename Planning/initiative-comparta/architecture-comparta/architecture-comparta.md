@@ -154,11 +154,11 @@ An arrow means "may depend on". `ComParta.Core` depends on no other project and 
 - **Prevents:** a hidden hosted relay or "connectivity check" server sneaking in to make home-to-home work; network jargon reaching the person.
 - **Rule:** The engine adapter listens on IPv4 and IPv6, asks the router for a port mapping (UPnP and NAT-PMP/PCP) when `SharingPolicy.AllowPortForwarding` is on, puts every address it has good reason to think is reachable (mapped IPv4, global IPv6) into the invite, and keeps looking for the other side on the lookup network so that a transfer works when *either* device is reachable. It reports neutral facts (`ReachabilityFacts`: mapping obtained, global IPv6 present, listening, firewall rule present, recent incoming connection seen) through `ITransferEngine`; core reduces them to `ConnectionHealth` (`good`, `limited`, `blocked`) and the UI explains that in plain words (UX design, "Stuck transfer"). No code contacts a service to test reachability. A relay, if decision D-3 allows one, is another adapter behind the same port, opt-in, and run by someone the person chooses.
 
-### AD-16 — An invite is a ComParta link wrapping opaque engine text
+### AD-16 — An invite is the engine's own link, opaque to core
 
 - **Binds:** core, engine, shell, UI, contracts
 - **Prevents:** engine words in what people paste; every story parsing invites its own way; a display name in an invite being trusted as a file name.
-- **Rule:** `InviteCodec` in core is the only code that reads or writes invites. An invite is `comparta://receive/v1/<payload>`, where the payload is base64url of a small JSON object: the engine's opaque invite text (AD-2, never inspected by core), and display hints (sender name, item name, total size, item count) that the receive dialog shows labelled as "from the invite". The codec finds the link anywhere inside pasted text (a whole chat message), accepts the first build's raw engine text for compatibility, and rejects anything else with `invite.invalid`. Display hints never become file names: names on disk come only from the received metadata through the sanitising function (AD-6). The friendly message around the link is composed by the UI from the catalog. The shell registers the `comparta:` scheme with the operating system.
+- **Rule (amended 2026-10-13):** An invite is the link the engine writes, handed out as it is, so that other apps of the engine's kind open it too (with MonoTorrent: a magnet link carrying the content identity, the name, the size, the public servers the person named (AD-8) and the address hints (AD-15)). Core never inspects it (AD-2): it asks the engine for it (`GetInviteAsync`), asks the engine to find one inside pasted text or the clipboard (`FindInvite`, a whole chat message), and asks the engine what it announces (`DescribeInvite`) for the receive dialog. Because such a link cannot be told apart from any public download link, it is received as a download link (AD-21). `InviteCodec` still reads the `comparta://receive/v1/<payload>` links earlier builds handed out (base64url of a small JSON object: engine text plus display hints), found anywhere inside pasted text, and the shell still registers the `comparta:` scheme for them; the app no longer writes them. Text that is neither is refused with `invite.invalid`. Display hints never become file names: names on disk come only from the received metadata through the sanitising function (AD-6). The friendly message around the link is composed by the UI from the catalog.
 
 ### AD-17 — Distribution through stores; no update check of our own
 
@@ -240,7 +240,7 @@ erDiagram
   SETTING }o--|| APP : "configures"
 ```
 
-`SHARE` and `TRANSFER` exist in the first release; `SETTING` arrives with R1 (language, your name, start with Windows, received folder, theme, view). `SHARE_ITEM` arrives with R2 (AD-19). An invite is a ComParta link (AD-16) and is not stored as an entity; `PERSON` and `DEVICE` arrive with R3 after the epic 13 spike.
+`SHARE` and `TRANSFER` exist in the first release; `SETTING` arrives with R1 (language, your name, start with Windows, received folder, theme, view). `SHARE_ITEM` arrives with R2 (AD-19). An invite is the engine's link (AD-16) and is not stored as an entity; `PERSON` and `DEVICE` arrive with R3 after the epic 13 spike.
 
 ```text
 ComParta/

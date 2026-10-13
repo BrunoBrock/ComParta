@@ -127,12 +127,8 @@ public sealed class BridgeRouterTests
         var result = await InvokeAsync(Commands.SharesCopyInvite, new { id, message = "Paulo sends you a file.\n{link}\nOpen it in ComParta." });
 
         Assert.True(result.GetProperty("ok").GetBoolean());
-        var link = InviteCodec.FindLink(_shell.Copied)!;
-        Assert.Equal($"Paulo sends you a file.\n{link}\nOpen it in ComParta.", _shell.Copied);
-        Assert.True(InviteCodec.TryRead(link, out var invite));
-        Assert.Equal(FakeEngine.InvitePrefix + id, invite.EngineText);
-        Assert.Equal("birthday.mp4", invite.Hints.Name);
-        Assert.Equal(5_000, invite.Hints.SizeBytes);
+        // The engine's own link, as it is, so that other apps can open it too (AD-16, amended).
+        Assert.Equal($"Paulo sends you a file.\n{FakeEngine.InvitePrefix}{id}\nOpen it in ComParta.", _shell.Copied);
     }
 
     [Fact]
@@ -142,7 +138,7 @@ public sealed class BridgeRouterTests
 
         await InvokeAsync(Commands.SharesCopyInvite, new { id });
 
-        Assert.Equal(InviteCodec.FindLink(_shell.Copied), _shell.Copied);
+        Assert.Equal(FakeEngine.InvitePrefix + id, _shell.Copied);
     }
 
     [Fact]
@@ -167,6 +163,10 @@ public sealed class BridgeRouterTests
         _shell.OnClipboard = "Here you go:\n" + link;
 
         Assert.Equal(link, (await InvokeAsync(Commands.ClipboardFindInvite)).GetProperty("value").GetString());
+
+        // The link the app copies now is the engine's own, and it is found the same way.
+        _shell.OnClipboard = $"Here you go: {FakeEngine.InvitePrefix}abc\nSee you!";
+        Assert.Equal(FakeEngine.InvitePrefix + "abc", (await InvokeAsync(Commands.ClipboardFindInvite)).GetProperty("value").GetString());
 
         _shell.OnClipboard = "shopping list";
         var nothing = await InvokeAsync(Commands.ClipboardFindInvite);

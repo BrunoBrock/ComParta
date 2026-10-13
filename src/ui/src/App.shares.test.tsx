@@ -128,7 +128,7 @@ describe('sending to another person', () => {
     expect(bridge.copiedInvite).toBe(
       'Someone wants to send you “Birthday party.mp4” (1.20 GB) with ComParta.\n' +
         '1. Get ComParta: https://github.com/BrunoBrock/ComParta/releases\n' +
-        '2. Open this invite in ComParta: comparta://receive/v1/s1',
+        '2. Open this invite in ComParta: link:?id=s1&dn=Birthday%20party.mp4&xl=1288490188',
     )
     expect(screen.getByRole('button', { name: 'Copy invite for Birthday party.mp4' })).toHaveTextContent(en['shares.copied'])
   })

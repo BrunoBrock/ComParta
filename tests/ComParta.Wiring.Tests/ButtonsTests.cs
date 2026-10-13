@@ -57,7 +57,9 @@ public sealed class ButtonsTests : IAsyncLifetime
     {
         public string? Text { get; private set; }
         public Task SetTextAsync(string text, CancellationToken ct = default) { Text = text; return Task.CompletedTask; }
-        public Task<string?> GetTextAsync(CancellationToken ct = default) => Task.FromResult<string?>(null);
+        /// <summary>What the person copied somewhere else, for the receive dialog to find.</summary>
+        public string? Holds { get; set; }
+        public Task<string?> GetTextAsync(CancellationToken ct = default) => Task.FromResult(Holds);
     }
 
     public async Task InitializeAsync()
@@ -235,16 +237,38 @@ public sealed class ButtonsTests : IAsyncLifetime
         var message = new CopyInviteArgs(id, "Hi! Open this to get the file: {link}");
 
         await ClickAsync(Commands.SharesCopyInvite, message);
-        Assert.StartsWith("Hi! Open this to get the file: comparta://", _clipboard.Text);
+        Assert.StartsWith("Hi! Open this to get the file: magnet:?xt=urn:btih:", _clipboard.Text);
 
         await ClickAsync(Commands.ActivitySet, new SetActivityArgs(SendingStopped: true, ReceivingStopped: true));
         await ClickAsync(Commands.SharesCopyInvite, message with { Message = null });
-        Assert.StartsWith("comparta://", _clipboard.Text);
+        Assert.StartsWith("magnet:?xt=urn:btih:", _clipboard.Text);
 
         await ClickAsync(Commands.ActivitySet, new SetActivityArgs(SendingStopped: false, ReceivingStopped: false));
         await ClickAsync(Commands.SharesPause, new IdArgs(id));
         await ClickAsync(Commands.SharesCopyInvite, message);
-        Assert.Contains("comparta://", _clipboard.Text);
+        Assert.Contains("magnet:?xt=urn:btih:", _clipboard.Text);
+    }
+
+    [Fact]
+    public async Task The_copied_invite_is_a_link_other_apps_open_and_the_app_reads_it_back_from_a_whole_message()
+    {
+        var id = await ShareAFileAsync("for other apps.bin");
+
+        await ClickAsync(Commands.SharesCopyInvite, new CopyInviteArgs(id, "Hi! Open this to get the file: {link}\nSee you"));
+        var message = _clipboard.Text!;
+
+        // Any torrent app reads this: the content, its name and its size, in the usual words.
+        var link = message[message.IndexOf("magnet:?", StringComparison.Ordinal)..].Split('\n')[0];
+        Assert.True(global::MonoTorrent.MagnetLink.TryParse(link, out var magnet), link);
+        Assert.Equal("for other apps.bin", magnet!.Name);
+        Assert.True(magnet.Size > 0, link);
+
+        // And ComParta reads its own message back: the receive dialog finds it and shows the file.
+        _clipboard.Holds = message;
+        Assert.Equal(link, (await ClickAsync(Commands.ClipboardFindInvite)).GetString());
+        var preview = await ClickAsync(Commands.TransfersPreview, new ReceiveArgs(message));
+        Assert.Equal("for other apps.bin", preview.GetProperty("name").GetString());
+        Assert.Equal(magnet.Size, preview.GetProperty("sizeBytes").GetInt64());
     }
 
     [Fact]
@@ -272,8 +296,8 @@ public sealed class ButtonsTests : IAsyncLifetime
                 await Task.Delay(100);
             }
             await ClickAsync(Commands.SharesCopyInvite, new CopyInviteArgs(id, null));
-            Assert.True(InviteCodec.TryRead(_clipboard.Text, out var invite));
-            Assert.Contains("tr=" + Uri.EscapeDataString(server), invite.EngineText, StringComparison.Ordinal);
+            Assert.StartsWith("magnet:?", _clipboard.Text);
+            Assert.Contains("tr=" + Uri.EscapeDataString(server), _clipboard.Text, StringComparison.Ordinal);
         }
         finally
         {

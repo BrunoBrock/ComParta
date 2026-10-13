@@ -18,9 +18,10 @@ public sealed record InviteHints(string? SenderName, string? Name, long? SizeByt
 public sealed record Invite(string EngineText, InviteHints Hints, bool IsLink);
 
 /// <summary>
-/// The only code that reads or writes invites (AD-16). An invite is
-/// <c>comparta://receive/v1/&lt;payload&gt;</c>, where the payload is base64url of a small JSON
-/// object holding the engine's text and the display hints. Core never looks inside the engine text.
+/// Reads the ComParta links of earlier builds (AD-16): <c>comparta://receive/v1/&lt;payload&gt;</c>,
+/// where the payload is base64url of a small JSON object holding the engine's text and the display
+/// hints. The app no longer hands these out: an invite is now the engine's own link, which other
+/// apps open too (AD-16, amended). Core never looks inside the engine text.
 /// </summary>
 public static partial class InviteCodec
 {

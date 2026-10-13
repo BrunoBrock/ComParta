@@ -193,8 +193,9 @@ public sealed class ShareUseCases
     }
 
     /// <summary>
-    /// The ComParta link another person opens to receive this share (AD-16). It carries the name
-    /// and size so they can see what it is before they agree.
+    /// The link another person opens to receive this share: the engine's own link, as it is, so
+    /// that other apps of its kind open it too (AD-16, amended). The engine puts the name and size
+    /// in it so the person can see what it is before they agree.
     /// </summary>
     public async Task<Result<string>> GetInviteAsync(ShareId id, CancellationToken ct = default)
     {
@@ -207,10 +208,7 @@ public sealed class ShareUseCases
             return Result<string>.Fail(ErrorKind.ShareNotReady);
 
         var invite = await _engine.GetInviteAsync(id, ct);
-        if (invite is null)
-            return Result<string>.Fail(ErrorKind.ShareNotReady);
-        var hints = new InviteHints(SenderName: null, view.Share.Name, view.Share.SizeBytes, ItemCount: 1);
-        return Result<string>.Success(InviteCodec.Write(invite, hints));
+        return invite is null ? Result<string>.Fail(ErrorKind.ShareNotReady) : Result<string>.Success(invite);
     }
 
     private void OnOfferChanged(ShareId id, OfferState state)
