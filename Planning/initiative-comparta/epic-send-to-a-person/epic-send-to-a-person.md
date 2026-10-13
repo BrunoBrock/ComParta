@@ -57,3 +57,5 @@ Invite and receive on Windows. Not transfer progress beyond done or not done (ep
 - Decision 2026-10-12 (maintainer): shared files are reachable from the whole internet, with the limits in AD-8. Reachability is epic 9; edge cases set aside are in `todo-later.md`.
 - Assumption: the friendly invite message (story 3) and the copy action say that the link is for the chosen person only, because anyone holding it can download the file (spec, Constraints, 2026-10-12).
 - Waits on epic-share-a-file because: it provides the running app, the bridge contract and the engine port.
+- Changed 2026-10-13 (PR #23, Bruno): the copied invite is the engine's own link, which other torrent apps open too, instead of a `comparta://` link (AD-16 amended). Old ComParta links are still read. Given up: the sender name in the invite, telling an invite from a public download link, and a click opening ComParta rather than whichever app Windows has for those links.
+- Fixed 2026-10-13 (PR #19): Copy invite retries when Windows reports the clipboard busy, and a failing button writes the reason to `comparta.log`.

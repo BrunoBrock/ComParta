@@ -94,6 +94,7 @@ risk = "low"
 id = 9
 type = "story"
 title = "A relay run by someone the family chooses (only if decided)"
+# Dropped 2026-10-13: replaced by epic 16 (a helper every torrent app can use), after Bruno set the goal of no router setup on either side.
 description = "Only if decision D-3 says yes after story 8: an opt-in setting where one ComParta, on a PC that is always on and reachable, passes encrypted bytes between two others it knows, as another adapter behind AD-15. Scope is set when it starts."
 verify = "Set when refined."
 covers = ["CAP-18"]

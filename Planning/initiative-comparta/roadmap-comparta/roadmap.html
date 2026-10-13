@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ComParta Roadmap</title>
+<style>
+  /* Layout: one reading column; each drawing sits on its own surface, wide drawings scroll inside it. */
+  :root {
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --text: #0f172a;
+    --muted: #475569;
+    --primary: #0b6e4f;
+    --primary-soft: #e3f2ec;
+    --busy: #1d4ed8;
+    --busy-soft: #e8f0fe;
+    --warn: #b45309;
+    --warn-soft: #fff7ed;
+    --danger: #b91c1c;
+    --border: #cbd5e1;
+    --track: #e2e8f0;
+    --font: 'Segoe UI Variable Text', 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
+    --mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --bg: #0f1418; --surface: #182027; --text: #e8edf2; --muted: #a6b3c0;
+      --primary: #4fc79b; --primary-soft: #173a2e; --busy: #8ab4ff; --busy-soft: #1b2a3d;
+      --warn: #f5b25c; --warn-soft: #33261a; --danger: #ff8f85; --border: #34404b; --track: #26313b;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme='dark'] {
+    --bg: #0f1418; --surface: #182027; --text: #e8edf2; --muted: #a6b3c0;
+    --primary: #4fc79b; --primary-soft: #173a2e; --busy: #8ab4ff; --busy-soft: #1b2a3d;
+    --warn: #f5b25c; --warn-soft: #33261a; --danger: #ff8f85; --border: #34404b; --track: #26313b;
+    color-scheme: dark;
+  }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 16px; line-height: 1.55; }
+  .page { max-width: 980px; margin: 0 auto; padding-inline: 20px; padding-block: 32px 64px; display: grid; gap: 40px; }
+  h1, h2, h3 { text-wrap: balance; line-height: 1.2; margin: 0; }
+  h1 { font-size: 34px; letter-spacing: -0.01em; }
+  h2 { font-size: 22px; }
+  h3 { font-size: 16px; }
+  p { margin: 0; max-width: 68ch; }
+  .eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+  header { display: grid; gap: 12px; }
+  .goal { border-left: 4px solid var(--primary); padding: 12px 16px; background: var(--primary-soft); border-radius: 0 10px 10px 0; max-width: 72ch; }
+  section { display: grid; gap: 16px; }
+  .sheet { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .scroll { overflow-x: auto; }
+  svg text { font-family: var(--font); }
+  .s-box { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+  .s-closed { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.5; }
+  .s-helper { fill: var(--primary-soft); stroke: var(--primary); stroke-width: 2; }
+  .s-t { fill: var(--text); font-size: 14px; font-weight: 600; }
+  .s-m { fill: var(--muted); font-size: 12px; }
+  .s-ok { stroke: var(--primary); stroke-width: 2.5; fill: none; }
+  .s-ok-t { fill: var(--primary); font-size: 12px; font-weight: 600; }
+  .s-no { stroke: var(--danger); stroke-width: 2; fill: none; stroke-dasharray: 6 5; }
+  .s-no-t { fill: var(--danger); font-size: 12px; font-weight: 600; }
+  .s-head-ok { fill: var(--primary); }
+  .s-head-no { fill: var(--danger); }
+  .twin { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+  .twin > div { min-width: 0; display: grid; gap: 8px; align-content: start; }
+  .caption { font-size: 14px; color: var(--muted); }
+  /* Releases */
+  .lanes { display: grid; gap: 14px; }
+  .lane { display: grid; grid-template-columns: 150px 1fr; gap: 16px; align-items: start; }
+  .lane-name { display: grid; gap: 2px; }
+  .lane-name strong { font-size: 15px; }
+  .lane-name span { font-size: 13px; color: var(--muted); }
+  .epics { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; min-width: 0; }
+  .epic { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; background: var(--surface); }
+  .epic.next { border-color: var(--primary); border-width: 2px; background: var(--primary-soft); }
+  .epic .row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .epic .name { font-size: 14px; font-weight: 600; }
+  .epic .count { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bar { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; display: flex; }
+  .bar i { display: block; height: 100%; }
+  .bar .d { background: var(--primary); }
+  .bar .r { background: var(--busy); }
+  .bar .p { background: var(--warn); }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 12px; height: 6px; border-radius: 3px; display: inline-block; }
+  .tag { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--primary); }
+  /* Steps */
+  .steps { display: grid; gap: 0; counter-reset: s; }
+  .step { display: grid; grid-template-columns: 36px 1fr; gap: 14px; padding-bottom: 18px; position: relative; }
+  .step::before { counter-increment: s; content: counter(s); width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; background: var(--surface); border: 2px solid var(--primary); color: var(--primary); position: relative; z-index: 1; }
+  .step:not(:last-child)::after { content: ''; position: absolute; left: 15px; top: 34px; bottom: 0; width: 2px; background: var(--border); }
+  .step div { display: grid; gap: 2px; min-width: 0; }
+  .step .who { font-size: 12px; color: var(--muted); }
+  /* References and decisions */
+  .refs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+  .ref { display: grid; gap: 6px; align-content: start; border-top: 3px solid var(--primary); padding-top: 10px; }
+  .ref p { font-size: 14px; color: var(--muted); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 12px 10px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+  td:first-child { font-family: var(--mono); font-size: 13px; white-space: nowrap; }
+  footer { font-size: 13px; color: var(--muted); }
+  @media (max-width: 560px) {
+    .lane { grid-template-columns: 1fr; gap: 8px; }
+    h1 { font-size: 28px; }
+  }
+</style>
+</head>
+<body>
+
+<main class="page">
+  <header>
+    <div class="eyebrow">Plan · updated 13 Oct 2026 · main at PR #23</div>
+    <h1>ComParta roadmap</h1>
+    <p class="goal"><strong>First goal:</strong> a file shared from a PC can be downloaded from anywhere, with ComParta or with any other BitTorrent app, on Windows computers and Android phones, and nobody changes a router or opens a port.</p>
+    <p class="caption">53 of 111 stories are done. The written plan is in <code>roadmap-comparta.md</code> next to this page; the spec, architecture and epics sit beside it in <code>Planning/initiative-comparta</code>.</p>
+  </header>
+
+  <section aria-labelledby="reach">
+    <h2 id="reach">How a file reaches any app</h2>
+    <p>On 13 Oct both ComParta's port (54759) and qBittorrent's port (3225) timed out when tested from outside Bruno's home, and a phone on 4G can never receive connections. When both sides can only connect out, they never meet. A helper that everyone can reach fixes that, and every app already knows how to use it.</p>
+    <div class="twin">
+      <div class="sheet">
+        <h3>Today: both sides closed</h3>
+        <div class="scroll">
+          <svg viewBox="0 0 420 220" width="100%" role="img" aria-labelledby="t1">
+            <title id="t1">Bruno's PC and a phone on 4G both refuse incoming connections, so no connection forms.</title>
+            <defs>
+              <marker id="hn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="s-head-no" /></marker>
+            </defs>
+            <rect x="10" y="60" width="150" height="90" rx="12" class="s-closed" />
+            <text x="85" y="95" text-anchor="middle" class="s-t">Bruno's PC</text>
+            <text x="85" y="115" text-anchor="middle" class="s-m">ComParta sharing</text>
+            <text x="85" y="133" text-anchor="middle" class="s-m">port closed</text>
+            <rect x="260" y="60" width="150" height="90" rx="12" class="s-closed" />
+            <text x="335" y="95" text-anchor="middle" class="s-t">Phone on 4G</text>
+            <text x="335" y="115" text-anchor="middle" class="s-m">any BitTorrent app</text>
+            <text x="335" y="133" text-anchor="middle" class="s-m">behind the carrier</text>
+            <line x1="164" y1="92" x2="208" y2="92" class="s-no" marker-end="url(#hn)" />
+            <line x1="256" y1="118" x2="212" y2="118" class="s-no" marker-end="url(#hn)" />
+            <text x="210" y="50" text-anchor="middle" class="s-no-t">each call is refused</text>
+            <text x="210" y="190" text-anchor="middle" class="s-m">Public servers help them find each other,</text>
+            <text x="210" y="207" text-anchor="middle" class="s-m">but cannot make either one reachable.</text>
+          </svg>
+        </div>
+      </div>
+      <div class="sheet">
+        <h3>With the helper (epic 16)</h3>
+        <div class="scroll">
+          <svg viewBox="0 0 420 300" width="100%" role="img" aria-labelledby="t2">
+            <title id="t2">Bruno's PC connects out to the helper and hands it the file; a PC on another network and a phone on 4G also connect out to the helper and download it.</title>
+            <defs>
+              <marker id="ho" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="s-head-ok" /></marker>
+            </defs>
+            <rect x="135" y="16" width="150" height="86" rx="12" class="s-helper" />
+            <text x="210" y="48" text-anchor="middle" class="s-t">Helper</text>
+            <text x="210" y="67" text-anchor="middle" class="s-m">always reachable</text>
+            <text x="210" y="84" text-anchor="middle" class="s-m">free Oracle machine</text>
+            <rect x="10" y="196" width="125" height="86" rx="12" class="s-closed" />
+            <text x="72" y="228" text-anchor="middle" class="s-t">Bruno's PC</text>
+            <text x="72" y="247" text-anchor="middle" class="s-m">ComParta</text>
+            <text x="72" y="264" text-anchor="middle" class="s-m">port still closed</text>
+            <rect x="148" y="196" width="125" height="86" rx="12" class="s-box" />
+            <text x="210" y="228" text-anchor="middle" class="s-t">Another home</text>
+            <text x="210" y="247" text-anchor="middle" class="s-m">qBittorrent</text>
+            <text x="210" y="264" text-anchor="middle" class="s-m">or ComParta</text>
+            <rect x="286" y="196" width="125" height="86" rx="12" class="s-box" />
+            <text x="348" y="228" text-anchor="middle" class="s-t">Phone on 4G</text>
+            <text x="348" y="247" text-anchor="middle" class="s-m">LibreTorrent, Flud</text>
+            <text x="348" y="264" text-anchor="middle" class="s-m">or ComParta</text>
+            <path d="M72,192 C72,140 120,110 150,104" class="s-ok" marker-end="url(#ho)" />
+            <path d="M210,192 L210,108" class="s-ok" marker-end="url(#ho)" />
+            <path d="M348,192 C348,140 300,110 270,104" class="s-ok" marker-end="url(#ho)" />
+            <text x="10" y="122" class="s-ok-t">hands over</text>
+            <text x="10" y="137" class="s-ok-t">the file</text>
+            <text x="218" y="150" class="s-ok-t">downloads</text>
+            <text x="412" y="122" text-anchor="end" class="s-ok-t">downloads</text>
+          </svg>
+        </div>
+        <p class="caption">Every arrow starts on the side that connects out, which always works. The copied link names the helper first, so any app finds it.</p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="releases">
+    <h2 id="releases">Releases and progress</h2>
+    <div class="legend" aria-hidden="true">
+      <span><i style="background: var(--primary)"></i>Done</span>
+      <span><i style="background: var(--busy)"></i>Built, waiting on a person</span>
+      <span><i style="background: var(--warn)"></i>In progress</span>
+      <span><i style="background: var(--track)"></i>Planned</span>
+    </div>
+    <div class="sheet lanes">
+      <div class="lane">
+        <div class="lane-name"><strong>Next</strong><span>Bruno's first goal</span></div>
+        <div class="epics">
+          <div class="epic next">
+            <div class="tag">Start here</div>
+            <div class="row"><span class="name">16 · Reachable from anywhere</span><span class="count">0 / 6</span></div>
+            <div class="bar" role="img" aria-label="0 of 6 stories done"></div>
+          </div>
+        </div>
+      </div>
+      <div class="lane">
+        <div class="lane-name"><strong>R1 · Family pilot</strong><span>Windows, Portuguese, two homes</span></div>
+        <div class="epics" id="r1"></div>
+      </div>
+      <div class="lane">
+        <div class="lane-name"><strong>R2 · Albums and phones</strong><span>Folders, then Android</span></div>
+        <div class="epics" id="r2"></div>
+      </div>
+      <div class="lane">
+        <div class="lane-name"><strong>R3 · People I share with</strong><span>Only chosen people can get it</span></div>
+        <div class="epics" id="r3"></div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="epic16">
+    <h2 id="epic16">Epic 16, story by story</h2>
+    <div class="sheet steps">
+      <div class="step"><div><strong>Try it with the apps people already have</strong><span class="who">Bruno · second PC with one forwarded port, phone on 4G</span><span>A plain helper on a reachable computer; check that qBittorrent, LibreTorrent and Flud download from the copied link.</span></div></div>
+      <div class="step"><div><strong>Build the helper program</strong><span class="who">Claude · tested in CI</span><span>A public server and a helper that holds files only while they are shared, with a key and a space limit.</span></div></div>
+      <div class="step"><div><strong>ComParta uses the helper</strong><span class="who">Claude · wiring test in Windows CI</span><span>A "Helper computer" setting; every share is handed over and the link names the helper first.</span></div></div>
+      <div class="step"><div><strong>Copy link or save a download file</strong><span class="who">Claude</span><span>For apps that open links, and for apps that only open files.</span></div></div>
+      <div class="step"><div><strong>Run your own helper</strong><span class="who">Bruno · free Oracle Cloud machine, São Paulo</span><span>A short guide and a ready release; about 10 TB a month out at no cost.</span></div></div>
+      <div class="step"><div><strong>Field test: any app, anywhere</strong><span class="who">Bruno and the family</span><span>No router touched on either side; results go into the field test record.</span></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="refs">
+    <h2 id="refs">What we measure ourselves against</h2>
+    <div class="refs">
+      <div class="ref"><h3>qBittorrent</h3><p>Works with every other BitTorrent app and opens any public link. Details, pause, speeds. Its power-user screens stay out of the main view.</p></div>
+      <div class="ref"><h3>Stremio</h3><p>Media first, on Windows and Android with the same feel. Proposed: a video plays while it is still arriving (needs Bruno's yes).</p></div>
+      <div class="ref"><h3>Google Drive</h3><p>The look: a grid or list, a details panel, search and sort, sharing by copying a link, and later "Shared with me".</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="decide">
+    <h2 id="decide">Waiting on Bruno</h2>
+    <div class="sheet scroll">
+      <table>
+        <thead><tr><th>Id</th><th>Question</th><th>Recommendation</th></tr></thead>
+        <tbody>
+          <tr><td>D-5</td><td>Where does the first helper run?</td><td>The free Oracle Cloud machine; Bruno's second PC for development.</td></tr>
+          <tr><td>D-6</td><td>Does the released app use the project's helper for everyone?</td><td>Yes for the family pilot; decide again before a public release.</td></tr>
+          <tr><td>D-1</td><td>Which open source license?</td><td>Apache-2.0.</td></tr>
+          <tr><td>D-2</td><td>How do Windows users get the app?</td><td>Microsoft Store first, plus a zip on GitHub.</td></tr>
+          <tr><td>CAP-30</td><td>Add "watch while it arrives" from Stremio?</td><td>Yes, in R2 after Android.</td></tr>
+          <tr><td>PR #20</td><td>Keep the paused safe-received-files work?</td><td>Keep it as a draft until epic 16 is done.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>Drawn from <code>Planning/initiative-comparta/tickets.toml</code> and each epic's stories on 13 Oct 2026. Counts change as stories are marked done.</footer>
+</main>
+
+<script>
+  // Each epic: [number, name, done, built, inProgress, total]; from tickets.py status on 2026-10-13.
+  const releases = {
+    r1: [
+      [1, 'Share a file', 13, 0, 0, 14], [2, 'Send to a person', 5, 1, 0, 7], [9, 'Connect between homes', 5, 1, 0, 9],
+      [15, 'Speed bar and details', 4, 0, 0, 4], [6, 'Brazilian Portuguese', 4, 0, 0, 5], [8, 'Drive-like home', 10, 0, 0, 12],
+      [4, 'Follow a transfer', 5, 0, 0, 5], [14, 'Download any link', 3, 0, 0, 5], [10, 'Keep sharing in background', 4, 0, 0, 4],
+      [3, 'Safe received files', 0, 0, 1, 5], [12, 'Help, settings, first run', 0, 0, 0, 5], [5, 'Install and update', 0, 0, 0, 7],
+    ],
+    r2: [[11, 'Share a folder', 0, 0, 0, 5], [7, 'Android', 0, 0, 0, 11]],
+    r3: [[13, 'People and Shared with me', 0, 0, 0, 6]],
+  }
+  for (const [lane, epics] of Object.entries(releases)) {
+    const host = document.getElementById(lane)
+    for (const [id, name, done, built, busy, total] of epics) {
+      const pct = (n) => `${(n / total) * 100}%`
+      const card = document.createElement('div')
+      card.className = 'epic'
+      card.innerHTML =
+        `<div class="row"><span class="name">${id} · ${name}</span><span class="count">${done} / ${total}</span></div>` +
+        `<div class="bar" role="img" aria-label="${done} of ${total} stories done">` +
+        `<i class="d" style="width:${pct(done)}"></i><i class="r" style="width:${pct(built)}"></i><i class="p" style="width:${pct(busy)}"></i></div>`
+      host.append(card)
+    }
+  }
+</script>
+</body>
+</html>

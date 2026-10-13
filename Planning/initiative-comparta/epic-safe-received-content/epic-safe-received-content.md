@@ -47,3 +47,4 @@ Containment of received content on Windows. Not the receive flow itself (epic Se
 - Waits on epic-drive-like-home because: the Open action this epic guards is built there (story 5).
 - Waits on epic-follow-a-transfer because: the `blocked` state is added there (story 3).
 - Waits on epic-send-to-a-person because: it provides the receive path that writes into the Received root.
+- Paused 2026-10-13: story 1 was started (safer received names, risky extensions, `MaxFiles`) on `claude/safe-received-content`, draft PR #20. Its hostile-metadata engine test was written but never run, and nothing yet tests it through the real wiring, so it is not ready. It waits behind epic 16.

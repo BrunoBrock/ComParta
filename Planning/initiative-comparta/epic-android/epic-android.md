@@ -59,3 +59,4 @@ The Android shell and phone layout. Not iOS. No change to core rules; anything A
 - Waits on epic-connect-between-homes because: reachability facts and IPv6 are reused.
 - Waits on epic-share-a-file because: it provides the core, contracts and UI the Android shell hosts.
 - Waits on epic-send-to-a-person because: it provides the invite and receive flows to carry over.
+- Note 2026-10-13: since AD-16 was amended, a phone can already get a shared file with any Android torrent app (LibreTorrent, Flud, µTorrent) from the copied link, once epic 16's helper makes the sharing PC reachable. ComParta on Android (this epic) still matters for sharing from the phone and for the Drive-like screen, and it uses the same helper.

@@ -3,7 +3,7 @@ title: 'Engine reports reachability facts; core turns them into health'
 type: 'feature'
 ticket: '2'
 created: '2026-10-12'
-status: 'built'
+status: done
 baseline_revision: '93cd84d0951eb1a841755ec5d8dfacf11f6ddfcb'
 route: 'full'
 route_source: 'auto'

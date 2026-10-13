@@ -1,0 +1,68 @@
+# Stories of epic-reachable-from-anywhere, in build order.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Spike: stock apps download through an always-reachable peer"
+description = "Runs a plain MonoTorrent seeder and tracker on a reachable computer (Bruno's second PC with one forwarded port, or the free Oracle machine). The sharing ComParta, with port mapping off, names that server under public servers (CAP-29) and connects out to it. Checks that qBittorrent on Windows on another network, and LibreTorrent and Flud on an Android phone on mobile data, download the file from the copied link. Records what each app needed (tr=, x.pe=, a download file) in `spike-helper.md` in this folder."
+verify = "`spike-helper.md` records, for each app, whether the file arrived and from which link form; the epic's assumptions are confirmed or corrected."
+covers = ["CAP-28"]
+after = []
+hitl = true                 # needs a reachable computer and a phone on mobile data
+risk = "high"
+
+[[entry]]
+id = 2
+type = "story"
+title = "The helper program"
+description = "A new open-source console program, `ComParta.Helper`, on the same engine: a public server (HTTP and UDP) and a peer that keeps the files ComParta installs ask it to hold. ComParta sends the file's description (the engine's download file) with the helper key over HTTPS; the helper joins it, gets the bytes from the ComParta that connects out to it, and serves them to anyone. Limits: size per file and in total, oldest dropped first; a file is dropped when its share stops. Runs on Linux Arm and x64 and on Windows; one settings file for the port, the key and the space."
+verify = "Engine-level tests in CI: a helper, a sender that accepts no incoming connections and a receiver that accepts none either; the file arrives byte-identical through the helper. A request without the key is refused; a file over the limit is refused; a stopped share is gone from the helper."
+covers = ["CAP-28", "CAP-18"]
+after = [1]
+hitl = false
+risk = "high"
+references = ["architecture-comparta/architecture-comparta.md#ad-23"]
+
+[[entry]]
+id = 3
+type = "story"
+title = "ComParta uses a helper"
+description = "Settings gets a helper address and key (plain words: \"Helper computer\"), with the build's default. While a share is ready, the engine adapter registers it with the helper, announces to the helper's public server and puts the helper's server and address first in the link (AD-16). Stopping or removing a share tells the helper. Reachability facts gain \"reachable through the helper\" and the connection indicator says so plainly."
+verify = "Wiring test in Windows CI: `settings.set` with a helper, through the router, use cases and real engine, with a real helper in the test; a receiver that accepts no connections gets the file; `shares.remove` removes it from the helper. UI tests for the field and the health wording; the plain-language guard passes."
+covers = ["CAP-28", "CAP-18", "CAP-4"]
+after = [2, "9.2"]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "Copy the link, or save a download file, for other apps"
+description = "The item menu and the ⓘ window offer \"Copy link\" (the invite, already a standard link since AD-16 was amended) and \"Save download file\" (the engine's download file, for apps that do not open links). The words say the link works in other apps; no technical word."
+verify = "Wiring test: the saved download file opens in a second engine and names the helper; UI tests for both actions in English and Portuguese."
+covers = ["CAP-28", "CAP-4"]
+after = [3]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Run your own helper: the guide"
+description = "A short guide in `docs/helper.md`: run the helper on the free Oracle Cloud machine (São Paulo region, Arm, about 10 TB a month out at no cost), or on a spare Windows PC with one forwarded port for development. Includes a ready service file for Linux and the release build in GitHub Releases."
+verify = "Bruno, or someone following only the guide, has a helper running on Oracle and a ComParta using it."
+covers = ["CAP-28"]
+after = [2]
+hitl = true                 # needs an Oracle account and a person following the guide
+risk = "medium"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Field test: any app, anywhere"
+description = "Repeats epic 9's matrix with the helper on: the sharing PC behind Bruno's router with no forwarded port, and receivers on another home network (qBittorrent and ComParta on Windows) and on 4G or 5G (a stock Android app). Records results in epic 9's `field-test.md`."
+verify = "`field-test.md` holds the helper rows; the epic's Done when 1 and 2 pass; OQ-6 and the roadmap risk table are updated."
+covers = ["CAP-28", "CAP-18"]
+after = [3, 4, 5]
+hitl = true
+risk = "medium"
