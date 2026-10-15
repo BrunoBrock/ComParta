@@ -1,0 +1,14 @@
+{
+  "Helper": {
+    "PublicAddress": "",
+    "Key": "",
+    "PeerPort": 6881,
+    "TrackerPort": 6969,
+    "ControlPort": 6970,
+    "MaxFileBytes": 4294967296,
+    "MaxTotalBytes": 21474836480,
+    "DataFolder": "data",
+    "CertificatePath": "",
+    "CertificateKeyPath": ""
+  }
+}
