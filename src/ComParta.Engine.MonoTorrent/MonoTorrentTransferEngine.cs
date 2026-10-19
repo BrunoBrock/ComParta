@@ -15,6 +15,7 @@ using MonoTorrent.PieceWriter;
 
 [assembly: InternalsVisibleTo("ComParta.Engine.MonoTorrent.Tests")]
 [assembly: InternalsVisibleTo("ComParta.Wiring.Tests")]
+[assembly: InternalsVisibleTo("ComParta.Helper.Tests")]
 
 namespace ComParta.Engine.MonoTorrent;
 
