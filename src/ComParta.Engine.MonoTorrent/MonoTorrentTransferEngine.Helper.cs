@@ -68,7 +68,7 @@ public sealed partial class MonoTorrentTransferEngine
                 }
                 try
                 {
-                    await UseServersAsync(manager);
+                    await UseServersAsync(offer);
                     // Announced now, not at its next turn, so the helper meets this computer at once.
                     if (added && manager.State is TorrentState.Seeding or TorrentState.Downloading)
                         await manager.TrackerManager.AnnounceAsync(ct);
@@ -106,15 +106,18 @@ public sealed partial class MonoTorrentTransferEngine
 
     /// <summary>
     /// The public servers a shared file announces to and a link names: the helper's first, so every
-    /// app finds the helper, then the ones the person named (AD-8, AD-16).
+    /// app finds the helper, then the ones the person named (AD-8, AD-16). The helper's only once it
+    /// holds the file: its server refuses a file it does not hold, and the engine would not ask again
+    /// for a long while after that answer.
     /// </summary>
-    private IReadOnlyList<Uri> AnnounceServers()
+    private IReadOnlyList<Uri> AnnounceServers(Offer offer)
     {
-        var helperServers = _helper is not null && _helperAbout is { } about ? about.Trackers : [];
+        var helperServers = offer.HeldByHelper && _helper is not null && _helperAbout is { } about ? about.Trackers : [];
         return [.. helperServers.Concat(_publicServers).Distinct()];
     }
 
-    private Task UseServersAsync(TorrentManager manager) => UsePublicServersAsync(manager, AnnounceServers());
+    private Task UseServersAsync(Offer offer) =>
+        offer.Manager is { } manager ? UsePublicServersAsync(manager, AnnounceServers(offer)) : Task.CompletedTask;
 
     private void StartHelperTimer() =>
         _helperTimer = new Timer(_ =>

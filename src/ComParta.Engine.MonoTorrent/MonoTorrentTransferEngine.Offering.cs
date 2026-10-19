@@ -50,7 +50,7 @@ public sealed partial class MonoTorrentTransferEngine
                     // While sending is stopped, or this file is paused, the offer waits, ready, until
                     // Continue starts it.
                     // Added before it starts, so the first announcement already reaches them.
-                    await UseServersAsync(manager);
+                    await UseServersAsync(offer);
                     if (!_sendingStopped && !offer.Paused)
                         await manager.StartAsync();
                     // The size is written by hand: the library reads it from a link but does not write it,
@@ -158,7 +158,7 @@ public sealed partial class MonoTorrentTransferEngine
 
         // The helper's public server first, then the ones the person named: any torrent app finds the
         // helper, or this computer, from the link alone.
-        foreach (var server in AnnounceServers())
+        foreach (var server in AnnounceServers(offer))
             invite += $"&tr={Uri.EscapeDataString(server.OriginalString)}";
 
         // The helper's address first: it can always be reached (AD-23).
@@ -183,9 +183,9 @@ public sealed partial class MonoTorrentTransferEngine
                 continue;
             try
             {
-                await UseServersAsync(manager);
+                await UseServersAsync(offer);
                 // A running share tells the new servers about itself now, not at its next turn.
-                if (manager.State is TorrentState.Seeding or TorrentState.Downloading && AnnounceServers().Count > 0)
+                if (manager.State is TorrentState.Seeding or TorrentState.Downloading && AnnounceServers(offer).Count > 0)
                     await manager.TrackerManager.AnnounceAsync(ct);
             }
             catch (Exception) { /* the next change tries again */ }
