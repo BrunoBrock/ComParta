@@ -70,6 +70,8 @@ export interface FakeBridge extends Bridge {
   nextDownloadFile: PickedFile | 'invalid' | null
   /** Text of the last invite message "copied". */
   copiedInvite: string | null
+  /** Ids of shares whose download file was "saved", in order. */
+  savedDownloadFiles: string[]
   /** What the system clipboard holds, for the "found an invite you copied" path. */
   clipboardText: string | null
   openedFolder: number
@@ -414,6 +416,17 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       return ok(null)
     },
 
+    'shares.saveDownloadFile': (args) => {
+      const { id } = args as IdArgs
+      const share = shares.find((s) => s.id === id)
+      if (!share) return fail('share.notFound')
+      if (share.status !== 'ready') return fail('share.notReady')
+      fake.savedDownloadFiles.push(id)
+      // As the app: a numbered name when one is already there.
+      const copies = fake.savedDownloadFiles.filter((saved) => saved === id).length
+      return ok(copies === 1 ? `${share.name}.download` : `${share.name} (${copies}).download`)
+    },
+
     'transfers.list': () => ok([...transfers]),
 
     'transfers.preview': (args) => {
@@ -600,6 +613,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     nextDownloadFile: { name: 'Free documentary.mkv', sizeBytes: 2_147_483_648 } as PickedFile | 'invalid' | null,
     failNextWith: null as ErrorCode | null,
     copiedInvite: null as string | null,
+    savedDownloadFiles: [] as string[],
     clipboardText: null as string | null,
     openedFolder: 0,
     openedConnectionSettings: 0,

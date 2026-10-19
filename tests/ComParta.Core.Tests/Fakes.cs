@@ -122,6 +122,12 @@ internal sealed class FakeEngine : ITransferEngine
     public Task<string?> GetInviteAsync(ShareId id, CancellationToken ct = default) =>
         Task.FromResult(Offered.ContainsKey(id) ? InvitePrefix + id : null);
 
+    /// <summary>A download file's content is its invite, so a test can tell which share it describes.</summary>
+    public Task<DownloadFile?> GetDownloadFileAsync(ShareId id, CancellationToken ct = default) =>
+        Task.FromResult(Offered.TryGetValue(id, out var path)
+            ? new DownloadFile(Path.GetFileName(path) + ".download", System.Text.Encoding.UTF8.GetBytes(InvitePrefix + id))
+            : null);
+
     public string? FindInvite(string text) =>
         System.Text.RegularExpressions.Regex.Match(text, InvitePrefix + @"\S+") is { Success: true } found ? found.Value : null;
 
@@ -215,6 +221,14 @@ internal sealed class FakeFileSystem : IFileSystem
         Deleted.Add(path);
     }
 
+    public void WriteNewFile(string path, byte[] content)
+    {
+        if (Locked.Contains(path) || Files.ContainsKey(path))
+            throw new IOException("cannot write");
+        Files[path] = content.Length;
+        Contents[path] = content;
+    }
+
     public byte[] ReadSmallFile(string path, int maxBytes) =>
         Locked.Contains(path) || !Contents.TryGetValue(path, out var content) ? throw new UnauthorizedAccessException()
         : content.Length > maxBytes ? throw new IOException()
@@ -227,6 +241,7 @@ internal sealed class FakePaths(string root) : IAppPaths
     public string EngineRoot => Path.Combine(root, "engine");
     public string ReceivedRoot => Path.Combine(root, "Received");
     public string LogsRoot => Path.Combine(root, "logs");
+    public string SavedRoot => Path.Combine(root, "Downloads");
 }
 
 internal sealed class FakeOpener : IContentOpener

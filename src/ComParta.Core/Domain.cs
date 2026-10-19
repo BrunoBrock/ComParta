@@ -193,6 +193,12 @@ public sealed record ReachabilityFacts(
 /// </summary>
 /// <param name="Address">Where the helper takes files, such as https://helper.example.org:6970.</param>
 /// <param name="Key">The secret the helper asks for before it takes a file.</param>
+/// <summary>
+/// A shared file's download file (AD-21), for apps that do not open links. <see cref="Name"/>
+/// is a plain file name, extension included, that names the share.
+/// </summary>
+public sealed record DownloadFile(string Name, byte[] Content);
+
 public sealed record HelperComputer(Uri Address, string Key);
 
 /// <summary>Which addresses lead outside the local network.</summary>
@@ -245,6 +251,8 @@ public enum ErrorKind
     ReceivedNotFound,
     ReceivedOpenFailed,
     ShareDropFailed,
+    /// <summary>A file the person asked to save could not be written.</summary>
+    SaveFailed,
     Unexpected,
 }
 

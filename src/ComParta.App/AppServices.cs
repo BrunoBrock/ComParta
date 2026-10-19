@@ -52,7 +52,7 @@ public sealed class AppServices
 			Directory.CreateDirectory(_paths.ReceivedRoot);
 			var store = await SqliteStore.OpenAsync(_paths.DatabasePath);
 			_engine = new MonoTorrentTransferEngine(_paths);
-			var shares = new ShareUseCases(store, _engine, new NativeFilePicker(), new LocalFileSystem());
+			var shares = new ShareUseCases(store, _engine, new NativeFilePicker(), new LocalFileSystem(), paths: _paths);
 			var transfers = new TransferUseCases(
 				store, _engine, picker: new NativeFilePicker(), files: new LocalFileSystem(), storage: new LocalStorageInfo(_paths));
 			var settings = new SettingsUseCases(store, new SystemInfo(), _engine);

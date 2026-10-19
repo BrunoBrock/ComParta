@@ -131,6 +131,17 @@ public sealed class BridgeRouter
                 return CommandResult.Success(null);
             }
 
+            case Commands.SharesSaveDownloadFile:
+            {
+                var saved = ShareId.TryParse(Args<IdArgs>(argsJson)?.Id, out var saveShareId)
+                    ? await _shares.SaveDownloadFileAsync(saveShareId)
+                    : Result<string>.Fail(ErrorKind.ShareNotFound);
+                if (!saved.Ok)
+                    return Failure(saved.Error);
+                await _opener.RevealAsync(saved.Value!);
+                return CommandResult.Success(Path.GetFileName(saved.Value!));
+            }
+
             case Commands.TransfersPreview:
             {
                 var preview = _transfers.Preview(Args<ReceiveArgs>(argsJson)?.Invite);
@@ -422,6 +433,7 @@ public sealed class BridgeRouter
         ErrorKind.ReceivedNotFound => ErrorCodes.ReceivedNotFound,
         ErrorKind.ReceivedOpenFailed => ErrorCodes.ReceivedOpenFailed,
         ErrorKind.ShareDropFailed => ErrorCodes.ShareDropFailed,
+        ErrorKind.SaveFailed => ErrorCodes.FileSaveFailed,
         _ => ErrorCodes.Unexpected,
     };
 }

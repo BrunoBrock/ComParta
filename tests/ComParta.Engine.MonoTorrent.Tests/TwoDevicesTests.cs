@@ -34,6 +34,7 @@ public sealed class TwoDevicesTests : IAsyncLifetime
         public string EngineRoot => Path.Combine(Root, "engine");
         public string ReceivedRoot => Path.Combine(Root, "Received");
         public string LogsRoot => Path.Combine(Root, "logs");
+        public string SavedRoot => Path.Combine(Root, "Downloads");
     }
 
     private async Task<(MonoTorrentTransferEngine Engine, Paths Paths)> StartDeviceAsync(

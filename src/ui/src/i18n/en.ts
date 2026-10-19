@@ -77,6 +77,12 @@ export const en = {
   'shares.copyInvite': 'Copy invite',
   'shares.copyInviteFor': 'Copy invite for {name}',
   'shares.copied': 'Copied',
+  'shares.copyLink': 'Copy link for other apps',
+  'shares.linkCopied':
+    'Link for “{name}” copied. Besides ComParta, other apps that download files, on a computer or a phone, open it too.',
+  'shares.saveDownloadFile': 'Save download file',
+  'shares.downloadFileSaved':
+    'The download file for “{name}” is in your Downloads folder. Open it in an app that downloads files, if that app does not take links.',
   'invite.someone': 'Someone',
   'invite.message':
     '{sender} wants to send you “{name}” ({size}) with ComParta.\n1. Get ComParta: {store}\n2. Open this invite in ComParta: {link}',
@@ -276,6 +282,7 @@ export const en = {
   'error.received.notFound': 'This file is no longer in your ComParta folder. It may have been moved or deleted.',
   'error.received.openFailed': 'ComParta could not open this file. Choose Show in folder to see it.',
   'error.share.dropFailed': 'ComParta could not take those files. Choose “Share a file” to pick them instead.',
+  'error.file.saveFailed': 'ComParta could not save the download file. Check that your Downloads folder has room, then try again.',
   'error.settings.invalid': 'That choice could not be saved. Try again.',
   'error.unexpected': 'Something went wrong. Close ComParta, open it again and try once more.',
 

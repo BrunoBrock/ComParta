@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using ComParta.Core;
 using ComParta.Core.Ports;
 using MonoTorrent;
+using MonoTorrent.BEncoding;
 using MonoTorrent.Client;
 
 namespace ComParta.Engine.MonoTorrent;
@@ -172,6 +173,31 @@ public sealed partial class MonoTorrentTransferEngine
                 invite += $"&{AddressHint}={endPoint}";
         }
         return Task.FromResult<string?>(invite);
+    }
+
+    public async Task<DownloadFile?> GetDownloadFileAsync(ShareId id, CancellationToken ct = default)
+    {
+        if (!_offers.TryGetValue(id, out var offer) || offer.Invite is null || offer.Manager is not { } manager)
+            return null;
+        byte[] description;
+        try { description = await File.ReadAllBytesAsync(DescriptionPath(id), ct); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+
+        // The same servers as the invite, helper first, so an app that opens the file finds the helper
+        // or this computer. Only the parts outside the description of the content change.
+        var torrent = BEncodedValue.Decode<BEncodedDictionary>(description);
+        var servers = AnnounceServers(offer);
+        torrent.Remove("announce");
+        torrent.Remove("announce-list");
+        if (servers.Count > 0)
+        {
+            torrent["announce"] = new BEncodedString(servers[0].OriginalString);
+            var tiers = new BEncodedList();
+            foreach (var server in servers)
+                tiers.Add(new BEncodedList { new BEncodedString(server.OriginalString) });
+            torrent["announce-list"] = tiers;
+        }
+        return new DownloadFile(manager.Torrent!.Name + DownloadFileExtensions[0], torrent.Encode());
     }
 
     public async Task SetPublicServersAsync(IReadOnlyList<Uri> servers, CancellationToken ct = default)

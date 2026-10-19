@@ -179,6 +179,7 @@ export const errorCodes = [
   "received.notFound",
   "received.openFailed",
   "share.dropFailed",
+  "file.saveFailed",
   "unexpected",
 ] as const;
 
@@ -189,6 +190,7 @@ export interface Commands {
   "shares.add": { args: undefined; result: ShareDto | null };
   "shares.remove": { args: IdArgs; result: null };
   "shares.copyInvite": { args: CopyInviteArgs; result: null };
+  "shares.saveDownloadFile": { args: IdArgs; result: string };
   "shares.pause": { args: IdArgs; result: null };
   "shares.resume": { args: IdArgs; result: null };
   "transfers.list": { args: undefined; result: TransferDto[] };

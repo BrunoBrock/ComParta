@@ -32,6 +32,9 @@ public sealed class AppPaths : Ports.IAppPaths
 	public string EngineRoot => Path.Combine(_root, "engine");
 	public string ReceivedRoot { get; }
 	public string LogsRoot => Path.Combine(_root, "logs");
+	public string SavedRoot => string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("COMPARTA_HOME"))
+		? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads")
+		: Path.Combine(_root, "Saved");
 }
 
 public sealed class NativeFilePicker : Ports.IFilePicker
@@ -162,6 +165,13 @@ public sealed class LocalFileSystem : Ports.IFileSystem
 	}
 
 	public void DeleteFile(string path) => File.Delete(path);
+
+	public void WriteNewFile(string path, byte[] content)
+	{
+		Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+		using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+		stream.Write(content);
+	}
 
 	public byte[] ReadSmallFile(string path, int maxBytes)
 	{

@@ -27,6 +27,7 @@ public sealed class ThroughTheHelperTests : HelperTestBase
         public string EngineRoot => Path.Combine(Root, "engine");
         public string ReceivedRoot => Path.Combine(Root, "Received");
         public string LogsRoot => Path.Combine(Root, "logs");
+        public string SavedRoot => Path.Combine(Root, "Downloads");
     }
 
     /// <summary>A device nobody can connect to, with every other way of finding the other side closed.</summary>

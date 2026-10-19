@@ -10,11 +10,13 @@ public sealed class ShareUseCases
     private readonly IFilePicker _picker;
     private readonly IFileSystem _files;
     private readonly TimeProvider _clock;
+    private readonly IAppPaths? _paths;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Dictionary<ShareId, ShareView> _shares = [];
 
-    public ShareUseCases(IShareRepository repository, ITransferEngine engine, IFilePicker picker, IFileSystem files, TimeProvider? clock = null)
+    public ShareUseCases(IShareRepository repository, ITransferEngine engine, IFilePicker picker, IFileSystem files, TimeProvider? clock = null, IAppPaths? paths = null)
     {
+        _paths = paths;
         _repository = repository;
         _engine = engine;
         _picker = picker;
@@ -209,6 +211,49 @@ public sealed class ShareUseCases
 
         var invite = await _engine.GetInviteAsync(id, ct);
         return invite is null ? Result<string>.Fail(ErrorKind.ShareNotReady) : Result<string>.Success(invite);
+    }
+
+    /// <summary>
+    /// Saves a ready share's download file in the person's Downloads folder, for apps that take
+    /// a file instead of a link, and returns the full path it was saved at. A file already there with
+    /// that name is never replaced: the new one gets a number.
+    /// </summary>
+    public async Task<Result<string>> SaveDownloadFileAsync(ShareId id, CancellationToken ct = default)
+    {
+        ShareView? view;
+        lock (_shares)
+            _shares.TryGetValue(id, out view);
+        if (view is null)
+            return Result<string>.Fail(ErrorKind.ShareNotFound);
+        if (view.Status != ShareStatus.Ready)
+            return Result<string>.Fail(ErrorKind.ShareNotReady);
+        if (_paths is null)
+            return Result<string>.Fail(ErrorKind.SaveFailed);
+
+        var file = await _engine.GetDownloadFileAsync(id, ct);
+        if (file is null)
+            return Result<string>.Fail(ErrorKind.ShareNotReady);
+
+        var name = Path.GetFileNameWithoutExtension(file.Name);
+        var extension = Path.GetExtension(file.Name);
+        for (var copy = 1; copy <= 100; copy++)
+        {
+            var path = Path.Combine(_paths.SavedRoot, copy == 1 ? file.Name : $"{name} ({copy}){extension}");
+            if (_files.FileExists(path))
+                continue;
+            try
+            {
+                _files.WriteNewFile(path, file.Content);
+                return Result<string>.Success(path);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // Taken a moment ago by something else: the next number. Anything else fails below.
+                if (!_files.FileExists(path))
+                    return Result<string>.Fail(ErrorKind.SaveFailed);
+            }
+        }
+        return Result<string>.Fail(ErrorKind.SaveFailed);
     }
 
     private void OnOfferChanged(ShareId id, OfferState state)

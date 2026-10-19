@@ -38,6 +38,7 @@ public sealed class SlowRouterTests : IAsyncLifetime
         public string EngineRoot => Path.Combine(Root, "engine");
         public string ReceivedRoot => Path.Combine(Root, "Received");
         public string LogsRoot => Path.Combine(Root, "logs");
+        public string SavedRoot => Path.Combine(Root, "Downloads");
     }
 
     /// <summary>Found by the search; every request to it waits forever.</summary>

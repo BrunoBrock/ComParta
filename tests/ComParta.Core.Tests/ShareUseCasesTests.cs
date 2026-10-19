@@ -152,6 +152,29 @@ public sealed class ShareUseCasesTests
     }
 
     [Fact]
+    public async Task A_download_file_is_saved_only_for_a_share_that_is_ready_and_never_over_another_file()
+    {
+        var paths = new FakePaths(Path.Combine(Path.GetTempPath(), "home"));
+        var shares = new ShareUseCases(_repository, _engine, _picker, _files, paths: paths);
+        var ready = await AddVideoAsync(shares);
+        var taken = Path.Combine(paths.SavedRoot, Path.GetFileName(ready.Share.FilePath) + ".download");
+        _files.Files[taken] = 1;
+
+        var saved = await shares.SaveDownloadFileAsync(ready.Share.Id);
+
+        Assert.Equal(Path.Combine(paths.SavedRoot, Path.GetFileNameWithoutExtension(taken) + " (2).download"), saved.Value);
+        Assert.Equal(1, _files.Files[taken]);
+
+        _engine.OfferOutcome = OfferState.Preparing;
+        var big = Path.Combine(Path.GetTempPath(), "big.iso");
+        _files.Files[big] = 9;
+        _picker.NextPick = big;
+        var preparing = (await shares.AddAsync()).Value!;
+        Assert.Equal(ErrorKind.ShareNotReady, (await shares.SaveDownloadFileAsync(preparing.Share.Id)).Error);
+        Assert.Equal(ErrorKind.ShareNotFound, (await shares.SaveDownloadFileAsync(ShareId.New())).Error);
+    }
+
+    [Fact]
     public async Task An_invite_is_given_only_for_a_share_that_is_ready()
     {
         var shares = Create();

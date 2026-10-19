@@ -81,6 +81,12 @@ export const ptBR: Catalog = {
   'shares.copyInvite': 'Copiar convite',
   'shares.copyInviteFor': 'Copiar convite de {name}',
   'shares.copied': 'Copiado',
+  'shares.copyLink': 'Copiar link para outros apps',
+  'shares.linkCopied':
+    'Link de “{name}” copiado. Além do ComParta, outros apps que baixam arquivos, no computador ou no celular, também abrem esse link.',
+  'shares.saveDownloadFile': 'Salvar arquivo de download',
+  'shares.downloadFileSaved':
+    'O arquivo de download de “{name}” está na sua pasta Downloads. Abra-o num app que baixa arquivos, se esse app não aceitar links.',
   'invite.someone': 'Alguém',
   'invite.message':
     '{sender} quer te enviar “{name}” ({size}) pelo ComParta.\n1. Instale o ComParta: {store}\n2. Abra este convite no ComParta: {link}',
@@ -282,6 +288,7 @@ export const ptBR: Catalog = {
   'error.received.notFound': 'Este arquivo não está mais na sua pasta do ComParta. Ele pode ter sido movido ou apagado.',
   'error.received.openFailed': 'O ComParta não conseguiu abrir este arquivo. Escolha Mostrar na pasta para vê-lo.',
   'error.share.dropFailed': 'O ComParta não conseguiu pegar esses arquivos. Escolha “Compartilhar um arquivo” para escolhê-los.',
+  'error.file.saveFailed': 'O ComParta não conseguiu salvar o arquivo de download. Veja se há espaço na sua pasta Downloads e tente de novo.',
   'error.settings.invalid': 'Não foi possível guardar essa escolha. Tente de novo.',
   'error.unexpected': 'Algo deu errado. Feche o ComParta, abra de novo e tente mais uma vez.',
 

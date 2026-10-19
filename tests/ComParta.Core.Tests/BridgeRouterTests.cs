@@ -26,10 +26,11 @@ public sealed class BridgeRouterTests
     private readonly BridgeRouter _router;
     private readonly NotificationUseCases _notifications;
     private readonly FakePresence _presence = new();
+    private readonly FakePaths _paths = new(Path.Combine(Path.GetTempPath(), "home"));
 
     public BridgeRouterTests()
     {
-        var shares = new ShareUseCases(new FakeShareRepository(), _engine, _picker, _files);
+        var shares = new ShareUseCases(new FakeShareRepository(), _engine, _picker, _files, paths: _paths);
         var transfers = new TransferUseCases(new FakeTransferRepository(), _engine, _clock, picker: _picker, files: _files);
         var settings = new SettingsUseCases(_settings, new FakeSystem("pt-BR"), _engine);
         var connection = new ConnectionUseCases(_engine, _firewall);
@@ -55,7 +56,8 @@ public sealed class BridgeRouterTests
         public Task SetTextAsync(string text, CancellationToken ct = default) { Copied = text; return Task.CompletedTask; }
         public Task OpenReceivedFolderAsync(CancellationToken ct = default) { Opened++; return Task.CompletedTask; }
         public Task<bool> OpenAsync(string path, CancellationToken ct = default) => Task.FromResult(true);
-        public Task RevealAsync(string path, CancellationToken ct = default) => Task.CompletedTask;
+        public List<string> Revealed { get; } = [];
+        public Task RevealAsync(string path, CancellationToken ct = default) { Revealed.Add(path); return Task.CompletedTask; }
     }
 
     private async Task<JsonElement> InvokeAsync(string command, object? args = null) =>
@@ -139,6 +141,33 @@ public sealed class BridgeRouterTests
         await InvokeAsync(Commands.SharesCopyInvite, new { id });
 
         Assert.Equal(FakeEngine.InvitePrefix + id, _shell.Copied);
+    }
+
+    [Fact]
+    public async Task Saving_a_download_file_puts_it_in_Downloads_and_shows_it_there()
+    {
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
+
+        var first = await InvokeAsync(Commands.SharesSaveDownloadFile, new { id });
+        var second = await InvokeAsync(Commands.SharesSaveDownloadFile, new { id });
+
+        // Only the name crosses the bridge (AD-18); the folder opens with the file selected.
+        Assert.Equal("birthday.mp4.download", first.GetProperty("value").GetString());
+        Assert.Equal("birthday.mp4 (2).download", second.GetProperty("value").GetString());
+        var saved = Path.Combine(_paths.SavedRoot, "birthday.mp4.download");
+        Assert.Equal(FakeEngine.InvitePrefix + id, System.Text.Encoding.UTF8.GetString(_files.Contents[saved]));
+        Assert.Equal([saved, Path.Combine(_paths.SavedRoot, "birthday.mp4 (2).download")], _shell.Revealed);
+    }
+
+    [Fact]
+    public async Task A_download_file_that_cannot_be_saved_says_so()
+    {
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
+        _files.Locked.Add(Path.Combine(_paths.SavedRoot, "birthday.mp4.download"));
+
+        Assert.Equal(ErrorCodes.FileSaveFailed, ErrorCode(await InvokeAsync(Commands.SharesSaveDownloadFile, new { id })));
+        Assert.Equal(ErrorCodes.ShareNotFound, ErrorCode(await InvokeAsync(Commands.SharesSaveDownloadFile, new { id = "nonsense" })));
+        Assert.Empty(_shell.Revealed);
     }
 
     [Fact]
