@@ -87,4 +87,9 @@ tests/                            C# tests
 
 ## License
 
-To be decided before the repository is made public.
+ComParta is open source under the [Zero-Clause BSD license](LICENSE) (0BSD): anyone may use,
+copy, change and share it, for any purpose, with or without credit.
+
+The libraries it is built on keep their own licenses, and all of them allow this: MonoTorrent
+and Mono.Nat (MIT); .NET, MAUI and Microsoft.Data.Sqlite (MIT, with SQLite itself in the public
+domain); React (MIT) and Lucide (ISC). A release that ships them carries their notices along.
