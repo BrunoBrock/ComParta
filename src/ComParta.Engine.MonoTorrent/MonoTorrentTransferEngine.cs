@@ -153,6 +153,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         _progressTimer = new Timer(_ => ReportProgress(), null, ProgressInterval, ProgressInterval);
         _reachabilityTimer = new Timer(_ => ReportReachability(), null, ReachabilityInterval, ReachabilityInterval);
         _activityTimer = new Timer(_ => _ = TickActivityAsync(), null, ActivityInterval, ActivityInterval);
+        StartHelperTimer();
         NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
         return Task.CompletedTask;
     }
@@ -243,6 +244,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
             _activityTimer = null;
             await activityTimer.DisposeAsync();
         }
+        await StopHelperTimerAsync();
         foreach (var offer in _offers.Values)
             offer.Cancel.Cancel();
         if (_engine is { } engine)
@@ -363,6 +365,8 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         public Task Work { get; set; } = Task.CompletedTask;
         public volatile TorrentManager? Manager;
         public volatile string? Invite;
+        /// <summary>The helper computer holds this file (AD-23).</summary>
+        public volatile bool HeldByHelper;
         /// <summary>The person paused this file on its own; a global continue leaves it paused.</summary>
         public volatile bool Paused;
         /// <summary>Devices getting the file now, and their average percentage; refreshed each activity tick.</summary>

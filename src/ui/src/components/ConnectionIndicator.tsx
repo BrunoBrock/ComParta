@@ -3,6 +3,8 @@ import { t } from '../i18n/index.ts'
 
 interface ConnectionIndicatorProps {
   health: ConnectionHealthDto | null
+  /** Others get the files through the helper computer (AD-23). */
+  throughHelper?: boolean
   onOpen: () => void
 }
 
@@ -10,9 +12,9 @@ interface ConnectionIndicatorProps {
  * This computer's connection at the bottom of the rail: a coloured dot and a few words, which open
  * the connection help (UX design, Layout; AD-15).
  */
-export default function ConnectionIndicator({ health, onOpen }: ConnectionIndicatorProps) {
+export default function ConnectionIndicator({ health, throughHelper = false, onOpen }: ConnectionIndicatorProps) {
   if (health === null) return null
-  const label = t(`connection.${health}`)
+  const label = health === 'good' && throughHelper ? t('connection.helper') : t(`connection.${health}`)
   return (
     <button
       type="button"

@@ -11,6 +11,8 @@ interface RailProps {
   receivedCount: number | null
   adding: boolean
   connection: ConnectionHealthDto | null
+  /** Others get the files through the helper computer. */
+  throughHelper?: boolean
   onConnection: () => void
   onSection: (section: Section) => void
   onAdd: () => void
@@ -27,7 +29,7 @@ interface RailProps {
  */
 export default function Rail(props: RailProps) {
   const { section, sharedCount, receivedCount, adding, connection, onConnection, onSection, onAdd, onReceive } = props
-  const { onHelp, onSettings } = props
+  const { onHelp, onSettings, throughHelper } = props
   const places = [
     { id: 'shared' as const, label: t('nav.shared'), count: sharedCount, Icon: Upload },
     { id: 'received' as const, label: t('nav.received'), count: receivedCount, Icon: Inbox },
@@ -85,7 +87,7 @@ export default function Rail(props: RailProps) {
       </nav>
 
       <p className="rail-tagline">{t('app.tagline')}</p>
-      <ConnectionIndicator health={connection} onOpen={onConnection} />
+      <ConnectionIndicator health={connection} throughHelper={throughHelper} onOpen={onConnection} />
     </aside>
   )
 }

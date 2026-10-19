@@ -259,4 +259,32 @@ public sealed class ConnectionUseCasesTests
     {
         Assert.Equal(expected, NetworkAddresses.IsPublic(IPAddress.Parse(address)));
     }
+
+    [Theory]
+    [InlineData(false, false, null)]
+    [InlineData(true, true, false)]
+    [InlineData(true, false, null)]
+    public void A_helper_that_holds_the_files_makes_them_reachable_whatever_the_router_or_firewall(
+        bool listening, bool busy, bool? firewallAllows)
+    {
+        var facts = Facts(listening, busy, PortMappingState.Refused) with { ReachableThroughHelper = true };
+
+        Assert.Equal(ConnectionHealth.Good, ConnectionUseCases.Reduce(facts, firewallAllows));
+    }
+
+    [Fact]
+    public void The_helper_is_told_apart_even_when_the_health_stays_good()
+    {
+        var connection = Create();
+        var changes = 0;
+        connection.Changed += () => changes++;
+        var good = Facts(mapping: PortMappingState.Obtained);
+
+        _engine.Report(good);
+        _engine.Report(good with { ReachableThroughHelper = true });
+
+        Assert.Equal(2, changes);
+        Assert.Equal(ConnectionHealth.Good, connection.Current());
+        Assert.True(connection.ThroughHelper());
+    }
 }

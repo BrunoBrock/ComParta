@@ -28,7 +28,7 @@ public sealed partial class MonoTorrentTransferEngine
             return;
         try
         {
-            var metadataPath = Path.Combine(_sharesFolder, offer.Id + ".torrent");
+            var metadataPath = DescriptionPath(offer.Id);
             for (var attempt = 0; attempt < 2; attempt++)
             {
                 var fromCache = File.Exists(metadataPath);
@@ -50,7 +50,7 @@ public sealed partial class MonoTorrentTransferEngine
                     // While sending is stopped, or this file is paused, the offer waits, ready, until
                     // Continue starts it.
                     // Added before it starts, so the first announcement already reaches them.
-                    await UsePublicServersAsync(manager, _publicServers);
+                    await UseServersAsync(manager);
                     if (!_sendingStopped && !offer.Paused)
                         await manager.StartAsync();
                     // The size is written by hand: the library reads it from a link but does not write it,
@@ -58,6 +58,9 @@ public sealed partial class MonoTorrentTransferEngine
                     offer.Invite = new MagnetLink(torrent.InfoHashes, torrent.Name).ToV1String()
                         + string.Create(CultureInfo.InvariantCulture, $"&xl={torrent.Size}");
                     OfferChanged?.Invoke(offer.Id, OfferState.Ready);
+                    // The helper gets it now, so people can get it even when this computer cannot be reached.
+                    if (_helper is not null)
+                        _ = SyncHelperAsync();
                     return;
                 }
 
@@ -98,6 +101,8 @@ public sealed partial class MonoTorrentTransferEngine
             offer.Cancel.Cancel();
             try { await offer.Work; }
             catch (Exception) { /* already reported */ }
+            if (forget)
+                ForgetAtHelper(offer);
             if (offer.Manager is { } manager && _engine is { } engine)
             {
                 try
@@ -151,9 +156,14 @@ public sealed partial class MonoTorrentTransferEngine
         if (!_offers.TryGetValue(id, out var offer) || offer.Invite is not { } invite)
             return Task.FromResult<string?>(null);
 
-        // The public servers the person named let any torrent app find this computer from the link alone.
-        foreach (var server in _publicServers)
+        // The helper's public server first, then the ones the person named: any torrent app finds the
+        // helper, or this computer, from the link alone.
+        foreach (var server in AnnounceServers())
             invite += $"&tr={Uri.EscapeDataString(server.OriginalString)}";
+
+        // The helper's address first: it can always be reached (AD-23).
+        if (offer.HeldByHelper && _helper is not null && _helperAbout?.Peer is { } helperPeer)
+            invite += $"&{AddressHint}={helperPeer}";
 
         // The addresses are read now, not when the share was added: a laptop changes networks.
         if (_policy.AllowAddressInInvite)
@@ -173,9 +183,9 @@ public sealed partial class MonoTorrentTransferEngine
                 continue;
             try
             {
-                await UsePublicServersAsync(manager, _publicServers);
+                await UseServersAsync(manager);
                 // A running share tells the new servers about itself now, not at its next turn.
-                if (manager.State is TorrentState.Seeding or TorrentState.Downloading && _publicServers.Count > 0)
+                if (manager.State is TorrentState.Seeding or TorrentState.Downloading && AnnounceServers().Count > 0)
                     await manager.TrackerManager.AnnounceAsync(ct);
             }
             catch (Exception) { /* the next change tries again */ }

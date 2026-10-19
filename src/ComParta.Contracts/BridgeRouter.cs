@@ -63,7 +63,7 @@ public sealed class BridgeRouter
         _sending.Changed += RaiseShares;
         _transfers.Changed += () => Raise(Events.TransfersChanged, _transfers.List().Select(ToDto).ToArray());
         _settings.Changed += () => _ = RaiseSettingsAsync();
-        _connection.Changed += () => Raise(Events.ConnectionChanged, ToDto(_connection.Current()));
+        _connection.Changed += () => Raise(Events.ConnectionChanged, ToDto(_connection.Current(), _connection.ThroughHelper()));
         _opened.Opened += () => Raise(Events.InvitesChanged, true);
         _activity.Changed += activityNow => Raise(Events.ActivityChanged, ToDto(activityNow));
     }
@@ -199,11 +199,11 @@ public sealed class BridgeRouter
             {
                 var args = Args<SetSettingsArgs>(argsJson);
                 return ToResult(await _settings.SetAsync(args?.Language, args?.View, args?.Sort, args?.SendStepsSeen ?? 0, args?.StartWithWindows ?? false,
-                    args?.PublicServers));
+                    args?.PublicServers, args?.HelperAddress, args?.HelperKey));
             }
 
             case Commands.ConnectionGet:
-                return CommandResult.Success(ToDto(_connection.Refresh()));
+                return CommandResult.Success(ToDto(_connection.Refresh(), _connection.ThroughHelper()));
 
             case Commands.ConnectionOpenSettings:
                 await _connection.OpenSettingsAsync();
@@ -357,7 +357,7 @@ public sealed class BridgeRouter
 
     public static SettingsDto ToDto(Settings settings) =>
         new(settings.Language, settings.SystemLanguage, settings.View, settings.Sort, settings.SendStepsSeen, settings.StartWithWindows,
-            [.. settings.PublicServers]);
+            [.. settings.PublicServers], settings.HelperAddress, settings.HelperKey);
 
     public static QuitAnswerDto ToDto(QuitAnswer answer) => new(answer.Quitting, [.. answer.Moving]);
 
@@ -398,13 +398,13 @@ public sealed class BridgeRouter
         preview.IsInvite,
         preview.FreeBytes);
 
-    public static ConnectionDto ToDto(ConnectionHealth? health) => new(health switch
+    public static ConnectionDto ToDto(ConnectionHealth? health, bool throughHelper = false) => new(health switch
     {
         ConnectionHealth.Good => ConnectionHealthDto.Good,
         ConnectionHealth.Limited => ConnectionHealthDto.Limited,
         ConnectionHealth.Blocked => ConnectionHealthDto.Blocked,
         _ => null,
-    });
+    }, throughHelper);
 
     public static string ToCode(ErrorKind error) => error switch
     {

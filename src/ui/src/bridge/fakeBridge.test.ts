@@ -14,19 +14,19 @@ describe('the fake bridge: connection health', () => {
   it('answers connection.get with a good connection when none is given, so the command is not silently unexpected', async () => {
     const bridge = createFakeBridge()
 
-    expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health: 'good' } })
+    expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health: 'good', throughHelper: false } })
   })
 
   it.each(healths)('starts with the %s health it was given', async (health) => {
     const bridge = createFakeBridge({ connection: health })
 
-    expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health } })
+    expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health, throughHelper: false } })
   })
 
   it('starts with no health when null is given', async () => {
     const bridge = createFakeBridge({ connection: null })
 
-    expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health: null } })
+    expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health: null, throughHelper: false } })
   })
 
   it.each(healths)('becomes %s when the app learns it, and says so', async (health) => {
@@ -35,8 +35,8 @@ describe('the fake bridge: connection health', () => {
 
     bridge.setConnection(health)
 
-    expect(events).toEqual([{ event: 'connection.changed', payload: { health } }])
-    expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health } })
+    expect(events).toEqual([{ event: 'connection.changed', payload: { health, throughHelper: false } }])
+    expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health, throughHelper: false } })
   })
 
   it('goes back to no health when nothing can be measured any more, and says so', async () => {
@@ -45,8 +45,8 @@ describe('the fake bridge: connection health', () => {
 
     bridge.setConnection(null)
 
-    expect(events).toEqual([{ event: 'connection.changed', payload: { health: null } }])
-    expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health: null } })
+    expect(events).toEqual([{ event: 'connection.changed', payload: { health: null, throughHelper: false } }])
+    expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health: null, throughHelper: false } })
   })
 
   it('raises one event per real change and none for a repeat', () => {
@@ -61,9 +61,9 @@ describe('the fake bridge: connection health', () => {
     bridge.setConnection(null)
 
     expect(events.map((event) => event.payload)).toEqual([
-      { health: 'good' },
-      { health: 'limited' },
-      { health: null },
+      { health: 'good', throughHelper: false },
+      { health: 'limited', throughHelper: false },
+      { health: null, throughHelper: false },
     ])
   })
 
@@ -82,6 +82,6 @@ describe('the fake bridge: connection health', () => {
     bridge.failNextWith = 'unexpected'
 
     expect(await bridge.invoke('connection.get')).toEqual({ ok: false, error: { code: 'unexpected' } })
-    expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health: 'good' } })
+    expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health: 'good', throughHelper: false } })
   })
 })

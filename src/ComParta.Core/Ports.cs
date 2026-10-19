@@ -124,6 +124,11 @@ public interface ITransferEngine
     /// </summary>
     Task SetPublicServersAsync(IReadOnlyList<Uri> servers, CancellationToken ct = default);
     /// <summary>
+    /// The helper computer the person named (AD-23), or null for none: every shared file is handed
+    /// to it, now and from then on, and every invite names it first. Stopping a share removes it there.
+    /// </summary>
+    Task SetHelperAsync(HelperComputer? helper, CancellationToken ct = default);
+    /// <summary>
     /// The invite text for a share that is ready, or null when it is not. It is a link the person
     /// can send as it is, and that other apps of the engine's kind open too (AD-16, amended).
     /// </summary>

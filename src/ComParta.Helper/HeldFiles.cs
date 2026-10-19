@@ -20,6 +20,9 @@ public enum AddResult
 /// <summary>The answer to adding a file: the id that removes it again.</summary>
 public sealed record AddedFile(string Id);
 
+/// <summary>What a ComParta needs to name the helper in its links: its public servers and where it serves files.</summary>
+public sealed record HelperAbout(string[] Trackers, string Peer);
+
 /// <summary>One file the helper holds, as the control port lists it.</summary>
 public sealed record HeldFile(string Id, string Name, long Size, double Percent, DateTime AddedUtc);
 
@@ -111,6 +114,9 @@ internal sealed class HeldFiles : IAsyncDisposable
                 await DropAsync(_held[0]);
             await File.WriteAllBytesAsync(DescriptionPath(id), description);
             await HoldAsync(torrent, DateTime.UtcNow);
+            // Answered once the helper is listed on its own server, so the sharing computer, which
+            // announces right after, learns where the helper is at once instead of at its next turn.
+            await WaitUntilListedAsync(torrent.InfoHashes, TimeSpan.FromSeconds(10));
             return (AddResult.Added, id);
         }
         finally
@@ -156,6 +162,14 @@ internal sealed class HeldFiles : IAsyncDisposable
         lock (_held)
             _held.Add(new Held(id, torrent, manager, addedUtc));
         await manager.StartAsync();
+    }
+
+    private async Task WaitUntilListedAsync(InfoHashes hashes, TimeSpan limit)
+    {
+        var until = DateTime.UtcNow + limit;
+        while (DateTime.UtcNow < until
+            && !_tracker.GetTrackerItems().Any(item => item.Trackable.InfoHash == hashes.V1OrV2 && item.Count > 0))
+            await Task.Delay(50);
     }
 
     private async Task DropAsync(Held held)

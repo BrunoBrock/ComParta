@@ -301,7 +301,86 @@ public sealed class ButtonsTests : IAsyncLifetime
         }
         finally
         {
+            // The engine first: stopping says goodbye to the public server, which must still be there to answer.
+            await _engine.StopAsync().WaitAsync(Quick);
             listener.Stop();
+        }
+    }
+
+    [Fact]
+    public async Task A_helper_chosen_in_settings_passes_a_shared_file_on_and_stop_sharing_takes_it_back()
+    {
+        int udpAndTcp;
+        do udpAndTcp = FreePort(); while (!UdpFree(udpAndTcp));
+        await using var helper = await ComParta.Helper.HelperHost.StartAsync(new ComParta.Helper.HelperOptions
+        {
+            PublicAddress = "127.0.0.1",
+            Key = "a-helper-key-for-the-wiring-test",
+            PeerPort = FreePort(),
+            TrackerPort = udpAndTcp,
+            ControlPort = FreePort(),
+            DataFolder = Path.Combine(_folder, "helper"),
+        }, _folder);
+
+        // The person types the helper's address and key in Settings and saves.
+        await ClickAsync(Commands.SettingsSet, new SetSettingsArgs(
+            null, null, null, 0, false, [], helper.ControlUri.AbsoluteUri, "a-helper-key-for-the-wiring-test"));
+        await ScreenShowsAsync(Events.SettingsChanged, s => s.GetProperty("helperAddress").GetString() == helper.ControlUri.AbsoluteUri);
+
+        var id = await ShareAFileAsync("through-helper.bin");
+        var original = Path.Combine(_folder, "originals", "through-helper.bin");
+
+        // The helper gets the whole file, and the connection says others get it through the helper.
+        var until = DateTime.UtcNow + Timeout;
+        while (helper.Files.Count != 1 || helper.Files[0].Percent < 100)
+        {
+            Assert.True(DateTime.UtcNow < until, "The helper never got the whole shared file.");
+            await Task.Delay(100);
+        }
+        await ScreenShowsAsync(Events.ConnectionChanged, c => c.GetProperty("throughHelper").GetBoolean()
+            && c.GetProperty("health").GetString() == "good");
+        await ClickAsync(Commands.SharesCopyInvite, new CopyInviteArgs(id, null));
+        Assert.Contains("tr=" + Uri.EscapeDataString(helper.TrackerUri.OriginalString), _clipboard.Text, StringComparison.Ordinal);
+
+        // This computer stops sending, so the file can only come from the helper; the receiver takes no connections.
+        await ClickAsync(Commands.ActivitySet, new SetActivityArgs(SendingStopped: true, ReceivingStopped: false));
+        await ScreenShowsAsync(Events.ActivityChanged, a => a.GetProperty("sendingStopped").GetBoolean());
+        var receiverPaths = new FakePaths(Path.Combine(_folder, "receiver"));
+        await using var receiver = new MonoTorrentTransferEngine(receiverPaths) { AcceptIncoming = false };
+        await receiver.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort(), AllowServersInDownloadLinks = true });
+        var done = new TaskCompletionSource<ReceiveProgress>(TaskCreationOptions.RunContinuationsAsynchronously);
+        receiver.ReceiveProgressed += progress =>
+        {
+            if (progress.Done || progress.Failed)
+                done.TrySetResult(progress);
+        };
+        Assert.True(await receiver.ReceiveAsync(TransferId.New(), _clipboard.Text!));
+        Assert.True((await done.Task.WaitAsync(Timeout)).Done);
+        Assert.Equal(
+            Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(original))),
+            Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(receiverPaths.ReceivedRoot, "through-helper.bin")))));
+
+        // Stop sharing takes the file back from the helper.
+        await ClickAsync(Commands.SharesRemove, new IdArgs(id));
+        await ScreenShowsAsync(Events.SharesChanged, shares => shares.GetArrayLength() == 0);
+        until = DateTime.UtcNow + Timeout;
+        while (helper.Files.Count > 0)
+        {
+            Assert.True(DateTime.UtcNow < until, "The helper kept the file after Stop sharing.");
+            await Task.Delay(100);
+        }
+    }
+
+    private static bool UdpFree(int port)
+    {
+        try
+        {
+            using var udp = new UdpClient(new IPEndPoint(IPAddress.Any, port));
+            return true;
+        }
+        catch (SocketException)
+        {
+            return false;
         }
     }
 }

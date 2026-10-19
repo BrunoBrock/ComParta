@@ -152,6 +152,23 @@ public sealed class HelperHost : IAsyncDisposable
                     ? StatusCodes.Status204NoContent
                     : StatusCodes.Status404NotFound;
         });
+        // What a ComParta puts in its links: this helper's public server and where it serves files (AD-16).
+        app.MapGet("/about", async context =>
+        {
+            if (!HoldsKey(context, key))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return;
+            }
+            var host = options.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6
+                ? $"[{options.PublicAddress}]"
+                : options.PublicAddress;
+            await context.Response.WriteAsJsonAsync(
+                new HelperAbout(
+                    [$"http://{host}:{options.TrackerPort}/announce", $"udp://{host}:{options.TrackerPort}"],
+                    $"{host}:{options.PeerPort}"),
+                HelperJson.Default.HelperAbout);
+        });
         app.MapGet("/files", async context =>
         {
             if (!HoldsKey(context, key))

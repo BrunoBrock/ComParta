@@ -4,6 +4,8 @@ import Dialog from './ui/Dialog.tsx'
 
 interface ConnectionHelpProps {
   health: ConnectionHealthDto | null
+  /** Others get the files through the helper computer (AD-23). */
+  throughHelper?: boolean
   onOpenSettings: () => void
   onClose: () => void
 }
@@ -12,7 +14,7 @@ interface ConnectionHelpProps {
  * What this computer's connection means and three things to try, in plain words (UX design,
  * "Stuck transfer"). When Windows is in the way, one button opens the place to fix it.
  */
-export default function ConnectionHelp({ health, onOpenSettings, onClose }: ConnectionHelpProps) {
+export default function ConnectionHelp({ health, throughHelper = false, onOpenSettings, onClose }: ConnectionHelpProps) {
 
   return (
     <Dialog labelledBy="connection-title" onClose={onClose}>
@@ -20,7 +22,7 @@ export default function ConnectionHelp({ health, onOpenSettings, onClose }: Conn
       {health !== null && (
         <p className={`connection connection-${health} connection-state`}>
           <span className="connection-dot" aria-hidden="true" />
-          <span>{t(`connection.state.${health}`)}</span>
+          <span>{health === 'good' && throughHelper ? t('connection.state.helper') : t(`connection.state.${health}`)}</span>
         </p>
       )}
       {health === 'blocked' && (
