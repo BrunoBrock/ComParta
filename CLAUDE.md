@@ -25,6 +25,7 @@ fake is fixed. Whatever still needs a person at a Windows PC is listed in the pu
 
 ## Standing rules
 
-- Never merge a pull request; Bruno merges. Open new work as a draft pull request.
+- Open new work as a draft pull request. Claude may merge its own pull request once every check
+  passes, including the wiring tests in the Windows CI job; anything else waits for Bruno.
 - No technical words reach the person (AD-5): see the guard tests in `tests/ComParta.Core.Tests`.
 - Things that need a real Windows PC or real people are listed in the pull request for Bruno.
