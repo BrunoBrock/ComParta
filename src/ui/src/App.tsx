@@ -29,6 +29,7 @@ import SettingsDialog, { type Theme } from './components/SettingsDialog.tsx'
 import SharesSection from './components/SharesSection.tsx'
 import SpeedBar from './components/SpeedBar.tsx'
 import TransfersSection from './components/TransfersSection.tsx'
+import Welcome, { type WelcomeChoices } from './components/Welcome.tsx'
 import IconButton from './components/ui/IconButton.tsx'
 import Toast from './components/ui/Toast.tsx'
 import { errorMessage, getLanguage, type Language, pickLanguage, setLanguage, t } from './i18n/index.ts'
@@ -80,11 +81,14 @@ export default function App({ bridge }: AppProps) {
     helperKey: null,
     yourName: null,
     theme: null,
+    welcomeDone: false,
   })
   const [yourName, setYourName] = useState('')
   const [theme, setTheme] = useState<Theme>('system')
   const [version, setVersion] = useState('')
   const [guidedSend, setGuidedSend] = useState(true)
+  const [welcoming, setWelcoming] = useState(false)
+  const welcomeChecked = useRef(false)
   const [startWithWindows, setStartWithWindows] = useState(false)
   const [publicServers, setPublicServers] = useState<readonly string[]>([])
   const [helper, setHelper] = useState<{ address: string | null; key: string | null }>({ address: null, key: null })
@@ -179,6 +183,12 @@ export default function App({ bridge }: AppProps) {
         helperKey: stored.helperKey,
         yourName: stored.yourName,
         theme: stored.theme,
+        welcomeDone: stored.welcomeDone,
+      }
+      // The welcome shows once per install, the first time the settings arrive (epic 12 story 3).
+      if (!welcomeChecked.current) {
+        welcomeChecked.current = true
+        if (!stored.welcomeDone) setWelcoming(true)
       }
       setYourName(stored.yourName ?? '')
       setSenderName(stored.yourName)
@@ -356,6 +366,21 @@ export default function App({ bridge }: AppProps) {
   function chooseStartWithWindows(on: boolean) {
     setStartWithWindows(on)
     void saveSettings({ startWithWindows: on })
+  }
+
+  // Finishing stores the name and start with Windows; skipping changes nothing else. Either way
+  // the welcome does not show again.
+  function endWelcome(choices: WelcomeChoices | null) {
+    setWelcoming(false)
+    if (choices) {
+      setYourName(choices.yourName)
+      setSenderName(choices.yourName || null)
+      setStartWithWindows(choices.startWithWindows)
+    }
+    void saveSettings({
+      welcomeDone: true,
+      ...(choices && { yourName: choices.yourName || null, startWithWindows: choices.startWithWindows }),
+    })
   }
 
   async function chooseName(name: string) {
@@ -700,6 +725,8 @@ export default function App({ bridge }: AppProps) {
           onClose={() => setOpened(null)}
         />
       )}
+
+      {welcoming && <Welcome onDone={endWelcome} />}
 
       {naming !== null && (
         <NameFilesDialog

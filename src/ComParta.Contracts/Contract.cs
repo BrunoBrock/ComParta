@@ -203,9 +203,10 @@ public sealed record InvitePreviewDto(
 /// <param name="YourName">The name others see in invites; null until the person gives one.</param>
 /// <param name="Theme">"light" or "dark", or null to follow the system.</param>
 /// <param name="Version">The app's version, for About.</param>
+/// <param name="WelcomeDone">The first-run welcome was finished or skipped.</param>
 public sealed record SettingsDto(
     string? Language, string SystemLanguage, string? View, string? Sort, int SendStepsSeen, bool StartWithWindows, string[] PublicServers,
-    string? HelperAddress, string? HelperKey, string? YourName, string? Theme, string Version);
+    string? HelperAddress, string? HelperKey, string? YourName, string? Theme, string Version, bool WelcomeDone);
 
 /// <summary>Every choice at once; the UI sends what it has, with the one it changed.</summary>
 /// <param name="Language">A language tag, or null to follow the system again.</param>
@@ -214,7 +215,7 @@ public sealed record SettingsDto(
 /// <param name="HelperKey">The helper computer's key; null or empty for none.</param>
 public sealed record SetSettingsArgs(
     string? Language, string? View, string? Sort, int? SendStepsSeen, bool? StartWithWindows, string[]? PublicServers,
-    string? HelperAddress = null, string? HelperKey = null, string? YourName = null, string? Theme = null);
+    string? HelperAddress = null, string? HelperKey = null, string? YourName = null, string? Theme = null, bool? WelcomeDone = null);
 
 /// <param name="Force">True once the person confirmed quitting although files are moving.</param>
 public sealed record QuitArgs(bool Force);

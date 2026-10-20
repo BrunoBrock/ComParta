@@ -18,10 +18,11 @@ namespace ComParta.Core.UseCases;
 /// <param name="YourName">The name others see in invites from this computer; null until the person gives one.</param>
 /// <param name="Theme">"light" or "dark", or null to follow the system.</param>
 /// <param name="Version">The app's version, for the About section.</param>
+/// <param name="WelcomeDone">The first-run welcome was finished or skipped; it shows once per install.</param>
 public sealed record Settings(
     string? Language, string SystemLanguage, string? View = null, string? Sort = null, int SendStepsSeen = 0, bool StartWithWindows = false,
     IReadOnlyList<string>? PublicServers = null, string? HelperAddress = null, string? HelperKey = null, string? YourName = null,
-    string? Theme = null, string Version = "")
+    string? Theme = null, string Version = "", bool WelcomeDone = false)
 {
     public IReadOnlyList<string> PublicServers { get; init; } = PublicServers ?? [];
 }
@@ -40,6 +41,7 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
     private const string HelperKeyKey = "helperKey";
     private const string YourNameKey = "yourName";
     private const string ThemeKey = "theme";
+    private const string WelcomeDoneKey = "welcomeDone";
 
     /// <summary>The longest name a person can give; it has to fit in an invite message.</summary>
     public const int MaxNameLength = 40;
@@ -78,7 +80,8 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
         await repository.GetAsync(HelperKeyKey, ct),
         await repository.GetAsync(YourNameKey, ct),
         await repository.GetAsync(ThemeKey, ct),
-        system.AppVersion);
+        system.AppVersion,
+        await repository.GetAsync(WelcomeDoneKey, ct) == "true");
 
     /// <summary>Hands the stored public servers to the engine; call after it starts and before anything is shared.</summary>
     public async Task StartAsync(CancellationToken ct = default)
@@ -98,7 +101,7 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
     public async Task<Result> SetAsync(
         string? language, string? view, string? sort, int sendStepsSeen = 0, bool startWithWindows = false,
         IReadOnlyList<string>? publicServers = null, string? helperAddress = null, string? helperKey = null,
-        string? yourName = null, string? theme = null, CancellationToken ct = default)
+        string? yourName = null, string? theme = null, bool welcomeDone = false, CancellationToken ct = default)
     {
         yourName = string.IsNullOrWhiteSpace(yourName) ? null : yourName.Trim();
         if (yourName is not null && (yourName.Length > MaxNameLength || yourName.Any(char.IsControl)))
@@ -130,6 +133,7 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
         await repository.SetAsync(HelperKeyKey, helperKey, ct);
         await repository.SetAsync(YourNameKey, yourName, ct);
         await repository.SetAsync(ThemeKey, theme, ct);
+        await repository.SetAsync(WelcomeDoneKey, welcomeDone ? "true" : null, ct);
         if (engine is not null && !servers.SequenceEqual(serversBefore))
             await engine.SetPublicServersAsync(ToUris(servers), ct);
         if (engine is not null && helper != helperBefore)

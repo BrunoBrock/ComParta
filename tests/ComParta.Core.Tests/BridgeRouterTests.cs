@@ -500,6 +500,18 @@ public sealed class BridgeRouterTests
     }
 
     [Fact]
+    public async Task The_welcome_is_not_done_at_first_and_stays_done_once_it_is()
+    {
+        Assert.False((await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("welcomeDone").GetBoolean());
+
+        Assert.True((await InvokeAsync(Commands.SettingsSet, new { welcomeDone = true, yourName = "Ana" })).GetProperty("ok").GetBoolean());
+
+        var value = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.True(value.GetProperty("welcomeDone").GetBoolean());
+        Assert.Equal("Ana", value.GetProperty("yourName").GetString());
+    }
+
+    [Fact]
     public async Task The_settings_say_which_version_this_is()
     {
         var settings = new SettingsUseCases(new FakeSettingsRepository(), new FakeSystem("en", "1.4.2"));

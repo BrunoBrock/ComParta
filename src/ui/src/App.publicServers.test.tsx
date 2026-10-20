@@ -63,7 +63,7 @@ describe('public servers in Settings', () => {
       sendStepsSeen: 0,
       startWithWindows: false,
       helperAddress: null,
-      helperKey: null, yourName: null, theme: null
+      helperKey: null, yourName: null, theme: null, welcomeDone: null
     }
     for (const bad of [
       'ftp://example.org/x',

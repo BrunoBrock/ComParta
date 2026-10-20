@@ -68,6 +68,8 @@ export interface FakeBridgeOptions {
   publicServers?: string[]
   /** The helper computer the person named, as the app stored it. */
   helper?: { address: string; key: string }
+  /** Whether the first-run welcome was done; done when left out, so only its own tests see it. */
+  welcomeDone?: boolean
   /** The name and colors the person chose in Settings. */
   yourName?: string
   theme?: 'light' | 'dark'
@@ -331,6 +333,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     yourName: options.yourName ?? null,
     theme: options.theme ?? null,
     version: '1.2.0',
+    welcomeDone: options.welcomeDone ?? true,
   }
   // What quitting would stop: shares someone is getting and files arriving, as the app counts them.
   const moving = () => [
@@ -596,6 +599,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
         helperKey: helper.helper?.key ?? null,
         yourName,
         theme,
+        welcomeDone: (args as SetSettingsArgs).welcomeDone ?? false,
       }
       emit({ event: 'settings.changed', payload: { ...settings } })
       const connectionAfter = connectionDto()

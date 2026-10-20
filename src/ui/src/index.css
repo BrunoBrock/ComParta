@@ -1707,3 +1707,29 @@ dialog.viewer {
 .settings-about p {
   margin: 0 0 var(--space);
 }
+
+/* The first-run welcome: one picture, one sentence, Next and Skip. */
+dialog.welcome {
+  max-width: 28rem;
+  text-align: center;
+}
+
+dialog.welcome form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+dialog.welcome label,
+dialog.welcome .hint {
+  text-align: start;
+}
+
+.welcome-picture {
+  align-self: center;
+  color: var(--color-primary);
+}
+
+dialog.welcome .dialog-actions {
+  justify-content: space-between;
+}

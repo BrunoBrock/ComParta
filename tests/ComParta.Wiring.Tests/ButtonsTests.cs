@@ -427,7 +427,7 @@ public sealed class ButtonsTests : IAsyncLifetime
     [Fact]
     public async Task Your_name_and_colors_chosen_in_settings_are_shown_and_kept_after_a_restart()
     {
-        await ClickAsync(Commands.SettingsSet, new SetSettingsArgs(null, null, null, 0, false, null, YourName: "Ana", Theme: "dark"));
+        await ClickAsync(Commands.SettingsSet, new SetSettingsArgs(null, null, null, 0, false, null, YourName: "Ana", Theme: "dark", WelcomeDone: true));
 
         await ScreenShowsAsync(Events.SettingsChanged, s => s.GetProperty("yourName").GetString() == "Ana" && s.GetProperty("theme").GetString() == "dark");
         var shown = await ClickAsync(Commands.SettingsGet);
@@ -436,7 +436,7 @@ public sealed class ButtonsTests : IAsyncLifetime
         // The app opens the same stored choices next time.
         var store = await SqliteStore.OpenAsync(_paths.DatabasePath);
         var next = await new SettingsUseCases(store, new FakeSystem("en")).GetAsync();
-        Assert.Equal(("Ana", "dark"), (next.YourName, next.Theme));
+        Assert.Equal(("Ana", "dark", true), (next.YourName, next.Theme, next.WelcomeDone));
 
         var json = await _router.InvokeAsync(Commands.SettingsSet, JsonSerializer.Serialize(new { theme = "blue" }, Contract.Json)).WaitAsync(Quick);
         Assert.Equal(ErrorCodes.SettingsInvalid, JsonDocument.Parse(json).RootElement.GetProperty("error").GetProperty("code").GetString());

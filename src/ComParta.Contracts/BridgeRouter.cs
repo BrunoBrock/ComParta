@@ -245,7 +245,7 @@ public sealed class BridgeRouter
             {
                 var args = Args<SetSettingsArgs>(argsJson);
                 return ToResult(await _settings.SetAsync(args?.Language, args?.View, args?.Sort, args?.SendStepsSeen ?? 0, args?.StartWithWindows ?? false,
-                    args?.PublicServers, args?.HelperAddress, args?.HelperKey, args?.YourName, args?.Theme));
+                    args?.PublicServers, args?.HelperAddress, args?.HelperKey, args?.YourName, args?.Theme, args?.WelcomeDone ?? false));
             }
 
             case Commands.ConnectionGet:
@@ -427,7 +427,7 @@ public sealed class BridgeRouter
 
     public static SettingsDto ToDto(Settings settings) =>
         new(settings.Language, settings.SystemLanguage, settings.View, settings.Sort, settings.SendStepsSeen, settings.StartWithWindows,
-            [.. settings.PublicServers], settings.HelperAddress, settings.HelperKey, settings.YourName, settings.Theme, settings.Version);
+            [.. settings.PublicServers], settings.HelperAddress, settings.HelperKey, settings.YourName, settings.Theme, settings.Version, settings.WelcomeDone);
 
     public static QuitAnswerDto ToDto(QuitAnswer answer) => new(answer.Quitting, [.. answer.Moving]);
 

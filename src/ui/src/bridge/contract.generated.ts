@@ -88,6 +88,7 @@ export interface SettingsDto {
   yourName: string | null;
   theme: string | null;
   version: string;
+  welcomeDone: boolean;
 }
 
 export interface SetSettingsArgs {
@@ -101,6 +102,7 @@ export interface SetSettingsArgs {
   helperKey: string | null;
   yourName: string | null;
   theme: string | null;
+  welcomeDone: boolean | null;
 }
 
 export interface ConnectionDto {
