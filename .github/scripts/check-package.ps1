@@ -60,7 +60,13 @@ try {
 
     Write-Host "== Check it brought the pilot data over" -ForegroundColor Cyan
     $data = Join-Path $env:LOCALAPPDATA "Packages\$($installed.PackageFamilyName)\LocalState\ComParta"
-    if ((Get-Content -Raw (Join-Path $data 'engine\port.txt')) -ne '51413') { throw 'The pilot port did not come over.' }
+    if (-not (Test-Path (Join-Path $data 'imported-from-pilot.txt'))) {
+        Get-ChildItem -Recurse $data -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+        Get-ChildItem (Join-Path $data 'logs') -ErrorAction SilentlyContinue | Get-Content | Write-Host
+        throw 'The pilot data was not imported.'
+    }
+    $port = Get-Content -Raw (Join-Path $data 'engine\port.txt')
+    if ($port -ne '51413') { throw "The pilot port did not come over: $port" }
     $found = python (Join-Path $PSScriptRoot 'pilot_db.py') read (Join-Path $data 'comparta.db')
     $version, $name = "$found" -split ' ', 2
     if ($LASTEXITCODE -ne 0 -or [int]$version -le 1 -or $name -ne 'pilot.bin') { throw "The pilot share did not come over upgraded: $found" }
