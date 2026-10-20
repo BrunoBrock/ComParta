@@ -80,8 +80,10 @@ public sealed class AppServices
 				new SupportUseCases(store, new SystemInfo(), settings, shares, transfers, connection));
 			router.CommandFailed += (_, e) => Log(e);
 
-			// Written at every start so a clicked link finds the app even after its folder moved.
-			LinkScheme.Register(executable);
+			// Written at every start so a clicked link finds the app even after its folder moved. The
+			// package declares the link itself.
+			if (!Packaged.IsPackaged)
+				LinkScheme.Register(executable);
 
 			await _engine.StartAsync(SharingPolicy.Default);
 			// The public servers the person named reach the engine before any file is shared again.

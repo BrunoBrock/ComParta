@@ -4,16 +4,19 @@
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
   xmlns:desktop2="http://schemas.microsoft.com/appx/manifest/desktop/windows10/2"
-  IgnorableNamespaces="uap rescap desktop2">
+  IgnorableNamespaces="uap rescap desktop desktop2">
 
-  <Identity Name="maui-package-name-placeholder" Publisher="CN=User Name" Version="0.0.0.0" />
+  <!-- The build fills in the name and version. The publisher matches the test certificate build.ps1
+       makes; the Store listing (epic 5 story 3) replaces it with the one Partner Center gives. -->
+  <Identity Name="maui-package-name-placeholder" Publisher="CN=ComParta" Version="0.0.0.0" />
 
   <mp:PhoneIdentity PhoneProductId="7F41F8D9-1044-4485-84E6-5405DBBCF9C5" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
     <DisplayName>$placeholder$</DisplayName>
-    <PublisherDisplayName>User Name</PublisherDisplayName>
+    <PublisherDisplayName>The ComParta contributors</PublisherDisplayName>
     <Logo>$placeholder$.png</Logo>
   </Properties>
 
@@ -44,6 +47,10 @@
             <uap:DisplayName>ComParta invite</uap:DisplayName>
           </uap:Protocol>
         </uap:Extension>
+        <!-- Starts ComParta hidden at sign-in, only once the person turns it on (AD-14). -->
+        <desktop:Extension Category="windows.startupTask" Executable="ComParta.exe" EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="ComPartaStartup" Enabled="false" DisplayName="ComParta" />
+        </desktop:Extension>
       </Extensions>
     </Application>
   </Applications>

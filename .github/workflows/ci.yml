@@ -26,3 +26,41 @@ jobs:
       - name: Build and test
         shell: pwsh
         run: ./build.ps1 Check
+
+  # The MSIX package (epic 5 story 2), signed with a test certificate, installed and started on the runner.
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/ui/package-lock.json
+
+      - name: Install the MAUI Windows workload
+        run: dotnet workload install maui-windows
+
+      - name: Make the package
+        shell: pwsh
+        # A tag like v1.2.3 names the version; anything else is 0.1.<run number>.
+        run: |
+          $version = if ('${{ github.ref }}' -match '^refs/tags/v(\d+\.\d+\.\d+)$') { $Matches[1] } else { '0.1.${{ github.run_number }}' }
+          ./build.ps1 Package -SkipTests -Version $version
+
+      - name: Install, check and start it
+        shell: pwsh
+        run: ./.github/scripts/check-package.ps1 publish/package
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ComParta-msix
+          path: |
+            publish/package/*.msix
+            publish/package/*.cer
+

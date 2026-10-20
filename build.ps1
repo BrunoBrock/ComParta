@@ -2,13 +2,17 @@
 #   .\build.ps1                   asks what you want to do
 #   .\build.ps1 Publish           builds and tests, then creates publish\ComParta: a folder you can run here
 #                                 or copy to another PC
+#   .\build.ps1 Package           builds and tests, then creates publish\package\ComParta_<version>_x64.msix,
+#                                 signed with a test certificate made on this PC
 #   .\build.ps1 Build|Test|Check  see $actions below
 #   -SkipTests                    leaves the tests out of Publish and Check
 #   -Run                          starts the published ComParta.exe once Publish succeeds
+#   -Version 1.2.3                the package's version; CI passes the git tag's
 # Without a person at the keyboard (CI, piped input) it does Check instead of asking.
 param(
-    [ValidateSet('Publish', 'Build', 'Test', 'Check')]
+    [ValidateSet('Publish', 'Package', 'Build', 'Test', 'Check')]
     [string]$Action,
+    [string]$Version = '0.1.0',
     [switch]$SkipTests,
     [switch]$Run
 )
@@ -17,11 +21,15 @@ $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $framework = 'net10.0-windows10.0.19041.0'
 $publishDir = Join-Path $root 'publish\ComParta'
+$packageDir = Join-Path $root 'publish\package'
+# Must match the Publisher in src\ComParta.App\Platforms\Windows\Package.appxmanifest.
+$packagePublisher = 'CN=ComParta'
 
 # What the menu offers, in order. The first one is the default. To add an option: add it here and to
 # the ValidateSet above, then give it a branch in the switch at the bottom.
 $actions = [ordered]@{
     Publish = 'Build and test, then create publish\ComParta, a folder to run here or copy to another PC'
+    Package = 'Build and test, then create an MSIX package in publish\package, signed for testing'
     Build   = 'Build the screen and the app, without running any tests'
     Test    = 'Run every test'
     Check   = 'Build and run every test (what CI does)'
@@ -99,6 +107,37 @@ function Publish-App {
     }
 }
 
+# A certificate to sign test packages, made once and kept in this user's store. Windows installs a
+# package signed with it only after the certificate is trusted (see .github\scripts\check-package.ps1).
+function Get-TestCertificate {
+    $existing = Get-ChildItem Cert:\CurrentUser\My |
+        Where-Object { $_.Subject -eq $packagePublisher -and $_.NotAfter -gt (Get-Date).AddDays(1) -and $_.HasPrivateKey } |
+        Select-Object -First 1
+    if ($existing) { return $existing }
+    New-SelfSignedCertificate -Type Custom -Subject $packagePublisher -KeyUsage DigitalSignature `
+        -FriendlyName 'ComParta test packages' -CertStoreLocation Cert:\CurrentUser\My `
+        -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
+}
+
+function Package-App {
+    if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "The version must look like 1.2.3, not $Version." }
+    $certificate = Get-TestCertificate
+    if (Test-Path $packageDir) { Remove-Item $packageDir -Recurse -Force }
+    Invoke-Step 'Package' '.' {
+        dotnet publish src\ComParta.App\ComParta.App.csproj -c Release -f $framework -r win-x64 --self-contained true `
+            -p:WindowsPackageType=MSIX -p:WindowsAppSDKSelfContained=true -p:GenerateAppxPackageOnBuild=true `
+            -p:AppxPackageSigningEnabled=true -p:PackageCertificateThumbprint=$($certificate.Thumbprint) `
+            -p:ApplicationDisplayVersion=$Version -p:ApplicationVersion=1 `
+            "-p:AppxPackageDir=$packageDir\\" --nologo -v minimal
+    }
+    $package = Get-ChildItem $packageDir -Recurse -Filter *.msix | Select-Object -First 1
+    if (-not $package) { throw "No .msix was made in $packageDir." }
+    $target = Join-Path $packageDir "ComParta_$($Version)_x64.msix"
+    Move-Item $package.FullName $target -Force
+    Export-Certificate -Cert $certificate -FilePath (Join-Path $packageDir 'ComParta-test.cer') | Out-Null
+    Write-Host "Ready: $target" -ForegroundColor Green
+}
+
 function Select-Action {
     $names = @($actions.Keys)
     Write-Host 'What do you want to do?' -ForegroundColor Cyan
@@ -130,6 +169,12 @@ switch ($Action) {
         Build-Ui
         if (-not $SkipTests) { Test-App }
         Publish-App   # builds the app itself, so there is no separate Build-App here
+    }
+    'Package' {
+        if (-not $SkipTests) { Test-Ui }
+        Build-Ui
+        if (-not $SkipTests) { Test-App }
+        Package-App
     }
     'Build' { Build-Ui; Build-App }
     'Test' { Test-Ui; Test-App }
