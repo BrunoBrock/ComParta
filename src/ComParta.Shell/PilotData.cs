@@ -19,20 +19,21 @@ public static class PilotData
     /// install has none of its own yet. True when it copied.
     /// </summary>
     /// <param name="copyDatabase">Copies the database safely, even while the pilot has it open.</param>
-    public static bool Import(string pilotRoot, string root, Action<string, string> copyDatabase)
+    /// <param name="skipped">Told about each engine file that could not be copied; the import goes on without it.</param>
+    public static bool Import(string pilotRoot, string root, Action<string, string> copyDatabase, Action<Exception>? skipped = null)
     {
         var database = Path.Combine(pilotRoot, DatabaseName);
         if (File.Exists(Path.Combine(root, MarkerName)) || File.Exists(Path.Combine(root, DatabaseName)) || !File.Exists(database))
             return false;
         Directory.CreateDirectory(root);
-        CopyFolder(Path.Combine(pilotRoot, EngineFolderName), Path.Combine(root, EngineFolderName));
+        CopyFolder(Path.Combine(pilotRoot, EngineFolderName), Path.Combine(root, EngineFolderName), skipped);
         // The database last: once it is there, nothing is copied again even if the marker was not written.
         copyDatabase(database, Path.Combine(root, DatabaseName));
         File.WriteAllText(Path.Combine(root, MarkerName), DateTime.UtcNow.ToString("O"));
         return true;
     }
 
-    private static void CopyFolder(string from, string to)
+    private static void CopyFolder(string from, string to, Action<Exception>? skipped)
     {
         if (!Directory.Exists(from))
             return;
@@ -44,9 +45,10 @@ public static class PilotData
             {
                 File.Copy(file, target, overwrite: true);
             }
-            catch (IOException)
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
                 // A file the running pilot holds is only engine cache; the engine rebuilds it.
+                skipped?.Invoke(e);
             }
         }
     }

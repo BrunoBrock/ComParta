@@ -53,7 +53,7 @@ public sealed class AppServices
 			// The first packaged run brings over what the pilot build kept (epic 5 story 5).
 			if (Packaged.IsPackaged && AppPaths.IsUsualRoot)
 			{
-				try { PilotData.Import(AppPaths.PilotRoot(), AppPaths.DataRoot(), SqliteStore.CopyDatabase); }
+				try { PilotData.Import(AppPaths.PilotRoot(), AppPaths.DataRoot(), SqliteStore.CopyDatabase, Log); }
 				catch (Exception e) { Log(e); }
 			}
 			var store = await SqliteStore.OpenAsync(_paths.DatabasePath);

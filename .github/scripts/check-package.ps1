@@ -79,7 +79,11 @@ try {
         throw 'The pilot data was not imported.'
     }
     $port = Get-Content -Raw (Join-Path $data 'engine\port.txt')
-    if ($port -ne $pilotPort) { throw "The pilot port $pilotPort did not come over: $port" }
+    if ($port -ne $pilotPort) {
+        Get-ChildItem -Recurse $data | ForEach-Object { Write-Host "$($_.FullName) $($_.LastWriteTimeUtc.ToString('o'))" }
+        Get-ChildItem (Join-Path $data 'logs') -ErrorAction SilentlyContinue | Get-Content | Write-Host
+        throw "The pilot port $pilotPort did not come over: $port"
+    }
     $found = python (Join-Path $PSScriptRoot 'pilot_db.py') read (Join-Path $data 'comparta.db')
     $version, $name = "$found" -split ' ', 2
     if ($LASTEXITCODE -ne 0 -or [int]$version -le 1 -or $name -ne 'pilot.bin') { throw "The pilot share did not come over upgraded: $found" }
