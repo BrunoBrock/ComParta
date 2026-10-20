@@ -127,10 +127,10 @@ function Package-App {
         dotnet publish src\ComParta.App\ComParta.App.csproj -c Release -f $framework -r win-x64 --self-contained true `
             -p:WindowsPackageType=MSIX -p:WindowsAppSDKSelfContained=true -p:GenerateAppxPackageOnBuild=true `
             -p:AppxPackageSigningEnabled=true -p:PackageCertificateThumbprint=$($certificate.Thumbprint) `
-            -p:ApplicationDisplayVersion=$Version -p:ApplicationVersion=1 `
+            -p:ApplicationDisplayVersion=$Version -p:ApplicationVersion=0 `
             "-p:AppxPackageDir=$packageDir\\" --nologo -v minimal
     }
-    $package = Get-ChildItem $packageDir -Recurse -Filter *.msix | Select-Object -First 1
+    $package = Get-ChildItem $packageDir -Recurse -Filter *_x64.msix | Select-Object -First 1
     if (-not $package) { throw "No .msix was made in $packageDir." }
     $target = Join-Path $packageDir "ComParta_$($Version)_x64.msix"
     Move-Item $package.FullName $target -Force
