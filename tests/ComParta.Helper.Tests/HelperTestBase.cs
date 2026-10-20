@@ -110,18 +110,25 @@ public abstract class HelperTestBase : IAsyncLifetime
         return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 
-    /// <summary>A port free on both TCP and UDP, as the public server takes both.</summary>
+    /// <summary>
+    /// A port free on both TCP and UDP, as the public server takes both. Tried across a range rather
+    /// than taken from the system's own TCP choices: Windows reserves blocks of ports for UDP that
+    /// those choices can fall in, and then every attempt is refused.
+    /// </summary>
     protected static int FreeTcpAndUdpPort()
     {
         for (var attempt = 0; ; attempt++)
         {
-            var port = FreeTcpPort();
+            var port = Random.Shared.Next(20_000, 45_000);
             try
             {
                 using var udp = new UdpClient(new IPEndPoint(IPAddress.Any, port));
+                var tcp = new TcpListener(IPAddress.Any, port);
+                tcp.Start();
+                tcp.Stop();
                 return port;
             }
-            catch (SocketException) when (attempt < 20)
+            catch (SocketException) when (attempt < 500)
             {
             }
         }
