@@ -203,6 +203,8 @@ export const ptBR: Catalog = {
   'viewer.previous': 'Arquivo anterior',
   'viewer.next': 'Próximo arquivo',
   'viewer.opening': 'Abrindo…',
+  'viewer.openFolder': 'Abrir a pasta',
+  'viewer.cancel': 'Cancelar',
   'received.openFor': 'Abrir {name}',
   'received.reveal': 'Mostrar na pasta',
   'received.revealFor': 'Mostrar {name} na pasta',

@@ -38,6 +38,8 @@ export default function MediaViewer({ bridge, items, start, onClose, onError }: 
   const [index, setIndex] = useState(start)
   const [opened, setOpened] = useState<{ url: string; kind: MediaKindDto } | null>(null)
   const [zoom, setZoom] = useState(1)
+  // The file cannot be shown or played here, or stopped playing part way (epic 18 story 4).
+  const [cannotPlay, setCannotPlay] = useState(false)
   const swipeFrom = useRef<number | null>(null)
   const player = useRef<HTMLMediaElement | null>(null)
   const item = items[index]
@@ -46,15 +48,27 @@ export default function MediaViewer({ bridge, items, start, onClose, onError }: 
     let current = true
     setOpened(null)
     setZoom(1)
+    setCannotPlay(false)
     void bridge.invoke('media.open', { kind: item.kind, id: item.id }).then((result) => {
       if (!current) return
       if (result.ok) setOpened({ url: result.value.url, kind: result.value.kind })
-      else onError(result.error.code)
+      else if (result.error.code === 'media.notPlayable') setCannotPlay(true)
+      else {
+        onError(result.error.code)
+        onClose()
+      }
     })
     return () => {
       current = false
     }
-  }, [bridge, item.kind, item.id, onError])
+  }, [bridge, item.kind, item.id, onError, onClose])
+
+  // Open the folder: the file selected in Explorer, or the phone's files app; then back home.
+  async function openFolder() {
+    const result = await bridge.invoke(item.kind === 'share' ? 'shares.reveal' : 'received.reveal', { id: item.id })
+    if (!result.ok) onError(result.error.code)
+    onClose()
+  }
 
   // Playback stops with the viewer, and when the person moves to another file.
   useEffect(() => {
@@ -129,6 +143,20 @@ export default function MediaViewer({ bridge, items, start, onClose, onError }: 
   }
 
   function shown() {
+    if (cannotPlay)
+      return (
+        <div className="viewer-cannot" role="alert">
+          <p>{t('error.media.notPlayable')}</p>
+          <div className="dialog-actions">
+            <button type="button" onClick={onClose}>
+              {t('viewer.cancel')}
+            </button>
+            <button type="button" className="primary" onClick={() => void openFolder()}>
+              {t('viewer.openFolder')}
+            </button>
+          </div>
+        </div>
+      )
     if (!opened)
       return (
         <p className="viewer-waiting" aria-busy="true">
@@ -136,11 +164,12 @@ export default function MediaViewer({ bridge, items, start, onClose, onError }: 
         </p>
       )
     if (opened.kind === 'video')
-      return <video ref={(element) => { player.current = element }} src={opened.url} controls autoPlay aria-label={item.name} />
+      return <video onError={() => setCannotPlay(true)} ref={(element) => { player.current = element }} src={opened.url} controls autoPlay aria-label={item.name} />
     if (opened.kind === 'song')
-      return <audio ref={(element) => { player.current = element }} src={opened.url} controls autoPlay aria-label={item.name} />
+      return <audio onError={() => setCannotPlay(true)} ref={(element) => { player.current = element }} src={opened.url} controls autoPlay aria-label={item.name} />
     return (
       <img
+        onError={() => setCannotPlay(true)}
         src={opened.url}
         alt={item.name}
         style={{ width: `${zoom * 100}%`, height: zoom > 1 ? 'auto' : undefined }}
@@ -157,7 +186,7 @@ export default function MediaViewer({ bridge, items, start, onClose, onError }: 
           {items.length > 1 && (
             <span className="viewer-count">{t('viewer.count', { number: index + 1, total: items.length })}</span>
           )}
-          {!playing && (
+          {!playing && !cannotPlay && (
             <>
               <button type="button" onClick={zoomOut} disabled={zoom === 1} aria-label={t('viewer.zoomOut')}>
                 <ZoomOut size={20} aria-hidden="true" />

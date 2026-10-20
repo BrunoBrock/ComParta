@@ -125,6 +125,8 @@ export default function App({ bridge }: AppProps) {
     return items.filter((item) => playableKind(item.name) !== null)
   }
 
+  const closeViewer = useCallback(() => setViewing(null), [])
+
   const canView = (item: DetailsOf) => viewable(item.kind).some((file) => file.id === item.id)
 
   function openViewer(item: DetailsOf) {
@@ -603,7 +605,7 @@ export default function App({ bridge }: AppProps) {
           bridge={bridge}
           items={viewing.items}
           start={viewing.start}
-          onClose={() => setViewing(null)}
+          onClose={closeViewer}
           onError={showError}
         />
       )}

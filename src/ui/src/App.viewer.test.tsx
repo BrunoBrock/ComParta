@@ -245,3 +245,64 @@ describe('the song and video player', () => {
     expect(fullscreen).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('when a file cannot be played', () => {
+  it('says so and opens the folder with the shared file selected, then goes back home', async () => {
+    const { bridge, user } = setup({ shares: [beach] })
+    const details = await openDetails(user, beach.name)
+
+    bridge.failNextWith = 'media.notPlayable'
+    await user.click(within(details).getByRole('button', { name: en['received.open'] }))
+
+    const viewer = await screen.findByRole('dialog', { name: beach.name })
+    expect(await within(viewer).findByRole('alert')).toHaveTextContent(en['error.media.notPlayable'])
+    await user.click(within(viewer).getByRole('button', { name: en['viewer.openFolder'] }))
+    expect(bridge.revealedShares).toEqual([beach.id])
+    expect(screen.queryByRole('dialog', { name: beach.name })).not.toBeInTheDocument()
+  })
+
+  it('leaves things as they were on Cancel, in Portuguese too', async () => {
+    const { bridge, user } = setup({ language: 'pt-BR', transfers: [arrived] })
+    await goToReceived(user)
+    const details = await openDetails(user, arrived.name!, ptBR)
+
+    bridge.failNextWith = 'media.notPlayable'
+    await user.click(within(details).getByRole('button', { name: ptBR['received.open'] }))
+
+    const viewer = await screen.findByRole('dialog', { name: arrived.name! })
+    expect(await within(viewer).findByRole('alert')).toHaveTextContent(ptBR['error.media.notPlayable'])
+    await user.click(within(viewer).getByRole('button', { name: ptBR['viewer.cancel'] }))
+    expect(screen.queryByRole('dialog', { name: arrived.name! })).not.toBeInTheDocument()
+    expect(bridge.revealedReceived).toEqual([])
+    expect(bridge.openedReceived).toEqual([])
+  })
+
+  it('offers the folder of a received file when it stops playing part way', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue()
+    const film: TransferDto = { ...arrived, id: 't3', name: 'film.mp4' }
+    const { bridge, user } = setup({ transfers: [film] })
+    await goToReceived(user)
+    const details = await openDetails(user, film.name!)
+    await user.click(within(details).getByRole('button', { name: en['received.open'] }))
+    const viewer = await screen.findByRole('dialog', { name: film.name! })
+
+    fireEvent.error(await within(viewer).findByLabelText(film.name!, { selector: 'video' }))
+
+    expect(await within(viewer).findByRole('alert')).toHaveTextContent(en['error.media.notPlayable'])
+    expect(within(viewer).queryByLabelText(film.name!, { selector: 'video' })).not.toBeInTheDocument()
+    await user.click(within(viewer).getByRole('button', { name: en['viewer.openFolder'] }))
+    expect(bridge.revealedReceived).toEqual(['t3'])
+    vi.restoreAllMocks()
+  })
+
+  it('shows any other problem as a message and goes back home', async () => {
+    const { bridge, user } = setup({ shares: [beach] })
+    const details = await openDetails(user, beach.name)
+
+    bridge.failNextWith = 'file.unreadable'
+    await user.click(within(details).getByRole('button', { name: en['received.open'] }))
+
+    expect(await screen.findByText(en['error.file.unreadable'])).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: beach.name })).not.toBeInTheDocument()
+  })
+})

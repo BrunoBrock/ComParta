@@ -207,6 +207,7 @@ export interface Commands {
   "shares.saveDownloadFile": { args: IdArgs; result: string };
   "shares.pause": { args: IdArgs; result: null };
   "shares.resume": { args: IdArgs; result: null };
+  "shares.reveal": { args: IdArgs; result: null };
   "transfers.list": { args: undefined; result: TransferDto[] };
   "transfers.preview": { args: ReceiveArgs; result: InvitePreviewDto };
   "transfers.receive": { args: ReceiveArgs; result: TransferDto };

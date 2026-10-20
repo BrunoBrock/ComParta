@@ -79,6 +79,8 @@ export interface FakeBridge extends Bridge {
   /** Ids of received files "opened" and "shown in their folder", in order. */
   openedReceived: string[]
   revealedReceived: string[]
+  /** Shared files shown in their folder. */
+  revealedShares: string[]
   /** How many times the firewall settings were opened. */
   openedConnectionSettings: number
   /** How many times the app quit. */
@@ -404,6 +406,13 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
 
     'shares.resume': (args) => setSharePaused((args as IdArgs).id, false),
 
+    'shares.reveal': (args) => {
+      const { id } = args as IdArgs
+      if (!shares.some((s) => s.id === id)) return fail('share.notFound')
+      fake.revealedShares.push(id)
+      return ok(null)
+    },
+
     'shares.copyInvite': (args) => {
       const { id, message } = args as CopyInviteArgs
       const share = shares.find((s) => s.id === id)
@@ -634,6 +643,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   const fake = {
     openedReceived: [] as string[],
     revealedReceived: [] as string[],
+    revealedShares: [] as string[],
     nextPick: samplePicks[0] as PickedFile | null,
     nextDownloadFile: { name: 'Free documentary.mkv', sizeBytes: 2_147_483_648 } as PickedFile | 'invalid' | null,
     failNextWith: null as ErrorCode | null,

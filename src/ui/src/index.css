@@ -1584,3 +1584,15 @@ dialog.viewer {
 .viewer-stage audio {
   width: min(560px, calc(100% - 32px));
 }
+
+.viewer-cannot {
+  max-width: 480px;
+  padding: calc(var(--space) * 3);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.viewer-cannot p {
+  margin: 0;
+}

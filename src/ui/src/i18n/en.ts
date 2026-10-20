@@ -197,6 +197,8 @@ export const en = {
   'viewer.previous': 'Previous file',
   'viewer.next': 'Next file',
   'viewer.opening': 'Opening…',
+  'viewer.openFolder': 'Open the folder',
+  'viewer.cancel': 'Cancel',
   'received.openFor': 'Open {name}',
   'received.reveal': 'Show in folder',
   'received.revealFor': 'Show {name} in its folder',

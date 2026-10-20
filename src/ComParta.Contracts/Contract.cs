@@ -15,6 +15,7 @@ public static class Commands
     public const string SharesSaveDownloadFile = "shares.saveDownloadFile";
     public const string SharesPause = "shares.pause";
     public const string SharesResume = "shares.resume";
+    public const string SharesReveal = "shares.reveal";
     public const string TransfersList = "transfers.list";
     public const string TransfersPreview = "transfers.preview";
     public const string TransfersReceive = "transfers.receive";
@@ -264,6 +265,8 @@ public static class Contract
         new(Commands.SharesSaveDownloadFile, typeof(IdArgs), typeof(string)),
         new(Commands.SharesPause, typeof(IdArgs), null),
         new(Commands.SharesResume, typeof(IdArgs), null),
+        // Shows the shared file selected in its folder, as received.reveal does for one that arrived.
+        new(Commands.SharesReveal, typeof(IdArgs), null),
         new(Commands.TransfersList, null, typeof(TransferDto[])),
         new(Commands.TransfersPreview, typeof(ReceiveArgs), typeof(InvitePreviewDto)),
         new(Commands.TransfersReceive, typeof(ReceiveArgs), typeof(TransferDto)),

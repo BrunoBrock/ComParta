@@ -39,6 +39,7 @@ public sealed class ButtonsTests : IAsyncLifetime
     private Exception? _failure;
     private readonly Clipboard _clipboard = new();
     private FakePaths _paths = null!;
+    private readonly FakeOpener _opener = new();
 
     private sealed class SlowRouter : INatGateway
     {
@@ -77,7 +78,7 @@ public sealed class ButtonsTests : IAsyncLifetime
         var settings = new SettingsUseCases(store, new FakeSystem("en"), _engine);
         var connection = new ConnectionUseCases(_engine, new FakeFirewall());
         var activity = new ActivityUseCases(_engine, store);
-        var opener = new FakeOpener();
+        var opener = _opener;
         // What has arrived is read from the real Received folder, as in the app.
         var disk = new LocalFileSystem();
         var received = new ReceivedUseCases(transfers, paths, opener, disk);
@@ -195,10 +196,12 @@ public sealed class ButtonsTests : IAsyncLifetime
             Assert.Equal(ErrorCodes.MediaNotPlayable, result.GetProperty("error").GetProperty("code").GetString());
         }
 
-        // A program renamed to look like a video is refused too.
+        // A program renamed to look like a video is refused too, and Open the folder shows it selected there.
         var renamed = await ShareAFileAsync("film.mp4", "MZ"u8.ToArray());
         var answer = await _router.InvokeAsync(Commands.MediaOpen, JsonSerializer.Serialize(new MediaArgs(ItemKindDto.Share, renamed), Contract.Json));
         Assert.Contains(ErrorCodes.MediaNotPlayable, answer, StringComparison.Ordinal);
+        await ClickAsync(Commands.SharesReveal, new IdArgs(renamed));
+        Assert.Equal([Path.Combine(_folder, "originals", "film.mp4")], _opener.Revealed);
     }
 
     [Fact]

@@ -129,6 +129,17 @@ public sealed class BridgeRouter
                     ? ToResult(await _shares.ContinueAsync(resumeShareId))
                     : CommandResult.Failure(ErrorCodes.ShareNotFound);
 
+            case Commands.SharesReveal:
+            {
+                var shown = ShareId.TryParse(Args<IdArgs>(argsJson)?.Id, out var revealShareId)
+                    ? _shares.Current().FirstOrDefault(v => v.Share.Id == revealShareId)
+                    : null;
+                if (shown is null)
+                    return CommandResult.Failure(ErrorCodes.ShareNotFound);
+                await _opener.RevealAsync(shown.Share.FilePath);
+                return CommandResult.Success(null);
+            }
+
             case Commands.SharesCopyInvite:
             {
                 var args = Args<CopyInviteArgs>(argsJson);

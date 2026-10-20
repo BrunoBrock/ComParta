@@ -408,6 +408,9 @@ public sealed class BridgeRouterTests
         var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
 
         Assert.Equal(ErrorCodes.MediaNotPlayable, ErrorCode(await InvokeAsync(Commands.MediaOpen, new { kind = "share", id })));
+        Assert.True((await InvokeAsync(Commands.SharesReveal, new { id })).GetProperty("ok").GetBoolean());
+        Assert.Equal([program], _shell.Revealed);
+        Assert.Equal(ErrorCodes.ShareNotFound, ErrorCode(await InvokeAsync(Commands.SharesReveal, new { id = "nope" })));
         Assert.Equal(ErrorCodes.ShareNotFound, ErrorCode(await InvokeAsync(Commands.MediaOpen, new { kind = "share", id = "nope" })));
         Assert.Equal(ErrorCodes.TransferNotFound, ErrorCode(await InvokeAsync(Commands.MediaOpen, new { kind = "transfer", id = TransferId.New().ToString() })));
     }
