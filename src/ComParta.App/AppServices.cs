@@ -53,7 +53,17 @@ public sealed class AppServices
 			// The first packaged run brings over what the pilot build kept (epic 5 story 5).
 			if (Packaged.IsPackaged && AppPaths.IsUsualRoot)
 			{
-				try { PilotData.Import(AppPaths.PilotRoot(), AppPaths.DataRoot(), SqliteStore.CopyDatabase, Log); }
+				try
+				{
+					// TEMPORARY diagnostics for the package check in CI.
+					var pilotEngine = Path.Combine(AppPaths.PilotRoot(), "engine");
+					Log(new InvalidOperationException(
+						$"pilot: db {File.Exists(Path.Combine(AppPaths.PilotRoot(), "comparta.db"))}, engine {Directory.Exists(pilotEngine)}, " +
+						$"files [{string.Join(", ", Directory.Exists(pilotEngine) ? Directory.GetFileSystemEntries(pilotEngine) : [])}], " +
+						$"top [{string.Join(", ", Directory.Exists(AppPaths.PilotRoot()) ? Directory.GetFileSystemEntries(AppPaths.PilotRoot()) : [])}], " +
+						$"port file {File.Exists(Path.Combine(pilotEngine, "port.txt"))}"));
+					PilotData.Import(AppPaths.PilotRoot(), AppPaths.DataRoot(), SqliteStore.CopyDatabase, Log);
+				}
 				catch (Exception e) { Log(e); }
 			}
 			var store = await SqliteStore.OpenAsync(_paths.DatabasePath);

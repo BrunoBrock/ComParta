@@ -82,6 +82,8 @@ try {
     if ($port -ne $pilotPort) {
         Get-ChildItem -Recurse $data | ForEach-Object { Write-Host "$($_.FullName) $($_.LastWriteTimeUtc.ToString('o'))" }
         Get-ChildItem (Join-Path $data 'logs') -ErrorAction SilentlyContinue | Get-Content | Write-Host
+        Get-ChildItem -Recurse $pilot | ForEach-Object { Write-Host "pilot: $($_.FullName)" }
+        Get-ChildItem -Recurse (Join-Path $env:LOCALAPPDATA "Packages\$($installed.PackageFamilyName)\LocalCache") -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "cache: $($_.FullName)" }
         throw "The pilot port $pilotPort did not come over: $port"
     }
     $found = python (Join-Path $PSScriptRoot 'pilot_db.py') read (Join-Path $data 'comparta.db')
