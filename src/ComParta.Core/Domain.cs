@@ -188,6 +188,12 @@ public sealed record ReachabilityFacts(
     bool ReachableThroughHelper = false);
 
 /// <summary>
+/// A shared file's download file (AD-21), for apps that do not open links. <see cref="Name"/>
+/// is a plain file name, extension included, that names the share.
+/// </summary>
+public sealed record DownloadFile(string Name, byte[] Content);
+
+/// <summary>
 /// A helper computer the person named (AD-23): an always-reachable computer that keeps a copy of
 /// each shared file and passes it on to anyone with the invite.
 /// </summary>
@@ -245,6 +251,8 @@ public enum ErrorKind
     ReceivedNotFound,
     ReceivedOpenFailed,
     ShareDropFailed,
+    /// <summary>A file the person asked to save could not be written.</summary>
+    SaveFailed,
     Unexpected,
 }
 

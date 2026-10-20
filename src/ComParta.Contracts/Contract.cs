@@ -12,6 +12,7 @@ public static class Commands
     public const string SharesAdd = "shares.add";
     public const string SharesRemove = "shares.remove";
     public const string SharesCopyInvite = "shares.copyInvite";
+    public const string SharesSaveDownloadFile = "shares.saveDownloadFile";
     public const string SharesPause = "shares.pause";
     public const string SharesResume = "shares.resume";
     public const string TransfersList = "transfers.list";
@@ -72,13 +73,14 @@ public static class ErrorCodes
     public const string ReceivedNotFound = "received.notFound";
     public const string ReceivedOpenFailed = "received.openFailed";
     public const string ShareDropFailed = "share.dropFailed";
+    public const string FileSaveFailed = "file.saveFailed";
     public const string Unexpected = "unexpected";
 
     public static IReadOnlyList<string> All { get; } =
     [
         ShareDuplicate, ShareNotFound, ShareNotReady, FileUnreadable,
         InviteInvalid, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, DiskFull, SettingsInvalid,
-        ReceivedNotFound, ReceivedOpenFailed, ShareDropFailed, Unexpected,
+        ReceivedNotFound, ReceivedOpenFailed, ShareDropFailed, FileSaveFailed, Unexpected,
     ];
 }
 
@@ -228,6 +230,8 @@ public static class Contract
         new(Commands.SharesAdd, null, typeof(ShareDto), ResultMayBeNull: true),
         new(Commands.SharesRemove, typeof(IdArgs), null),
         new(Commands.SharesCopyInvite, typeof(CopyInviteArgs), null),
+        // The saved file's name, shown to the person; the folder opens with it selected (AD-18: no path crosses the bridge).
+        new(Commands.SharesSaveDownloadFile, typeof(IdArgs), typeof(string)),
         new(Commands.SharesPause, typeof(IdArgs), null),
         new(Commands.SharesResume, typeof(IdArgs), null),
         new(Commands.TransfersList, null, typeof(TransferDto[])),

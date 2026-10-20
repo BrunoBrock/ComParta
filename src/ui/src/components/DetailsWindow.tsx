@@ -1,4 +1,4 @@
-import { Pause, Play } from 'lucide-react'
+import { FileDown, Link, Pause, Play } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Bridge, ErrorCode, ShareDetailsDto, TransferDetailsDto } from '../bridge/index.ts'
 import { formatDateTime, formatRate, formatSize, formatTimeLeft, type MessageKey, percentOf, t } from '../i18n/index.ts'
@@ -102,6 +102,19 @@ export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, 
     else onError(result.error.code)
   }
 
+  // For other apps (CAP-28): the link alone, or the download file for apps that do not take links.
+  async function copyLink() {
+    const result = await bridge.invoke('shares.copyInvite', { id: item.id, message: null })
+    if (result.ok) onInfo(t('shares.linkCopied', { name: item.name }))
+    else onError(result.error.code)
+  }
+
+  async function saveDownloadFile() {
+    const result = await bridge.invoke('shares.saveDownloadFile', { id: item.id })
+    if (result.ok) onInfo(t('shares.downloadFileSaved', { name: item.name }))
+    else onError(result.error.code)
+  }
+
   async function runOnReceived(command: 'received.open' | 'received.reveal') {
     const result = await bridge.invoke(command, { id: item.id })
     if (!result.ok) onError(result.error.code)
@@ -150,9 +163,19 @@ export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, 
           </>
         )}
         {!gone && details?.kind === 'share' && details.value.status === 'ready' && (
-          <button type="button" className="primary" onClick={() => copyInvite(details.value)}>
-            {t('shares.copyInvite')}
-          </button>
+          <>
+            <button type="button" onClick={copyLink}>
+              <Link size={18} aria-hidden="true" />
+              {t('shares.copyLink')}
+            </button>
+            <button type="button" onClick={saveDownloadFile}>
+              <FileDown size={18} aria-hidden="true" />
+              {t('shares.saveDownloadFile')}
+            </button>
+            <button type="button" className="primary" onClick={() => copyInvite(details.value)}>
+              {t('shares.copyInvite')}
+            </button>
+          </>
         )}
       </div>
     </Dialog>

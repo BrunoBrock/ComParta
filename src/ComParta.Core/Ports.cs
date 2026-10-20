@@ -133,6 +133,11 @@ public interface ITransferEngine
     /// can send as it is, and that other apps of the engine's kind open too (AD-16, amended).
     /// </summary>
     Task<string?> GetInviteAsync(ShareId id, CancellationToken ct = default);
+    /// <summary>
+    /// The download file of a share that is ready, naming the same servers and helper as its invite,
+    /// or null when it is not ready. For apps that take a file instead of a link.
+    /// </summary>
+    Task<DownloadFile?> GetDownloadFileAsync(ShareId id, CancellationToken ct = default);
     /// <summary>The first invite inside any text, such as a whole chat message, or null.</summary>
     string? FindInvite(string text);
 
@@ -253,6 +258,8 @@ public interface IFileSystem
     byte[] ReadSmallFile(string path, int maxBytes);
     /// <summary>Deletes one file; nothing happens when it is already gone.</summary>
     void DeleteFile(string path);
+    /// <summary>Writes a file that must not exist yet, making its folder when needed; throws when that fails.</summary>
+    void WriteNewFile(string path, byte[] content);
 }
 
 public interface IAppPaths
@@ -263,4 +270,6 @@ public interface IAppPaths
     /// <summary>The single place received content is written (AD-6).</summary>
     string ReceivedRoot { get; }
     string LogsRoot { get; }
+    /// <summary>Where files the person asks to save go, such as a download file: their Downloads folder.</summary>
+    string SavedRoot { get; }
 }
