@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <!-- The same engine as the app (AD-23), so the helper speaks exactly what ComParta speaks. -->
+    <PackageReference Include="Mono.Nat" Version="3.0.4" />
     <PackageReference Include="MonoTorrent" Version="3.0.2" />
   </ItemGroup>
 
