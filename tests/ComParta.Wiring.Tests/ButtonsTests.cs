@@ -349,8 +349,10 @@ public sealed class ButtonsTests : IAsyncLifetime
 
     private async Task<ComParta.Helper.HelperHost> StartHelperAsync()
     {
+        // Tried across a range: Windows reserves blocks of ports for UDP that the system's own TCP
+        // choices can fall in, and then no such choice is free on UDP.
         int udpAndTcp;
-        do udpAndTcp = FreePort(); while (!UdpFree(udpAndTcp));
+        do udpAndTcp = Random.Shared.Next(20_000, 45_000); while (!UdpFree(udpAndTcp) || !TcpFree(udpAndTcp));
         return await ComParta.Helper.HelperHost.StartAsync(new ComParta.Helper.HelperOptions
         {
             PublicAddress = "127.0.0.1",
@@ -408,6 +410,21 @@ public sealed class ButtonsTests : IAsyncLifetime
         Assert.Equal(
             Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(_folder, "originals", name)))),
             Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(receiverPaths.ReceivedRoot, name)))));
+    }
+
+    private static bool TcpFree(int port)
+    {
+        try
+        {
+            var tcp = new TcpListener(IPAddress.Any, port);
+            tcp.Start();
+            tcp.Stop();
+            return true;
+        }
+        catch (SocketException)
+        {
+            return false;
+        }
     }
 
     private static bool UdpFree(int port)
