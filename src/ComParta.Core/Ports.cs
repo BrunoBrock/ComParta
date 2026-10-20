@@ -115,6 +115,12 @@ public interface ITransferEngine
 
     /// <summary>Starts offering the file in place. Returns at once; <see cref="OfferChanged"/> reports the outcome.</summary>
     Task OfferAsync(ShareId id, string filePath, CancellationToken ct = default);
+    /// <summary>
+    /// Offers several files as one, under <paramref name="name"/>, each read where it is and placed
+    /// at its relative path on the other computer (AD-19). Like <see cref="OfferAsync"/> otherwise.
+    /// </summary>
+    Task OfferItemsAsync(ShareId id, string name, IReadOnlyList<ShareItem> items, CancellationToken ct = default) =>
+        OfferAsync(id, items[0].ContentRef, ct);
     /// <summary>Stops offering and forgets the share. Never touches the file.</summary>
     Task StopOfferingAsync(ShareId id, CancellationToken ct = default);
     /// <summary>Stops sending one shared file; a global continue leaves it paused. Never touches the file.</summary>

@@ -13,10 +13,15 @@ namespace ComParta.Engine.MonoTorrent;
 // Offering of the engine; the class is split by area, see MonoTorrentTransferEngine.cs.
 public sealed partial class MonoTorrentTransferEngine
 {
-    public async Task OfferAsync(ShareId id, string filePath, CancellationToken ct = default)
+    public Task OfferAsync(ShareId id, string filePath, CancellationToken ct = default) => StartOfferAsync(new Offer(id, filePath));
+
+    public Task OfferItemsAsync(ShareId id, string name, IReadOnlyList<ShareItem> items, CancellationToken ct = default) =>
+        StartOfferAsync(new Offer(id, items[0].ContentRef, name, items));
+
+    private async Task StartOfferAsync(Offer offer)
     {
+        var id = offer.Id;
         await StopOfferAsync(id, forget: false);
-        var offer = new Offer(id, filePath);
         _offers[id] = offer;
         OfferChanged?.Invoke(id, OfferState.Preparing);
         offer.Work = Task.Run(() => PrepareOfferAsync(offer), CancellationToken.None);
@@ -38,7 +43,14 @@ public sealed partial class MonoTorrentTransferEngine
                     : await CreateMetadataAsync(offer, metadataPath);
 
                 // The save directory is the folder the file already sits in, so it is read where it is (AD-6).
-                var manager = await engine.AddAsync(torrent, Path.GetDirectoryName(offer.FilePath)!, ToTorrentSettings());
+                // Several files are each pointed at where they are, wherever that is.
+                var manager = await engine.AddAsync(
+                    torrent, offer.Items is null ? Path.GetDirectoryName(offer.FilePath)! : ItemsFolder(offer.Id), ToTorrentSettings());
+                if (offer.Items is not null && !await PointAtItemsAsync(manager, offer.Items))
+                {
+                    await engine.RemoveAsync(manager);
+                    break;
+                }
                 WatchIncoming(manager);
                 WatchReceivers(offer, manager);
                 offer.Manager = manager;
@@ -85,10 +97,47 @@ public sealed partial class MonoTorrentTransferEngine
         }
     }
 
+    /// <summary>Where several files would be written if they were ever written; never used, so nothing is there.</summary>
+    private string ItemsFolder(ShareId id) => Path.Combine(_sharesFolder, id.ToString());
+
+    /// <summary>
+    /// Points each file of the content at the file it is read from. False when one cannot be matched,
+    /// or something already sits where the engine would have put it: then nothing is offered, so
+    /// the engine never moves or writes over a file of the person's.
+    /// </summary>
+    private static async Task<bool> PointAtItemsAsync(TorrentManager manager, IReadOnlyList<ShareItem> items)
+    {
+        var byPath = items.ToDictionary(item => Normalised(item.RelativePath), StringComparer.Ordinal);
+        foreach (var file in manager.Files)
+        {
+            // One file is content of one file, named by the file alone.
+            var item = items.Count == 1 ? items[0] : byPath.GetValueOrDefault(Normalised(file.Path));
+            if (item is null)
+                return false;
+            if (string.Equals(file.FullPath, item.ContentRef, StringComparison.Ordinal))
+                continue;
+            if (File.Exists(file.FullPath))
+                return false;
+            await manager.MoveFileAsync(file, item.ContentRef);
+        }
+        return true;
+    }
+
+    private static string Normalised(string path) => path.Replace('\\', '/');
+
+    /// <summary>Several files as the library's content source: each read from where it is, placed at its relative path.</summary>
+    private sealed class ItemsSource(string name, IReadOnlyList<ShareItem> items) : ITorrentFileSource
+    {
+        public IEnumerable<FileMapping> Files { get; } =
+            [.. items.Select(item => new FileMapping(item.ContentRef, item.RelativePath.Replace('/', Path.DirectorySeparatorChar), item.SizeBytes))];
+        public string TorrentName { get; } = name;
+    }
+
     private static async Task<Torrent> CreateMetadataAsync(Offer offer, string metadataPath)
     {
         var creator = new TorrentCreator(TorrentType.V1Only) { CreatedBy = "ComParta", Private = false };
-        var metadata = await creator.CreateAsync(new TorrentFileSource(offer.FilePath), offer.Cancel.Token);
+        ITorrentFileSource source = offer.Items is null ? new TorrentFileSource(offer.FilePath) : new ItemsSource(offer.Name!, offer.Items);
+        var metadata = await creator.CreateAsync(source, offer.Cancel.Token);
         await File.WriteAllBytesAsync(metadataPath, metadata.Encode());
         return Torrent.Load(metadata);
     }
@@ -108,7 +157,9 @@ public sealed partial class MonoTorrentTransferEngine
             {
                 try
                 {
-                    await manager.StopAsync(StopWait);
+                    // A stop that gives up half way would leave the manager registered, and offering
+                    // the same content again would then be refused.
+                    await StopFullyAsync(manager);
                     await engine.RemoveAsync(manager);
                 }
                 catch (Exception) { /* it is gone either way */ }

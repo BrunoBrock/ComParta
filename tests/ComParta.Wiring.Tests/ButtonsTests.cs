@@ -181,6 +181,12 @@ public sealed class ButtonsTests : IAsyncLifetime
         var named = await ClickAsync(Commands.SharesAddPicked, new AddPickedArgs("Best of the trip"));
         Assert.Equal(("collection", 2000L), (named.GetProperty("kind").GetString(), named.GetProperty("sizeBytes").GetInt64()));
 
+        // The engine reads each file where it is, so both are ready to send with one invite each.
+        await ScreenShowsAsync(Events.SharesChanged, list => list.GetArrayLength() == 2
+            && list.EnumerateArray().All(s => s.GetProperty("status").GetString() == "ready"));
+        await ClickAsync(Commands.SharesCopyInvite, new CopyInviteArgs(named.GetProperty("id").GetString()!, null));
+        Assert.Contains("Best", _clipboard.Text);
+
         var stored = await ((IShareRepository)await SqliteStore.OpenAsync(_paths.DatabasePath)).GetAllAsync();
         Assert.Equal([ShareKind.Folder, ShareKind.Collection], stored.Select(s => s.Kind));
         Assert.Equal(["beach.jpg", "day 2/hill.jpg"], stored[0].Items.Select(i => i.RelativePath));

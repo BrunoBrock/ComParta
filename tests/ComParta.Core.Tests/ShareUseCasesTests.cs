@@ -318,7 +318,8 @@ public sealed class ShareUseCasesTests
         foreach (var file in TripFiles)
             _files.Files[Path.Combine(Trip, file)] = 100;
         Assert.Equal(ShareStatus.Ready, Assert.Single(await shares.ListAsync()).Status);
-        Assert.Equal(Trip, _engine.Offered[added.Share.Id]);
+        Assert.Equal("Trip", _engine.Offered[added.Share.Id]);
+        Assert.Equal(added.Share.Items, _engine.OfferedItems[added.Share.Id]);
     }
 
     [Fact]

@@ -357,10 +357,14 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         catch (Exception) { /* a leftover folder is harmless */ }
     }
 
-    private sealed class Offer(ShareId id, string filePath)
+    private sealed class Offer(ShareId id, string filePath, string? name = null, IReadOnlyList<ShareItem>? items = null)
     {
         public ShareId Id { get; } = id;
         public string FilePath { get; } = filePath;
+        /// <summary>The name several files are offered under; null for one file offered as itself.</summary>
+        public string? Name { get; } = name;
+        /// <summary>Several files offered as one (AD-19); null for one file.</summary>
+        public IReadOnlyList<ShareItem>? Items { get; } = items;
         public CancellationTokenSource Cancel { get; } = new();
         public Task Work { get; set; } = Task.CompletedTask;
         public volatile TorrentManager? Manager;

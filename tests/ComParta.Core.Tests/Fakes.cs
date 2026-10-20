@@ -84,6 +84,15 @@ internal sealed class FakeEngine : ITransferEngine
         return Task.CompletedTask;
     }
 
+    /// <summary>Several files offered as one, by share; <see cref="Offered"/> holds their name.</summary>
+    public Dictionary<ShareId, IReadOnlyList<ShareItem>> OfferedItems { get; } = [];
+
+    public Task OfferItemsAsync(ShareId id, string name, IReadOnlyList<ShareItem> items, CancellationToken ct = default)
+    {
+        OfferedItems[id] = items;
+        return OfferAsync(id, name, ct);
+    }
+
     /// <summary>Runs while a share is being let go of, to see what the app shows meanwhile.</summary>
     public Action? OnStopOffering { get; set; }
 

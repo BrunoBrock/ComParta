@@ -221,7 +221,7 @@ public sealed class ShareUseCases
             var share = new Share(ShareId.New(), root, name, items.Sum(i => i.SizeBytes), _clock.GetUtcNow(), Items: items, Kind: kind);
             await _repository.AddAsync(share, ct);
             view = Set(share, ShareStatus.Preparing);
-            await _engine.OfferAsync(share.Id, share.FilePath, ct);
+            await OfferContentAsync(share, ct);
         }
         finally { _gate.Release(); }
 
@@ -281,10 +281,16 @@ public sealed class ShareUseCases
         return Result.Success;
     }
 
+    /// <summary>One file is offered as itself; a folder or several files as one, each read where it is (AD-19).</summary>
+    private Task OfferContentAsync(Share share, CancellationToken ct) =>
+        share.Kind == ShareKind.File
+            ? _engine.OfferAsync(share.Id, share.FilePath, ct)
+            : _engine.OfferItemsAsync(share.Id, share.Name, share.Items, ct);
+
     /// <summary>Offers a share, still paused when the person paused it.</summary>
     private async Task OfferAsync(Share share, CancellationToken ct)
     {
-        await _engine.OfferAsync(share.Id, share.FilePath, ct);
+        await OfferContentAsync(share, ct);
         if (share.Paused)
             await _engine.PauseOfferingAsync(share.Id, ct);
     }
