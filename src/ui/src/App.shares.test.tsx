@@ -34,6 +34,16 @@ describe('the list of my shares', () => {
     expect(within(item).queryByRole('button', { name: /copy invite/i })).not.toBeInTheDocument()
   })
 
+  it('marks a shared folder some of whose files went missing', async () => {
+    const trip = { ...album, id: 's3', name: 'Trip', status: 'partlyUnavailable' as const, itemCount: 3, kind: 'folder' as const }
+    setup({ shares: [trip] })
+
+    const item = (await within(sharesSection()).findByText('Trip')).closest('li')!
+    expect(within(item).getByText(en['shares.chip.partlyUnavailable'])).toBeInTheDocument()
+    expect(within(item).getByText(en['shares.status.partlyUnavailable'])).toBeInTheDocument()
+    expect(within(item).queryByRole('button', { name: /copy invite/i })).not.toBeInTheDocument()
+  })
+
   it('updates from a change event without reloading', async () => {
     const { bridge } = setup()
     await screen.findByText(en['shares.empty'])

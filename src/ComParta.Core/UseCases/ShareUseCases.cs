@@ -36,9 +36,9 @@ public sealed class ShareUseCases
         {
             foreach (var share in await _repository.GetAllAsync(ct))
             {
-                var available = _files.FileExists(share.FilePath);
-                Set(share, available ? ShareStatus.Preparing : ShareStatus.Unavailable);
-                if (available)
+                var missing = Missing(share);
+                Set(share, missing ?? ShareStatus.Preparing);
+                if (missing is null)
                     await OfferAsync(share, ct);
             }
         }
@@ -54,13 +54,15 @@ public sealed class ShareUseCases
         {
             foreach (var view in Snapshot())
             {
-                var exists = _files.FileExists(view.Share.FilePath);
-                if (!exists && view.Status != ShareStatus.Unavailable)
+                var missing = Missing(view.Share);
+                var wasMissing = view.Status is ShareStatus.Unavailable or ShareStatus.PartlyUnavailable;
+                if (missing is { } status && status != view.Status)
                 {
-                    Set(view.Share, ShareStatus.Unavailable);
-                    await _engine.StopOfferingAsync(view.Share.Id, ct);
+                    Set(view.Share, status);
+                    if (!wasMissing)
+                        await _engine.StopOfferingAsync(view.Share.Id, ct);
                 }
-                else if (exists && view.Status == ShareStatus.Unavailable)
+                else if (missing is null && wasMissing)
                 {
                     Set(view.Share, ShareStatus.Preparing);
                     await OfferAsync(view.Share, ct);
@@ -99,31 +101,53 @@ public sealed class ShareUseCases
         return (added, problem);
     }
 
-    private async Task<Result<ShareView?>> ShareFileAsync(string path, CancellationToken ct)
+    private Task<Result<ShareView?>> ShareFileAsync(string path, CancellationToken ct)
+    {
+        path = Path.GetFullPath(path);
+        return AddItemsAsync(path, Path.GetFileName(path), ShareKind.File, [Path.GetFileName(path)], ct);
+    }
+
+    /// <summary>
+    /// Shares a set of files as one (AD-19): each relative path is read from under
+    /// <paramref name="root"/>, the file itself for a single file. Every file must be readable and
+    /// not empty, and no path may leave the root.
+    /// </summary>
+    public async Task<Result<ShareView?>> AddItemsAsync(
+        string root, string name, ShareKind kind, IReadOnlyList<string> relativePaths, CancellationToken ct = default)
     {
         ShareView view;
         await _gate.WaitAsync(ct);
         try
         {
-            path = Path.GetFullPath(path);
-            if (Snapshot().Any(v =>string.Equals(v.Share.FilePath, path, StringComparison.OrdinalIgnoreCase)))
+            root = Path.GetFullPath(root);
+            if (relativePaths.Count == 0 || string.IsNullOrWhiteSpace(name))
+                return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
+            if (Snapshot().Any(v => string.Equals(v.Share.FilePath, root, StringComparison.OrdinalIgnoreCase)))
                 return Result<ShareView?>.Fail(ErrorKind.ShareDuplicate);
 
-            long size;
-            try
+            var items = new List<ShareItem>();
+            foreach (var relative in relativePaths)
             {
-                if (!_files.FileExists(path))
+                var path = kind == ShareKind.File ? root : Path.GetFullPath(Path.Combine(root, relative));
+                if (kind != ShareKind.File && !path.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                     return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
-                size = _files.GetReadableFileSize(path);
+                long size;
+                try
+                {
+                    if (!_files.FileExists(path))
+                        return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
+                    size = _files.GetReadableFileSize(path);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
+                }
+                if (size == 0)
+                    return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
+                items.Add(new ShareItem(relative.Replace('\\', '/'), size, path));
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
-            }
-            if (size == 0)
-                return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
 
-            var share = new Share(ShareId.New(), path, Path.GetFileName(path), size, _clock.GetUtcNow());
+            var share = new Share(ShareId.New(), root, name, items.Sum(i => i.SizeBytes), _clock.GetUtcNow(), Items: items, Kind: kind);
             await _repository.AddAsync(share, ct);
             view = Set(share, ShareStatus.Preparing);
             await _engine.OfferAsync(share.Id, share.FilePath, ct);
@@ -273,6 +297,13 @@ public sealed class ShareUseCases
             _shares[id] = view with { Status = status };
         }
         Changed?.Invoke();
+    }
+
+    /// <summary>Null when every file is there; else whether some or all of them are gone.</summary>
+    private ShareStatus? Missing(Share share)
+    {
+        var gone = share.Items.Count(item => !_files.FileExists(item.ContentRef));
+        return gone == 0 ? null : gone == share.Items.Count ? ShareStatus.Unavailable : ShareStatus.PartlyUnavailable;
     }
 
     private ShareView Set(Share share, ShareStatus status)

@@ -115,6 +115,8 @@ export const notSending = {
   secondsLeft: null,
   neededBytes: null,
   paused: false,
+  itemCount: 1,
+  kind: 'file',
 } as const
 
 /** Roughly what one ready share sends while someone is getting it, in the moving fake. */
@@ -586,7 +588,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       const { kind, id } = args as ThumbnailArgs
       const name =
         kind === 'share'
-          ? shares.find((s) => s.id === id && s.status !== 'unavailable')?.name
+          ? shares.find((s) => s.id === id && s.status !== 'unavailable' && s.status !== 'partlyUnavailable')?.name
           : (transfers.find((t) => t.id === id && t.state === 'done')?.name ?? undefined)
       if (!name) return kind === 'share' && !shares.some((s) => s.id === id) ? fail('share.notFound') : ok(null)
       return ok(isPicture(name) ? fakePicture(name) : null)

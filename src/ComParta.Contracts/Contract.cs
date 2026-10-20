@@ -87,7 +87,9 @@ public static class ErrorCodes
     ];
 }
 
-public enum ShareStatusDto { Preparing, Ready, Unavailable }
+public enum ShareStatusDto { Preparing, Ready, Unavailable, PartlyUnavailable }
+
+public enum ShareKindDto { File, Folder, Collection }
 
 public enum TransferStateDto { Connecting, Receiving, Paused, Done, Failed, Waiting, NoSpace, Blocked }
 
@@ -141,7 +143,8 @@ public enum TransferSourceDto { Invite, DownloadLink, DownloadFile }
 /// <param name="Paused">The person paused sending this file on its own.</param>
 public sealed record ShareDto(
     string Id, string Name, long SizeBytes, ShareStatusDto Status,
-    ShareActivityDto Activity, int ReceiverCount, int Percent, int FinishedCount, long? SecondsLeft, bool Paused);
+    ShareActivityDto Activity, int ReceiverCount, int Percent, int FinishedCount, long? SecondsLeft, bool Paused,
+    int ItemCount, ShareKindDto Kind);
 
 public enum ShareActivityDto { Idle, Sending, Sent }
 

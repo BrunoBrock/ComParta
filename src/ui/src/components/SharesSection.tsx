@@ -44,7 +44,12 @@ interface SharesSectionProps {
   onAdd: () => void
 }
 
-const tones: Record<ShareDto['status'], ChipTone> = { preparing: 'busy', ready: 'ok', unavailable: 'warn' }
+const tones: Record<ShareDto['status'], ChipTone> = {
+  preparing: 'busy',
+  ready: 'ok',
+  unavailable: 'warn',
+  partlyUnavailable: 'warn',
+}
 
 /** A ready share's chip and sentence say whether someone is getting it or has it (CAP-8). */
 function chipOf(share: ShareDto): string {
@@ -200,7 +205,7 @@ export default function SharesSection(props: SharesSectionProps) {
                     kind="share"
                     id={share.id}
                     name={share.name}
-                    ready={share.status !== 'unavailable'}
+                    ready={share.status !== 'unavailable' && share.status !== 'partlyUnavailable'}
                   />
                 }
                 actions={

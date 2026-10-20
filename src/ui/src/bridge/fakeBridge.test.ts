@@ -98,6 +98,8 @@ describe('the fake bridge: opening a file inside the app', () => {
     finishedCount: 0,
     secondsLeft: null,
     paused: false,
+    itemCount: 1,
+    kind: 'file' as const,
   })
   const transfer = (id: string, name: string, state: 'done' | 'receiving') => ({
     id,

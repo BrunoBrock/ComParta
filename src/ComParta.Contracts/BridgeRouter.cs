@@ -369,6 +369,7 @@ public sealed class BridgeRouter
         {
             ShareStatus.Ready => ShareStatusDto.Ready,
             ShareStatus.Unavailable => ShareStatusDto.Unavailable,
+            ShareStatus.PartlyUnavailable => ShareStatusDto.PartlyUnavailable,
             _ => ShareStatusDto.Preparing,
         },
         sending.Activity switch
@@ -381,7 +382,14 @@ public sealed class BridgeRouter
         sending.Percent,
         sending.FinishedCount,
         sending.SecondsLeft,
-        view.Share.Paused);
+        view.Share.Paused,
+        view.Share.Items.Count,
+        view.Share.Kind switch
+        {
+            ShareKind.Folder => ShareKindDto.Folder,
+            ShareKind.Collection => ShareKindDto.Collection,
+            _ => ShareKindDto.File,
+        });
 
     public static TransferDto ToDto(TransferView view) => new(
         view.Transfer.Id.ToString(),

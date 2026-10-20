@@ -160,6 +160,22 @@ public sealed class ButtonsTests : IAsyncLifetime
         return id;
     }
 
+    [Fact]
+    public async Task A_shared_file_is_one_item_kept_in_the_database_and_marked_when_it_goes_missing()
+    {
+        var id = await ShareAFileAsync("letter.pdf");
+        var path = Path.Combine(_folder, "originals", "letter.pdf");
+
+        var listed = Assert.Single((await ClickAsync(Commands.SharesList)).EnumerateArray());
+        Assert.Equal((1, "file"), (listed.GetProperty("itemCount").GetInt32(), listed.GetProperty("kind").GetString()));
+        var stored = Assert.Single(await ((IShareRepository)await SqliteStore.OpenAsync(_paths.DatabasePath)).GetAllAsync());
+        Assert.Equal(new ShareItem("letter.pdf", 200_000, path), Assert.Single(stored.Items));
+
+        _files.Files.Remove(path);
+        var missing = Assert.Single((await ClickAsync(Commands.SharesList)).EnumerateArray());
+        Assert.Equal((id, "unavailable"), (missing.GetProperty("id").GetString(), missing.GetProperty("status").GetString()));
+    }
+
     [Theory]
     [InlineData("photo.jpg", "picture", "image/jpeg", new byte[] { 0xFF, 0xD8, 0xFF, 0xE1 })]
     [InlineData("song.mp3", "song", "audio/mpeg", new byte[] { (byte)'I', (byte)'D', (byte)'3', 4 })]

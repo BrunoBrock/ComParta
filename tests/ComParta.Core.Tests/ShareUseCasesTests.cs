@@ -276,4 +276,88 @@ public sealed class ShareUseCasesTests
         Assert.Equal(0, shownWhileStopping);
         Assert.Equal(1, changes);
     }
+
+    private static readonly string Trip = Path.Combine(Path.GetTempPath(), "Photos", "Trip");
+    private static readonly string[] TripFiles = ["beach.jpg", Path.Combine("day 2", "hill.jpg"), Path.Combine("day 2", "notes.txt")];
+
+    private async Task<ShareView> AddTripAsync(ShareUseCases shares)
+    {
+        foreach (var (file, i) in TripFiles.Select((file, i) => (file, i)))
+            _files.Files[Path.Combine(Trip, file)] = 100 * (i + 1);
+        return (await shares.AddItemsAsync(Trip, "Trip", ShareKind.Folder, TripFiles)).Value!;
+    }
+
+    [Fact]
+    public async Task A_folder_with_three_files_is_one_share_with_three_items()
+    {
+        var shares = Create();
+
+        var added = await AddTripAsync(shares);
+
+        var listed = Assert.Single(await shares.ListAsync());
+        Assert.Equal(("Trip", ShareKind.Folder, 600L, ShareStatus.Ready), (listed.Share.Name, listed.Share.Kind, listed.Share.SizeBytes, listed.Status));
+        Assert.Equal(["beach.jpg", "day 2/hill.jpg", "day 2/notes.txt"], listed.Share.Items.Select(i => i.RelativePath));
+        Assert.Equal(Path.Combine(Trip, "day 2", "notes.txt"), listed.Share.Items[2].ContentRef);
+        Assert.Equal(added.Share, Assert.Single(_repository.Items));
+    }
+
+    [Fact]
+    public async Task One_missing_file_makes_a_folder_partly_unavailable_and_all_missing_unavailable()
+    {
+        var shares = Create();
+        var added = await AddTripAsync(shares);
+
+        _files.Files.Remove(Path.Combine(Trip, "beach.jpg"));
+        Assert.Equal(ShareStatus.PartlyUnavailable, Assert.Single(await shares.ListAsync()).Status);
+        Assert.False(_engine.Offered.ContainsKey(added.Share.Id));
+
+        foreach (var file in TripFiles)
+            _files.Files.Remove(Path.Combine(Trip, file));
+        Assert.Equal(ShareStatus.Unavailable, Assert.Single(await shares.ListAsync()).Status);
+
+        foreach (var file in TripFiles)
+            _files.Files[Path.Combine(Trip, file)] = 100;
+        Assert.Equal(ShareStatus.Ready, Assert.Single(await shares.ListAsync()).Status);
+        Assert.Equal(Trip, _engine.Offered[added.Share.Id]);
+    }
+
+    [Fact]
+    public async Task A_folder_partly_gone_since_last_time_is_not_offered_after_a_restart()
+    {
+        var added = await AddTripAsync(Create());
+        _files.Files.Remove(Path.Combine(Trip, "day 2", "hill.jpg"));
+        _engine.Offered.Clear();
+
+        var restarted = Create();
+        await restarted.StartAsync();
+
+        Assert.Equal(ShareStatus.PartlyUnavailable, Assert.Single(restarted.Current()).Status);
+        Assert.False(_engine.Offered.ContainsKey(added.Share.Id));
+    }
+
+    [Fact]
+    public async Task A_file_shared_on_its_own_is_one_item()
+    {
+        var added = await AddVideoAsync(Create());
+
+        Assert.Equal(ShareKind.File, added.Share.Kind);
+        Assert.Equal(new ShareItem("birthday.mp4", 5_000, Video), Assert.Single(added.Share.Items));
+    }
+
+    [Fact]
+    public async Task Items_that_leave_the_folder_are_empty_or_cannot_be_read_are_refused()
+    {
+        var shares = Create();
+        var outside = Path.Combine(Path.GetTempPath(), "Photos", "secret.txt");
+        _files.Files[outside] = 10;
+        _files.Files[Path.Combine(Trip, "empty.txt")] = 0;
+        _files.Files[Path.Combine(Trip, "ok.jpg")] = 10;
+
+        Assert.Equal(ErrorKind.FileUnreadable, (await shares.AddItemsAsync(Trip, "Trip", ShareKind.Folder, [Path.Combine("..", "secret.txt")])).Error);
+        Assert.Equal(ErrorKind.FileUnreadable, (await shares.AddItemsAsync(Trip, "Trip", ShareKind.Folder, ["ok.jpg", "empty.txt"])).Error);
+        Assert.Equal(ErrorKind.FileUnreadable, (await shares.AddItemsAsync(Trip, "Trip", ShareKind.Folder, ["ok.jpg", "gone.jpg"])).Error);
+        Assert.Equal(ErrorKind.FileUnreadable, (await shares.AddItemsAsync(Trip, "Trip", ShareKind.Folder, [])).Error);
+        Assert.Empty(await shares.ListAsync());
+        Assert.Empty(_repository.Items);
+    }
 }

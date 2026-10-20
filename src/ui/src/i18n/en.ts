@@ -104,6 +104,7 @@ export const en = {
   'shares.chip.preparing': 'Getting ready',
   'shares.chip.ready': 'Ready to send',
   'shares.chip.unavailable': 'Not found',
+  'shares.chip.partlyUnavailable': 'Some files missing',
   'shares.chip.sending': 'Sending to {count}',
   'shares.chip.sentOnce': 'Sent 1 time',
   'shares.chip.sent': 'Sent {count} times',
@@ -111,6 +112,8 @@ export const en = {
   'shares.status.preparing': 'ComParta is reading the file so it can be sent. Large videos take a few minutes.',
   'shares.status.ready': 'Copy the invite and send it to someone.',
   'shares.status.unavailable': 'The file was moved, renamed, changed or deleted. Put it back, or stop sharing it.',
+  'shares.status.partlyUnavailable':
+    'Some files in this folder were moved, renamed or deleted. Put them back, or stop sharing it.',
   'shares.status.sendingOne': 'Sending to 1 person: {percent} %',
   'shares.status.sending': 'Sending to {count} people: {percent} %',
   'shares.status.keepOpen': 'Keep ComParta open.',

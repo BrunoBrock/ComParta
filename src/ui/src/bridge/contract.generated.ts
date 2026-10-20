@@ -1,8 +1,10 @@
 // Generated from ComParta.Contracts by tools/ComParta.Contracts.TypeGen. Do not edit.
 
-export type ShareStatusDto = "preparing" | "ready" | "unavailable";
+export type ShareStatusDto = "preparing" | "ready" | "unavailable" | "partlyUnavailable";
 
 export type ShareActivityDto = "idle" | "sending" | "sent";
+
+export type ShareKindDto = "file" | "folder" | "collection";
 
 export type TransferStateDto = "connecting" | "receiving" | "paused" | "done" | "failed" | "waiting" | "noSpace" | "blocked";
 
@@ -27,6 +29,8 @@ export interface ShareDto {
   finishedCount: number;
   secondsLeft: number | null;
   paused: boolean;
+  itemCount: number;
+  kind: ShareKindDto;
 }
 
 export interface IdArgs {

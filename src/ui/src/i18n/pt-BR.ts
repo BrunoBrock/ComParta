@@ -106,6 +106,7 @@ export const ptBR: Catalog = {
   'shares.chip.preparing': 'Preparando',
   'shares.chip.ready': 'Pronto para enviar',
   'shares.chip.unavailable': 'Não encontrado',
+  'shares.chip.partlyUnavailable': 'Faltam arquivos',
   'shares.chip.sending': 'Enviando para {count}',
   'shares.chip.sentOnce': 'Enviado 1 vez',
   'shares.chip.sent': 'Enviado {count} vezes',
@@ -115,6 +116,8 @@ export const ptBR: Catalog = {
   'shares.status.ready': 'Copie o convite e mande para alguém.',
   'shares.status.unavailable':
     'O arquivo foi movido, renomeado, alterado ou apagado. Coloque-o de volta ou pare de compartilhá-lo.',
+  'shares.status.partlyUnavailable':
+    'Alguns arquivos desta pasta foram movidos, renomeados ou apagados. Coloque-os de volta ou pare de compartilhá-la.',
   'shares.status.sendingOne': 'Enviando para 1 pessoa: {percent} %',
   'shares.status.sending': 'Enviando para {count} pessoas: {percent} %',
   'shares.status.keepOpen': 'Mantenha o ComParta aberto.',
