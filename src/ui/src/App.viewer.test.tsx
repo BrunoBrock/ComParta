@@ -1,8 +1,8 @@
 import { fireEvent, screen, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ShareDto, TransferDto } from './bridge/contract.generated.ts'
 import { notSending } from './bridge/fakeBridge.ts'
-import { swipePixels } from './components/PictureViewer.tsx'
+import { seekSeconds, swipePixels } from './components/MediaViewer.tsx'
 import { en } from './i18n/en.ts'
 import { ptBR } from './i18n/pt-BR.ts'
 import { goToReceived, setup, type User, video } from './test/appHarness.tsx'
@@ -12,6 +12,7 @@ const picture = (id: string, name: string): ShareDto => ({ id, name, sizeBytes: 
 const beach = picture('p1', 'beach.jpg')
 const cake = picture('p2', 'cake.png')
 const dog = picture('p3', 'dog.webp')
+const letterShare = picture('d1', 'letter.pdf')
 const arrived: TransferDto = {
   id: 't1',
   name: 'from grandma.jpg',
@@ -51,7 +52,7 @@ describe('the picture viewer', () => {
   })
 
   it('moves between the pictures in the order the screen shows them, by arrow keys and buttons, skipping other files', async () => {
-    const { user } = setup({ shares: [beach, video, cake, dog] })
+    const { user } = setup({ shares: [beach, letterShare, cake, dog] })
 
     const viewer = await openPicture(user, cake.name)
     expect(await shown(viewer)).toHaveAttribute('alt', cake.name)
@@ -135,17 +136,112 @@ describe('the picture viewer', () => {
     expect(bridge.openedReceived).toEqual([])
   })
 
-  it('leaves other files to the app that opens them, and offers no viewer for a shared video yet', async () => {
-    const document: TransferDto = { ...arrived, id: 't2', name: 'letter.pdf' }
-    const { bridge, user } = setup({ shares: [video], transfers: [document] })
+  it('leaves other files to the app that opens them, and offers no viewer for a shared one', async () => {
+    const letter: TransferDto = { ...arrived, id: 't2', name: 'letter.pdf' }
+    const { bridge, user } = setup({ shares: [letterShare], transfers: [letter] })
 
-    const shareDetails = await openDetails(user, video.name)
+    const shareDetails = await openDetails(user, letterShare.name)
     expect(within(shareDetails).queryByRole('button', { name: en['received.open'] })).not.toBeInTheDocument()
     await user.click(within(shareDetails).getByRole('button', { name: en['details.close'] }))
 
     await goToReceived(user)
-    const details = await openDetails(user, document.name!)
+    const details = await openDetails(user, letter.name!)
     await user.click(within(details).getByRole('button', { name: en['received.open'] }))
     expect(bridge.openedReceived).toEqual(['t2'])
+  })
+})
+
+describe('the song and video player', () => {
+  const song = picture('m1', 'our song.mp3')
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  /** jsdom cannot play; these stand in for the web view's player. */
+  function fakePlayback() {
+    const played = vi.spyOn(HTMLMediaElement.prototype, 'play').mockImplementation(function (this: HTMLMediaElement) {
+      Object.defineProperty(this, 'paused', { value: false, configurable: true })
+      return Promise.resolve()
+    })
+    const paused = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(function (this: HTMLMediaElement) {
+      Object.defineProperty(this, 'paused', { value: true, configurable: true })
+    })
+    return { played, paused }
+  }
+
+  it('plays a shared video with the usual controls from the address the app gives', async () => {
+    fakePlayback()
+    const { user } = setup({ shares: [video] })
+
+    const viewer = await openPicture(user, video.name)
+
+    const player = await within(viewer).findByLabelText(video.name, { selector: 'video' })
+    expect(player).toHaveAttribute('controls')
+    expect(player.getAttribute('src')).toMatch(/^https:\/\/media\.comparta\.invalid\/[0-9a-f]{32}$/)
+    expect(within(viewer).queryByRole('button', { name: en['viewer.zoomIn'] })).not.toBeInTheDocument()
+  })
+
+  it('plays and pauses with Space, goes back and forward with the arrows, and turns the sound off with M', async () => {
+    const { played, paused } = fakePlayback()
+    const { user } = setup({ shares: [song] })
+    const viewer = await openPicture(user, song.name)
+    const player = (await within(viewer).findByLabelText(song.name, { selector: 'audio' })) as HTMLAudioElement
+    Object.defineProperty(player, 'duration', { value: 60, configurable: true })
+    Object.defineProperty(player, 'paused', { value: true, configurable: true })
+    let time = 0
+    Object.defineProperty(player, 'currentTime', { get: () => time, set: (value: number) => (time = value), configurable: true })
+    within(viewer).getByRole('button', { name: en['viewer.close'] }).focus()
+
+    await user.keyboard(' ')
+    expect(played).toHaveBeenCalledTimes(1)
+    await user.keyboard(' ')
+    expect(paused).toHaveBeenCalledTimes(1)
+
+    await user.keyboard('{ArrowRight}{ArrowRight}')
+    expect(time).toBe(2 * seekSeconds)
+    await user.keyboard('{ArrowLeft}{ArrowLeft}{ArrowLeft}')
+    expect(time).toBe(0)
+    time = 58
+    await user.keyboard('{ArrowRight}')
+    expect(time).toBe(60)
+
+    await user.keyboard('m')
+    expect(player.muted).toBe(true)
+    await user.keyboard('M')
+    expect(player.muted).toBe(false)
+  })
+
+  it('stops playing when the viewer closes or moves to another file', async () => {
+    const { paused } = fakePlayback()
+    const { user } = setup({ shares: [song, video] })
+    const viewer = await openPicture(user, video.name)
+    await within(viewer).findByLabelText(video.name, { selector: 'video' })
+
+    await user.click(within(viewer).getByRole('button', { name: en['viewer.next'] }))
+    expect(await within(viewer).findByLabelText(song.name, { selector: 'audio' })).toBeInTheDocument()
+    expect(paused).toHaveBeenCalledTimes(1)
+
+    await user.click(within(viewer).getByRole('button', { name: en['viewer.close'] }))
+    expect(paused).toHaveBeenCalledTimes(2)
+  })
+
+  it('fills the screen with a video on F, and a song does not try', async () => {
+    fakePlayback()
+    const fullscreen = vi.fn(() => Promise.resolve())
+    HTMLElement.prototype.requestFullscreen = fullscreen
+    const { user } = setup({ shares: [song, video] })
+    const viewer = await openPicture(user, video.name)
+    await within(viewer).findByLabelText(video.name, { selector: 'video' })
+    within(viewer).getByRole('button', { name: en['viewer.close'] }).focus()
+
+    await user.keyboard('f')
+    expect(fullscreen).toHaveBeenCalledTimes(1)
+
+    await user.keyboard('{PageDown}')
+    await within(viewer).findByLabelText(song.name, { selector: 'audio' })
+    within(viewer).getByRole('button', { name: en['viewer.close'] }).focus()
+    await user.keyboard('f')
+    expect(fullscreen).toHaveBeenCalledTimes(1)
   })
 })

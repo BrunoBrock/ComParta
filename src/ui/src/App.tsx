@@ -19,7 +19,7 @@ import HelpDialog from './components/HelpDialog.tsx'
 import type { ItemSpeed, ViewMode } from './components/ItemView.tsx'
 import { shareToggle, transferToggle } from './components/itemToggles.ts'
 import Notice from './components/Notice.tsx'
-import PictureViewer, { type ViewedItem } from './components/PictureViewer.tsx'
+import MediaViewer, { type ViewedItem } from './components/MediaViewer.tsx'
 import Rail, { type Section } from './components/Rail.tsx'
 import ReceiveDialog from './components/ReceiveDialog.tsx'
 import SendSteps from './components/SendSteps.tsx'
@@ -100,7 +100,7 @@ export default function App({ bridge }: AppProps) {
   const [opened, setOpened] = useState<'help' | 'settings' | null>(null)
   const [activity, setActivity] = useState<ActivityDto | null>(null)
   const [details, setDetails] = useState<DetailsOf | null>(null)
-  const [viewing, setViewing] = useState<{ pictures: ViewedItem[]; start: number } | null>(null)
+  const [viewing, setViewing] = useState<{ items: ViewedItem[]; start: number } | null>(null)
   const [stuck, setStuck] = useState<ReadonlySet<string>>(() => new Set())
   // When this screen first saw each transfer waiting for the other computer.
   const waitingSince = useRef(new Map<string, number>())
@@ -111,9 +111,9 @@ export default function App({ bridge }: AppProps) {
   const clearNotice = useCallback(() => setNotice(null), [])
   const clearSearch = useCallback(() => setQuery(''), [])
 
-  // The pictures the viewer moves between: those in the same section that can be opened, in the
-  // order the section shows them (epic 18 story 2).
-  function viewablePictures(kind: 'share' | 'transfer'): ViewedItem[] {
+  // The files the viewer moves between: the pictures, songs and videos in the same section that
+  // can be opened, in the order the section shows them (epic 18 stories 2 and 3).
+  function viewable(kind: 'share' | 'transfer'): ViewedItem[] {
     const items =
       kind === 'share'
         ? inOrder(shares ?? [], sort, (s) => s.name, (s) => s.sizeBytes)
@@ -122,14 +122,14 @@ export default function App({ bridge }: AppProps) {
         : inOrder(transfers ?? [], sort, (tr) => tr.name ?? '', (tr) => tr.sizeBytes)
             .filter((tr) => tr.state === 'done' && tr.name)
             .map((tr) => ({ kind, id: tr.id, name: tr.name ?? '' }))
-    return items.filter((item) => playableKind(item.name) === 'picture')
+    return items.filter((item) => playableKind(item.name) !== null)
   }
 
-  const canView = (item: DetailsOf) => viewablePictures(item.kind).some((picture) => picture.id === item.id)
+  const canView = (item: DetailsOf) => viewable(item.kind).some((file) => file.id === item.id)
 
   function openViewer(item: DetailsOf) {
-    const pictures = viewablePictures(item.kind)
-    setViewing({ pictures, start: Math.max(0, pictures.findIndex((picture) => picture.id === item.id)) })
+    const items = viewable(item.kind)
+    setViewing({ items, start: Math.max(0, items.findIndex((file) => file.id === item.id)) })
   }
 
   // Each guided send that shared a file counts; opting out ends them at once.
@@ -599,9 +599,9 @@ export default function App({ bridge }: AppProps) {
       )}
 
       {viewing && (
-        <PictureViewer
+        <MediaViewer
           bridge={bridge}
-          pictures={viewing.pictures}
+          items={viewing.items}
           start={viewing.start}
           onClose={() => setViewing(null)}
           onError={showError}
