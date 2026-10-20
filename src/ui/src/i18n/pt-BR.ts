@@ -53,6 +53,37 @@ export const ptBR: Catalog = {
   'help.invite': 'Copie o convite e envie para a pessoa pelo WhatsApp ou por e-mail.',
   'help.receive': 'A pessoa abre o convite no ComParta e o arquivo vem direto do seu computador. Deixe o ComParta aberto até ele chegar.',
   'help.close': 'Fechar',
+  'help.questions': 'Perguntas',
+  'help.q.what': 'O que o ComParta faz?',
+  'help.a.what':
+    'Ele envia arquivos direto do seu computador para as pessoas que você escolher. Não tem conta nem nuvem: o arquivo vai do seu computador para o delas.',
+  'help.q.needsApp': 'A outra pessoa precisa ter o ComParta?',
+  'help.a.needsApp':
+    'É mais fácil quando ela tem. Ela também pode usar outro app que baixa arquivos: abra os detalhes do arquivo e escolha “Copiar link para outros apps”.',
+  'help.q.where': 'Para onde vão os arquivos que eu recebo?',
+  'help.a.where':
+    'Para a pasta ComParta dentro da sua pasta Downloads. Escolha “Mostrar na pasta” em um arquivo recebido para vê-lo lá.',
+  'help.q.copied': 'Meu arquivo é copiado ou movido quando eu compartilho?',
+  'help.a.copied':
+    'Nenhum dos dois. Ele continua onde está, e o ComParta lê dali enquanto você compartilha. Não mova nem renomeie o arquivo enquanto ele estiver compartilhado.',
+  'help.q.looking': 'Por que aparece “Procurando o outro computador”?',
+  'help.a.looking':
+    'O ComParta está tentando alcançar o computador da outra pessoa. Os dois computadores precisam estar ligados, com o ComParta aberto e na internet. Ele continua tentando sozinho; a ajuda de conexão abaixo explica o que mais pode atrapalhar.',
+  'help.q.howLong': 'Quanto tempo demora?',
+  'help.a.howLong':
+    'Depende do tamanho do arquivo e da internet dos dois lados. Enquanto o arquivo chega, o ComParta mostra quanto falta e mais ou menos quanto tempo. Deixe os dois computadores ligados até terminar.',
+  'help.q.safe': 'É seguro?',
+  'help.a.safe':
+    'O arquivo vai direto entre os dois computadores e é embaralhado no caminho, para que outras pessoas na rede não consigam ler. O ComParta nunca abre um programa sozinho. Só abra arquivos de pessoas que você conhece.',
+  'help.q.strangers': 'Estranhos podem encontrar meus arquivos?',
+  'help.a.strangers':
+    'O ComParta não mostra seus arquivos para ninguém, e o outro computador é encontrado pelo convite. Quem receber o convite, por exemplo se ele for encaminhado, pode baixar o arquivo enquanto você compartilha. Para se encontrarem, os computadores também usam uma lista pública que muitos apps de compartilhamento usam, onde um arquivo aparece com um código feito a partir do conteúdo, nunca com o nome. Alguém olhando essa lista poderia encontrar e baixar o arquivo: improvável, mas possível. Compartilhe só arquivos com que você se sinta à vontade, e pare de compartilhar quando todos já tiverem recebido.',
+  'help.q.stop': 'Como paro de compartilhar um arquivo?',
+  'help.a.stop':
+    'Escolha “Parar de compartilhar” no arquivo. O arquivo continua no seu computador; só que os outros não conseguem mais baixá-lo de você. Para parar tudo por um tempo, use “Parar” na barra de cima.',
+  'help.q.getHelp': 'Como consigo ajuda?',
+  'help.a.getHelp':
+    'Peça para quem costuma ajudar você com o computador. A ajuda de conexão mostra se os outros conseguem alcançar este computador e o que tentar.',
 
   'shares.heading': 'Compartilhados por mim',
   'shares.add': 'Compartilhar um arquivo',

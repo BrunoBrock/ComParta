@@ -52,6 +52,37 @@ export const en = {
   'help.invite': 'Copy the invite and send it to the person in WhatsApp or an email.',
   'help.receive': 'They open the invite in ComParta and the file comes straight from your computer. Keep ComParta open until it arrives.',
   'help.close': 'Close',
+  'help.questions': 'Questions',
+  'help.q.what': 'What does ComParta do?',
+  'help.a.what':
+    'It sends files straight from your computer to the people you choose. There is no account and no cloud: the file goes from your computer to theirs.',
+  'help.q.needsApp': 'Does the other person need ComParta?',
+  'help.a.needsApp':
+    'It is easiest when they have it. They can also use another app that downloads files: open the file’s details and choose “Copy link for other apps”.',
+  'help.q.where': 'Where do the files I receive go?',
+  'help.a.where':
+    'To the ComParta folder inside your Downloads folder. Choose “Show in folder” on a received file to see it there.',
+  'help.q.copied': 'Is my file copied or moved when I share it?',
+  'help.a.copied':
+    'Neither. It stays where it is, and ComParta reads it from there while you share it. Do not move or rename it while it is shared.',
+  'help.q.looking': 'Why does it say “Looking for the other computer”?',
+  'help.a.looking':
+    'ComParta is trying to reach the other person’s computer. Both computers must be on, with ComParta open and on the internet. It keeps trying by itself; the connection help below explains what else can stop it.',
+  'help.q.howLong': 'How long does it take?',
+  'help.a.howLong':
+    'It depends on the size of the file and on both internet connections. While a file arrives, ComParta shows how much is left and roughly how long. Keep both computers on until it is done.',
+  'help.q.safe': 'Is it safe?',
+  'help.a.safe':
+    'The file goes straight between the two computers and is scrambled on the way, so others on the network cannot read it. ComParta never runs a program by itself. Only open files from people you know.',
+  'help.q.strangers': 'Can strangers find my files?',
+  'help.a.strangers':
+    'ComParta shows your files to no one, and the other computer is found with the invite. Anyone who gets the invite, for example if it is forwarded, can get the file while you share it. To find each other, computers also use a public list that many file-sharing apps use, where a shared file appears under a code made from its content, never under its name. Someone watching that list could find and download it: unlikely, but possible. Share only files you would be comfortable with, and stop sharing when everyone has them.',
+  'help.q.stop': 'How do I stop sharing a file?',
+  'help.a.stop':
+    'Choose “Stop sharing” on the file. The file stays on your computer; others just cannot get it from you any more. To stop everything for a while, use “Stop” on the bar at the top.',
+  'help.q.getHelp': 'How do I get help?',
+  'help.a.getHelp':
+    'Ask the person who usually helps you with the computer. The connection help shows whether others can reach this computer and what to try.',
 
   'shares.heading': 'Shared by me',
   'shares.add': 'Share a file',

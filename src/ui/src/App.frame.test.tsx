@@ -14,7 +14,7 @@ describe('the frame around the files', () => {
 
     await user.click(within(header()).getByRole('button', { name: en['nav.help'] }))
     const help = screen.getByRole('dialog', { name: en['help.title'] })
-    expect(within(help).getAllByRole('listitem')).toHaveLength(3)
+    expect(within(within(help).getByRole('list')).getAllByRole('listitem')).toHaveLength(3)
     expect(await accessibilityProblems()).toEqual([])
     await user.click(within(help).getByRole('button', { name: en['help.close'] }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()

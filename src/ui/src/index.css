@@ -893,6 +893,28 @@ dialog textarea {
   margin-top: var(--space);
 }
 
+/* Long enough to scroll on small windows; each answer opens under its question. */
+dialog.help {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+.help-questions details {
+  border-top: 1px solid var(--color-border);
+  padding: var(--space) 0;
+}
+
+.help-questions summary {
+  min-height: 32px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.help-questions p {
+  margin: var(--space) 0 0;
+  color: var(--color-text-muted);
+}
+
 /* The floating ＋ appears only on narrow windows (UX design, Phone). */
 .fab {
   display: none;
