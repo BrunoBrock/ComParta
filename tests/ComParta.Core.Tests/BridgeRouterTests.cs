@@ -445,6 +445,40 @@ public sealed class BridgeRouterTests
     }
 
     [Fact]
+    public async Task Your_name_and_colors_are_stored_and_odd_ones_refused()
+    {
+        var value = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.Equal(JsonValueKind.Null, value.GetProperty("yourName").ValueKind);
+        Assert.Equal(JsonValueKind.Null, value.GetProperty("theme").ValueKind);
+
+        Assert.True((await InvokeAsync(Commands.SettingsSet, new { yourName = "  Ana Maria ", theme = "dark" })).GetProperty("ok").GetBoolean());
+
+        value = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.Equal(("Ana Maria", "dark"), (value.GetProperty("yourName").GetString(), value.GetProperty("theme").GetString()));
+        foreach (var odd in new object[]
+        {
+            new { yourName = new string('a', SettingsUseCases.MaxNameLength + 1) },
+            new { yourName = "line\nbreak" },
+            new { theme = "blue" },
+        })
+            Assert.Equal(ErrorCodes.SettingsInvalid, ErrorCode(await InvokeAsync(Commands.SettingsSet, odd)));
+        Assert.Equal("Ana Maria", (await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("yourName").GetString());
+
+        // A blank name is no name: invites say "Someone" again.
+        Assert.True((await InvokeAsync(Commands.SettingsSet, new { yourName = "   " })).GetProperty("ok").GetBoolean());
+        value = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.Equal(JsonValueKind.Null, value.GetProperty("yourName").ValueKind);
+        Assert.Equal(JsonValueKind.Null, value.GetProperty("theme").ValueKind);
+    }
+
+    [Fact]
+    public async Task The_settings_say_which_version_this_is()
+    {
+        var settings = new SettingsUseCases(new FakeSettingsRepository(), new FakeSystem("en", "1.4.2"));
+        Assert.Equal("1.4.2", (await settings.GetAsync()).Version);
+    }
+
+    [Fact]
     public async Task Start_with_Windows_is_off_by_default_and_stored_when_chosen()
     {
         Assert.False((await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("startWithWindows").GetBoolean());

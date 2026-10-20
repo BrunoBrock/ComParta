@@ -72,6 +72,9 @@ export interface SettingsDto {
   publicServers: string[];
   helperAddress: string | null;
   helperKey: string | null;
+  yourName: string | null;
+  theme: string | null;
+  version: string;
 }
 
 export interface SetSettingsArgs {
@@ -83,6 +86,8 @@ export interface SetSettingsArgs {
   publicServers: string[] | null;
   helperAddress: string | null;
   helperKey: string | null;
+  yourName: string | null;
+  theme: string | null;
 }
 
 export interface ConnectionDto {

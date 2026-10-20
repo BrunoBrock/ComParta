@@ -184,9 +184,12 @@ public sealed record InvitePreviewDto(
 /// <param name="PublicServers">Addresses of public servers that help others find what is shared; empty for none.</param>
 /// <param name="HelperAddress">Where the helper computer takes files; null for none.</param>
 /// <param name="HelperKey">The helper computer's key; null for none.</param>
+/// <param name="YourName">The name others see in invites; null until the person gives one.</param>
+/// <param name="Theme">"light" or "dark", or null to follow the system.</param>
+/// <param name="Version">The app's version, for About.</param>
 public sealed record SettingsDto(
     string? Language, string SystemLanguage, string? View, string? Sort, int SendStepsSeen, bool StartWithWindows, string[] PublicServers,
-    string? HelperAddress, string? HelperKey);
+    string? HelperAddress, string? HelperKey, string? YourName, string? Theme, string Version);
 
 /// <summary>Every choice at once; the UI sends what it has, with the one it changed.</summary>
 /// <param name="Language">A language tag, or null to follow the system again.</param>
@@ -195,7 +198,7 @@ public sealed record SettingsDto(
 /// <param name="HelperKey">The helper computer's key; null or empty for none.</param>
 public sealed record SetSettingsArgs(
     string? Language, string? View, string? Sort, int? SendStepsSeen, bool? StartWithWindows, string[]? PublicServers,
-    string? HelperAddress = null, string? HelperKey = null);
+    string? HelperAddress = null, string? HelperKey = null, string? YourName = null, string? Theme = null);
 
 /// <param name="Force">True once the person confirmed quitting although files are moving.</param>
 public sealed record QuitArgs(bool Force);

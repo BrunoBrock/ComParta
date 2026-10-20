@@ -5,6 +5,11 @@ import { maxPublicServers, readPublicServers } from '../publicServers.ts'
 import Button from './ui/Button.tsx'
 import Dialog from './ui/Dialog.tsx'
 
+export type Theme = 'system' | 'light' | 'dark'
+const themes: readonly Theme[] = ['system', 'light', 'dark']
+/** As core's MaxNameLength: the name has to fit in an invite message. */
+export const maxNameLength = 40
+
 interface SettingsDialogProps {
   language: Language
   onLanguage: (language: Language) => void
@@ -17,13 +22,22 @@ interface SettingsDialogProps {
   helperKey: string | null
   /** Saves the helper computer, or turns it off with null; true once it is stored. */
   onHelper: (helper: { address: string; key: string } | null) => Promise<boolean>
+  yourName: string
+  /** Saves the name others see in invites; true once it is stored. */
+  onYourName: (name: string) => Promise<boolean>
+  theme: Theme
+  onTheme: (theme: Theme) => void
+  /** The step-by-step help runs when the person shares a file. */
+  guidedSend: boolean
+  onGuidedSend: (on: boolean) => void
+  version: string
   onClose: () => void
 }
 
 /**
- * The settings there are so far: the language, start with Windows, the public servers that help
- * others find shared files and the helper computer that passes them on (AD-23). Epic 12 adds the
- * rest (UX design, Settings).
+ * The Settings page (epic 12 story 1, UX design, Settings): your name, the language, the theme,
+ * start with Windows, the guided send, the public servers that help others find shared files, the
+ * helper computer that passes them on (AD-23) and About.
  */
 export default function SettingsDialog({
   language,
@@ -35,8 +49,17 @@ export default function SettingsDialog({
   helperAddress,
   helperKey,
   onHelper,
+  yourName,
+  onYourName,
+  theme,
+  onTheme,
+  guidedSend,
+  onGuidedSend,
+  version,
   onClose,
 }: SettingsDialogProps) {
+  const [name, setName] = useState(yourName)
+  const [nameProblem, setNameProblem] = useState(false)
   const [address, setAddress] = useState(helperAddress ?? '')
   const [key, setKey] = useState(helperKey ?? '')
   const [helperProblem, setHelperProblem] = useState(false)
@@ -49,6 +72,14 @@ export default function SettingsDialog({
     if ('tooMany' in read) return setProblem(t('settings.serversTooMany', { count: maxPublicServers }))
     setProblem(null)
     if (await onPublicServers(read.servers)) setServers(read.servers.join('\n'))
+  }
+
+  async function saveName() {
+    // As core: control characters are refused; the length is kept by the field itself.
+    // eslint-disable-next-line no-control-regex
+    if (/[\u0000-\u001f\u007f-\u009f]/.test(name) || name.trim().length > maxNameLength) return setNameProblem(true)
+    setNameProblem(false)
+    if (await onYourName(name)) setName(name.trim())
   }
 
   async function saveHelper() {
@@ -64,6 +95,32 @@ export default function SettingsDialog({
   return (
     <Dialog labelledBy="settings-title" onClose={onClose}>
       <h2 id="settings-title">{t('settings.title')}</h2>
+      <label htmlFor="settings-name">{t('settings.name')}</label>
+      <div className="settings-row">
+        <input
+          id="settings-name"
+          type="text"
+          autoComplete="name"
+          maxLength={maxNameLength}
+          value={name}
+          placeholder={t('invite.someone')}
+          aria-describedby="settings-name-hint"
+          aria-invalid={nameProblem}
+          onChange={(event) => setName(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') void saveName()
+          }}
+        />
+        <Button onClick={() => void saveName()}>{t('settings.nameSave')}</Button>
+      </div>
+      <p id="settings-name-hint" className="hint">
+        {t('settings.nameHint')}
+      </p>
+      {nameProblem && (
+        <p role="alert" className="settings-problem">
+          {t('settings.nameInvalid')}
+        </p>
+      )}
       <label htmlFor="settings-language">{t('language.label')}</label>
       <select
         id="settings-language"
@@ -81,6 +138,21 @@ export default function SettingsDialog({
       <p id="settings-language-hint" className="hint">
         {t('settings.languageHint')}
       </p>
+      <fieldset className="settings-theme">
+        <legend>{t('settings.theme')}</legend>
+        {themes.map((option) => (
+          <label key={option} className="settings-check">
+            <input
+              type="radio"
+              name="settings-theme"
+              value={option}
+              checked={theme === option}
+              onChange={() => onTheme(option)}
+            />
+            {t(`settings.theme.${option}`)}
+          </label>
+        ))}
+      </fieldset>
       <label className="settings-check">
         <input
           type="checkbox"
@@ -92,6 +164,18 @@ export default function SettingsDialog({
       </label>
       <p id="settings-start-hint" className="hint">
         {t('settings.startWithWindowsHint')}
+      </p>
+      <label className="settings-check">
+        <input
+          type="checkbox"
+          checked={guidedSend}
+          aria-describedby="settings-guided-hint"
+          onChange={(event) => onGuidedSend(event.target.checked)}
+        />
+        {t('settings.guidedSend')}
+      </label>
+      <p id="settings-guided-hint" className="hint">
+        {t('settings.guidedSendHint')}
       </p>
       <label htmlFor="settings-servers">{t('settings.servers')}</label>
       <textarea
@@ -144,6 +228,11 @@ export default function SettingsDialog({
         )}
         <Button onClick={() => void saveHelper()}>{t('settings.helperSave')}</Button>
       </fieldset>
+      <section className="settings-about" aria-labelledby="settings-about-title">
+        <h3 id="settings-about-title">{t('settings.about')}</h3>
+        {version && <p>{t('settings.version', { version })}</p>}
+        <p>{t('settings.openSource')}</p>
+      </section>
       <div className="dialog-actions">
         <Button onClick={onClose} autoFocus>
           {t('settings.close')}

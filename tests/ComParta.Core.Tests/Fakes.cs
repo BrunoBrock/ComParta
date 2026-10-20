@@ -293,9 +293,10 @@ internal sealed class FakeSettingsRepository : ISettingsRepository
     }
 }
 
-internal sealed class FakeSystem(string uiLanguage) : ISystemInfo
+internal sealed class FakeSystem(string uiLanguage, string appVersion = "") : ISystemInfo
 {
     public string UiLanguage { get; } = uiLanguage;
+    public string AppVersion { get; } = appVersion;
 }
 
 internal sealed class FakeFirewall : IFirewall

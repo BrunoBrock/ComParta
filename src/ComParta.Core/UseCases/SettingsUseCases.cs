@@ -15,14 +15,18 @@ namespace ComParta.Core.UseCases;
 /// </param>
 /// <param name="HelperAddress">Where the helper computer the person named takes files (AD-23); null for none.</param>
 /// <param name="HelperKey">The helper's key, set exactly when <paramref name="HelperAddress"/> is.</param>
+/// <param name="YourName">The name others see in invites from this computer; null until the person gives one.</param>
+/// <param name="Theme">"light" or "dark", or null to follow the system.</param>
+/// <param name="Version">The app's version, for the About section.</param>
 public sealed record Settings(
     string? Language, string SystemLanguage, string? View = null, string? Sort = null, int SendStepsSeen = 0, bool StartWithWindows = false,
-    IReadOnlyList<string>? PublicServers = null, string? HelperAddress = null, string? HelperKey = null)
+    IReadOnlyList<string>? PublicServers = null, string? HelperAddress = null, string? HelperKey = null, string? YourName = null,
+    string? Theme = null, string Version = "")
 {
     public IReadOnlyList<string> PublicServers { get; init; } = PublicServers ?? [];
 }
 
-/// <summary>The person's choices. Later stories add fields (your name, theme).</summary>
+/// <summary>The person's choices (epic 12, Settings).</summary>
 /// <param name="engine">Told which public servers to use, at start and whenever they change; none in tests that do not need it.</param>
 public sealed partial class SettingsUseCases(ISettingsRepository repository, ISystemInfo system, ITransferEngine? engine = null)
 {
@@ -34,6 +38,12 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
     private const string PublicServersKey = "publicServers";
     private const string HelperAddressKey = "helperAddress";
     private const string HelperKeyKey = "helperKey";
+    private const string YourNameKey = "yourName";
+    private const string ThemeKey = "theme";
+
+    /// <summary>The longest name a person can give; it has to fit in an invite message.</summary>
+    public const int MaxNameLength = 40;
+    private static readonly string[] Themes = ["light", "dark"];
 
     /// <summary>The shortest helper key the helper accepts (its MinimumKeyLength).</summary>
     public const int MinHelperKeyLength = 16;
@@ -65,7 +75,10 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
         await repository.GetAsync(StartWithWindowsKey, ct) == "true",
         ReadServers(await repository.GetAsync(PublicServersKey, ct)),
         await repository.GetAsync(HelperAddressKey, ct),
-        await repository.GetAsync(HelperKeyKey, ct));
+        await repository.GetAsync(HelperKeyKey, ct),
+        await repository.GetAsync(YourNameKey, ct),
+        await repository.GetAsync(ThemeKey, ct),
+        system.AppVersion);
 
     /// <summary>Hands the stored public servers to the engine; call after it starts and before anything is shared.</summary>
     public async Task StartAsync(CancellationToken ct = default)
@@ -84,8 +97,14 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
     /// </summary>
     public async Task<Result> SetAsync(
         string? language, string? view, string? sort, int sendStepsSeen = 0, bool startWithWindows = false,
-        IReadOnlyList<string>? publicServers = null, string? helperAddress = null, string? helperKey = null, CancellationToken ct = default)
+        IReadOnlyList<string>? publicServers = null, string? helperAddress = null, string? helperKey = null,
+        string? yourName = null, string? theme = null, CancellationToken ct = default)
     {
+        yourName = string.IsNullOrWhiteSpace(yourName) ? null : yourName.Trim();
+        if (yourName is not null && (yourName.Length > MaxNameLength || yourName.Any(char.IsControl)))
+            return Result.Fail(ErrorKind.SettingsInvalid);
+        if (theme is not null && !Themes.Contains(theme))
+            return Result.Fail(ErrorKind.SettingsInvalid);
         if (language is not null && (language.Length > 35 || !LanguageTag().IsMatch(language)))
             return Result.Fail(ErrorKind.SettingsInvalid);
         if ((view is not null && !Views.Contains(view)) || (sort is not null && !Sorts.Contains(sort)))
@@ -109,6 +128,8 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
         await repository.SetAsync(PublicServersKey, servers.Count == 0 ? null : string.Join('\n', servers), ct);
         await repository.SetAsync(HelperAddressKey, helperAddress, ct);
         await repository.SetAsync(HelperKeyKey, helperKey, ct);
+        await repository.SetAsync(YourNameKey, yourName, ct);
+        await repository.SetAsync(ThemeKey, theme, ct);
         if (engine is not null && !servers.SequenceEqual(serversBefore))
             await engine.SetPublicServersAsync(ToUris(servers), ct);
         if (engine is not null && helper != helperBefore)

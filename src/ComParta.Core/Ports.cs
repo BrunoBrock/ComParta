@@ -28,6 +28,9 @@ public interface ISystemInfo
 {
     /// <summary>The language the operating system shows, as a tag like "pt-BR".</summary>
     string UiLanguage { get; }
+
+    /// <summary>The app's version, as the About section shows it; empty when not known.</summary>
+    string AppVersion => "";
 }
 
 public enum OfferState { Preparing, Ready, Failed }

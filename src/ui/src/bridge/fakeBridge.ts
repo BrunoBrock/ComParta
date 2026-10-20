@@ -60,6 +60,9 @@ export interface FakeBridgeOptions {
   publicServers?: string[]
   /** The helper computer the person named, as the app stored it. */
   helper?: { address: string; key: string }
+  /** The name and colors the person chose in Settings. */
+  yourName?: string
+  theme?: 'light' | 'dark'
 }
 
 export interface FakeBridge extends Bridge {
@@ -311,6 +314,9 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     publicServers: options.publicServers ?? [],
     helperAddress: options.helper?.address ?? null,
     helperKey: options.helper?.key ?? null,
+    yourName: options.yourName ?? null,
+    theme: options.theme ?? null,
+    version: '1.2.0',
   }
   // What quitting would stop: shares someone is getting and files arriving, as the app counts them.
   const moving = () => [
@@ -508,6 +514,13 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       if (!('servers' in read) || entries.some((entry) => entry.includes('\n'))) return fail('settings.invalid')
       const helper = readHelper((args as SetSettingsArgs).helperAddress ?? '', (args as SetSettingsArgs).helperKey ?? '')
       if (!('helper' in helper)) return fail('settings.invalid')
+      // As core: a blank name is none; a long one or one with control characters is refused.
+      const yourName = (args as SetSettingsArgs).yourName?.trim() || null
+      // eslint-disable-next-line no-control-regex
+      if (yourName !== null && (yourName.length > 40 || /[\u0000-\u001f\u007f-\u009f]/.test(yourName)))
+        return fail('settings.invalid')
+      const theme = (args as SetSettingsArgs).theme ?? null
+      if (theme !== null && theme !== 'light' && theme !== 'dark') return fail('settings.invalid')
       const connectionBefore = connectionDto()
       settings = {
         ...settings,
@@ -519,6 +532,8 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
         publicServers: read.servers,
         helperAddress: helper.helper?.address ?? null,
         helperKey: helper.helper?.key ?? null,
+        yourName,
+        theme,
       }
       emit({ event: 'settings.changed', payload: { ...settings } })
       const connectionAfter = connectionDto()

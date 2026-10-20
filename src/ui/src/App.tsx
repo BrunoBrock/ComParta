@@ -24,7 +24,7 @@ import Rail, { type Section } from './components/Rail.tsx'
 import ReceiveDialog from './components/ReceiveDialog.tsx'
 import SendSteps from './components/SendSteps.tsx'
 import QuitDialog from './components/QuitDialog.tsx'
-import SettingsDialog from './components/SettingsDialog.tsx'
+import SettingsDialog, { type Theme } from './components/SettingsDialog.tsx'
 import SharesSection from './components/SharesSection.tsx'
 import SpeedBar from './components/SpeedBar.tsx'
 import TransfersSection from './components/TransfersSection.tsx'
@@ -32,6 +32,7 @@ import IconButton from './components/ui/IconButton.tsx'
 import Toast from './components/ui/Toast.tsx'
 import { errorMessage, getLanguage, type Language, pickLanguage, setLanguage, t } from './i18n/index.ts'
 import { playableKind } from './fileNames.ts'
+import { setSenderName } from './invite.ts'
 import { inOrder, type SortOrder } from './order.ts'
 
 interface AppProps {
@@ -76,7 +77,13 @@ export default function App({ bridge }: AppProps) {
     publicServers: [],
     helperAddress: null,
     helperKey: null,
+    yourName: null,
+    theme: null,
   })
+  const [yourName, setYourName] = useState('')
+  const [theme, setTheme] = useState<Theme>('system')
+  const [version, setVersion] = useState('')
+  const [guidedSend, setGuidedSend] = useState(true)
   const [startWithWindows, setStartWithWindows] = useState(false)
   const [publicServers, setPublicServers] = useState<readonly string[]>([])
   const [helper, setHelper] = useState<{ address: string | null; key: string | null }>({ address: null, key: null })
@@ -167,7 +174,17 @@ export default function App({ bridge }: AppProps) {
         publicServers: stored.publicServers,
         helperAddress: stored.helperAddress,
         helperKey: stored.helperKey,
+        yourName: stored.yourName,
+        theme: stored.theme,
       }
+      setYourName(stored.yourName ?? '')
+      setSenderName(stored.yourName)
+      const shownTheme = stored.theme === 'light' || stored.theme === 'dark' ? stored.theme : 'system'
+      setTheme(shownTheme)
+      if (shownTheme === 'system') delete document.documentElement.dataset.theme
+      else document.documentElement.dataset.theme = shownTheme
+      setVersion(stored.version)
+      setGuidedSend(stored.sendStepsSeen < sendStepsShown)
       setStartWithWindows(stored.startWithWindows)
       setPublicServers(stored.publicServers)
       setHelper({ address: stored.helperAddress, key: stored.helperKey })
@@ -336,6 +353,29 @@ export default function App({ bridge }: AppProps) {
   function chooseStartWithWindows(on: boolean) {
     setStartWithWindows(on)
     void saveSettings({ startWithWindows: on })
+  }
+
+  async function chooseName(name: string) {
+    const before = choices.current
+    choices.current = { ...before, yourName: name.trim() || null }
+    const result = await bridge.invoke('settings.set', choices.current)
+    if (!result.ok) {
+      choices.current = before
+      showError(result.error.code)
+      return false
+    }
+    showInfo(t('settings.nameSaved'))
+    return true
+  }
+
+  function chooseTheme(next: Theme) {
+    void saveSettings({ theme: next === 'system' ? null : next })
+  }
+
+  // On: the guided send runs again for the next sends. Off: Share opens the file dialog at once.
+  function chooseGuidedSend(on: boolean) {
+    setGuidedSend(on)
+    void saveSettings({ sendStepsSeen: on ? 0 : sendStepsShown })
   }
 
   async function choosePublicServers(servers: string[]) {
@@ -638,6 +678,13 @@ export default function App({ bridge }: AppProps) {
           helperAddress={helper.address}
           helperKey={helper.key}
           onHelper={chooseHelper}
+          yourName={yourName}
+          onYourName={chooseName}
+          theme={theme}
+          onTheme={chooseTheme}
+          guidedSend={guidedSend}
+          onGuidedSend={chooseGuidedSend}
+          version={version}
           onClose={() => setOpened(null)}
         />
       )}

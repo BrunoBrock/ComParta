@@ -1618,3 +1618,54 @@ dialog.viewer {
 .viewer-cannot p {
   margin: 0;
 }
+
+/* Your name in Settings: the field and its save button on one line. */
+.settings-row {
+  display: flex;
+  gap: var(--space);
+  align-items: center;
+}
+
+.settings-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--target);
+  padding: var(--space) calc(var(--space) * 1.5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+}
+
+/* The colors: three choices under a heading. */
+.settings-theme {
+  margin: calc(var(--space) * 2) 0 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.settings-theme legend {
+  padding: 0;
+  font-weight: 600;
+}
+
+.settings-theme .settings-check {
+  margin-block-start: 0;
+}
+
+.settings-about {
+  margin-block-start: calc(var(--space) * 3);
+  color: var(--color-text-muted);
+}
+
+.settings-about h3 {
+  margin: 0 0 var(--space);
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+.settings-about p {
+  margin: 0 0 var(--space);
+}
