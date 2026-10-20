@@ -38,6 +38,16 @@ export const ptBR: Catalog = {
   'settings.serversSaved': 'Servidores salvos.',
   'settings.serversInvalid': 'Esta linha não é um endereço de servidor: {line}',
   'settings.serversTooMany': 'Use no máximo {count} servidores.',
+  'settings.helper': 'Computador ajudante',
+  'settings.helperHint':
+    'Opcional. Um computador sempre ligado que todos conseguem acessar. Uma cópia de cada arquivo que você compartilha vai para ele, para que as pessoas recebam seus arquivos mesmo quando não conseguem acessar este computador. Quem cuida dele pode ver essa cópia.',
+  'settings.helperAddress': 'Endereço',
+  'settings.helperKey': 'Chave',
+  'settings.helperSave': 'Salvar ajudante',
+  'settings.helperSaved': 'Ajudante salvo.',
+  'settings.helperOff': 'Ajudante desligado.',
+  'settings.helperInvalid':
+    'Digite o endereço, como https://helper.example.org:6970, e uma chave de pelo menos 16 caracteres, ou deixe os dois vazios.',
   'help.title': 'Como o ComParta funciona',
   'help.share': 'Escolha “Compartilhar um arquivo” e selecione um arquivo deste computador. Ele continua onde está.',
   'help.invite': 'Copie o convite e envie para a pessoa pelo WhatsApp ou por e-mail.',
@@ -195,9 +205,12 @@ export const ptBR: Catalog = {
   'connection.good': 'Outros conseguem chegar a este computador',
   'connection.limited': 'Conexão limitada',
   'connection.blocked': 'Ninguém consegue chegar a este computador',
+  'connection.helper': 'Outros recebem seus arquivos pelo seu ajudante',
   'connection.open': 'Conexão: {state}. O que isso quer dizer?',
   'connection.title': 'Os outros conseguem chegar a este computador?',
   'connection.state.good': 'Sim. Quem recebe seus arquivos consegue chegar a este computador, então eles vão direto.',
+  'connection.state.helper':
+    'Sim. Seu computador ajudante guarda uma cópia do que você compartilha e a repassa, para que as pessoas recebam seus arquivos mesmo quando não conseguem chegar a este computador.',
   'connection.state.limited':
     'Talvez não. Os arquivos chegam mesmo assim quando o outro computador pode ser alcançado, então quase sempre funciona.',
   'connection.state.blocked':

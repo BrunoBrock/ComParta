@@ -56,7 +56,15 @@ describe('public servers in Settings', () => {
 
   it('refuses in the fake bridge what core refuses', async () => {
     const { bridge } = setup()
-    const base = { language: null, view: null, sort: null, sendStepsSeen: 0, startWithWindows: false }
+    const base = {
+      language: null,
+      view: null,
+      sort: null,
+      sendStepsSeen: 0,
+      startWithWindows: false,
+      helperAddress: null,
+      helperKey: null,
+    }
     for (const bad of [
       'ftp://example.org/x',
       'udp://example.org',

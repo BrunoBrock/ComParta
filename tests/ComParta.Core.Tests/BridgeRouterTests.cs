@@ -413,6 +413,84 @@ public sealed class BridgeRouterTests
     }
 
     [Fact]
+    public async Task The_helper_computer_is_stored_checked_and_handed_to_the_engine()
+    {
+        var value = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.Equal(JsonValueKind.Null, value.GetProperty("helperAddress").ValueKind);
+
+        var ok = await InvokeAsync(Commands.SettingsSet, new
+        {
+            language = "en",
+            helperAddress = " https://helper.example.org:6970 ",
+            helperKey = "a-helper-key-for-the-family",
+        });
+
+        Assert.True(ok.GetProperty("ok").GetBoolean());
+        value = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.Equal("https://helper.example.org:6970", value.GetProperty("helperAddress").GetString());
+        Assert.Equal("a-helper-key-for-the-family", value.GetProperty("helperKey").GetString());
+        Assert.Equal(new HelperComputer(new Uri("https://helper.example.org:6970"), "a-helper-key-for-the-family"), _engine.Helper);
+
+        // Changing another choice does not hand the same helper over again.
+        var calls = _engine.HelperCalls;
+        await InvokeAsync(Commands.SettingsSet, new
+        {
+            language = "pt-BR",
+            helperAddress = "https://helper.example.org:6970",
+            helperKey = "a-helper-key-for-the-family",
+        });
+        Assert.Equal(calls, _engine.HelperCalls);
+
+        foreach (var (address, key) in new (string?, string?)[]
+        {
+            ("https://helper.example.org:6970", null),
+            (null, "a-helper-key-for-the-family"),
+            ("https://helper.example.org:6970", "too-short"),
+            ("https://helper.example.org:6970", "a key with spaces in it"),
+            ("ftp://helper.example.org", "a-helper-key-for-the-family"),
+            ("https://user:secret@helper.example.org", "a-helper-key-for-the-family"),
+            ("helper.example.org", "a-helper-key-for-the-family"),
+        })
+        {
+            Assert.Equal(ErrorCodes.SettingsInvalid,
+                ErrorCode(await InvokeAsync(Commands.SettingsSet, new { helperAddress = address, helperKey = key })));
+        }
+        Assert.NotNull(_engine.Helper);
+
+        // Both left out turns the helper off.
+        Assert.True((await InvokeAsync(Commands.SettingsSet, new { language = "en" })).GetProperty("ok").GetBoolean());
+        Assert.Null(_engine.Helper);
+    }
+
+    [Fact]
+    public async Task A_stored_helper_reaches_the_engine_at_start()
+    {
+        await new SettingsUseCases(_settings, new FakeSystem("en"))
+            .SetAsync(null, null, null, helperAddress: "http://203.0.113.7:6970", helperKey: "a-helper-key-for-the-family");
+        var engine = new FakeEngine();
+
+        await new SettingsUseCases(_settings, new FakeSystem("en"), engine).StartAsync();
+
+        Assert.Equal(new HelperComputer(new Uri("http://203.0.113.7:6970"), "a-helper-key-for-the-family"), engine.Helper);
+    }
+
+    [Fact]
+    public void The_connection_says_when_others_get_the_files_through_the_helper()
+    {
+        var blocked = new ReachabilityFacts(true, false, PortMappingState.Refused, null, null, false, false, false);
+
+        _engine.Report(blocked);
+        _engine.Report(blocked with { ReachableThroughHelper = true });
+        _engine.Report(blocked);
+
+        var payloads = _events
+            .Where(e => e.GetProperty("event").GetString() == Events.ConnectionChanged)
+            .Select(e => (e.GetProperty("payload").GetProperty("health").GetString(), e.GetProperty("payload").GetProperty("throughHelper").GetBoolean()))
+            .ToList();
+        Assert.Equal([("blocked", false), ("good", true), ("blocked", false)], payloads);
+    }
+
+    [Fact]
     public async Task Stored_public_servers_reach_the_engine_at_start()
     {
         await new SettingsUseCases(_settings, new FakeSystem("en")).SetAsync(null, null, null, publicServers: ["udp://open.example.org:6969"]);

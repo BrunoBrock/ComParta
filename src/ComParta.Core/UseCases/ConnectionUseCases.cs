@@ -13,6 +13,7 @@ public sealed class ConnectionUseCases
     private readonly object _gate = new();
     private ReachabilityFacts? _facts;
     private ConnectionHealth? _health;
+    private bool _throughHelper;
 
     public ConnectionUseCases(ITransferEngine engine, IFirewall? firewall = null)
     {
@@ -28,6 +29,13 @@ public sealed class ConnectionUseCases
     {
         lock (_gate)
             return _health;
+    }
+
+    /// <summary>Whether others get the files through the helper computer (AD-23), as last worked out.</summary>
+    public bool ThroughHelper()
+    {
+        lock (_gate)
+            return _throughHelper;
     }
 
     /// <summary>
@@ -53,6 +61,9 @@ public sealed class ConnectionUseCases
     /// </summary>
     public static ConnectionHealth? Reduce(ReachabilityFacts facts, bool? firewallAllows = null)
     {
+        // The helper is reached by connecting out, so neither the router nor the firewall matters (AD-15, amended).
+        if (facts.ReachableThroughHelper)
+            return ConnectionHealth.Good;
         if (!facts.Listening && !facts.ListenPortBusy)
             return null;
         if (facts.ListenPortBusy || firewallAllows == false)
@@ -83,9 +94,10 @@ public sealed class ConnectionUseCases
         var health = Reduce(facts, AskFirewall());
         lock (_gate)
         {
-            if (_health == health)
+            if (_health == health && _throughHelper == facts.ReachableThroughHelper)
                 return health;
             _health = health;
+            _throughHelper = facts.ReachableThroughHelper;
         }
         Changed?.Invoke();
         return health;

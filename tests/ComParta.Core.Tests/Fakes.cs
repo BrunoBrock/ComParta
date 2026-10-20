@@ -109,6 +109,16 @@ internal sealed class FakeEngine : ITransferEngine
         return Task.CompletedTask;
     }
 
+    public HelperComputer? Helper { get; private set; }
+    public int HelperCalls { get; private set; }
+
+    public Task SetHelperAsync(HelperComputer? helper, CancellationToken ct = default)
+    {
+        Helper = helper;
+        HelperCalls++;
+        return Task.CompletedTask;
+    }
+
     public Task<string?> GetInviteAsync(ShareId id, CancellationToken ct = default) =>
         Task.FromResult(Offered.ContainsKey(id) ? InvitePrefix + id : null);
 
