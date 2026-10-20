@@ -15,9 +15,19 @@ Import-Certificate -FilePath (Join-Path $PackageDir 'ComParta-test.cer') -CertSt
 Write-Host "== Leave pilot data behind" -ForegroundColor Cyan
 $pilot = Join-Path $env:LOCALAPPDATA 'ComParta'
 New-Item -ItemType Directory -Force (Join-Path $pilot 'engine') | Out-Null
-# A port free on this machine, as the pilot would have kept; Windows reserves some ranges.
-$probe = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, 0)
-$probe.Start(); $pilotPort = "$($probe.LocalEndpoint.Port)"; $probe.Stop()
+# A port free on this machine, as the pilot would have kept. Below Windows' range for outgoing
+# connections, which could take it in the meantime; Windows also reserves some ranges, so try a few.
+$pilotPort = $null
+foreach ($candidate in Get-Random -Minimum 20000 -Maximum 40000 -Count 20) {
+    try {
+        $probe = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, $candidate)
+        $probe.Start(); $probe.Stop()
+        $pilotPort = "$candidate"
+        break
+    }
+    catch { }
+}
+if (-not $pilotPort) { throw 'No free port for the pilot data.' }
 Set-Content -NoNewline (Join-Path $pilot 'engine\port.txt') $pilotPort
 $pilotDatabase = Join-Path $pilot 'comparta.db'
 python (Join-Path $PSScriptRoot 'pilot_db.py') make $pilotDatabase
