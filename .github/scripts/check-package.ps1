@@ -29,6 +29,7 @@ foreach ($candidate in Get-Random -Minimum 20000 -Maximum 40000 -Count 20) {
 }
 if (-not $pilotPort) { throw 'No free port for the pilot data.' }
 Set-Content -NoNewline (Join-Path $pilot 'engine\port.txt') $pilotPort
+Get-ChildItem -Recurse -Force $pilot | ForEach-Object { Write-Host "pilot after writing: $($_.FullName)" }
 $pilotDatabase = Join-Path $pilot 'comparta.db'
 python (Join-Path $PSScriptRoot 'pilot_db.py') make $pilotDatabase
 if ($LASTEXITCODE -ne 0) { throw 'Could not write the pilot database.' }
@@ -38,6 +39,7 @@ Add-AppxPackage -Path $package.FullName
 $installed = Get-AppxPackage | Where-Object { $_.Publisher -eq 'CN=ComParta' } | Select-Object -First 1
 if (-not $installed) { throw 'The package did not install.' }
 Write-Host "Installed $($installed.PackageFullName), version $($installed.Version)"
+Get-ChildItem -Recurse -Force $pilot | ForEach-Object { Write-Host "pilot after installing: $($_.FullName)" }
 
 try {
     Write-Host "== Check what the package declares" -ForegroundColor Cyan
