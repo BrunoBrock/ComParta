@@ -173,6 +173,13 @@ public interface IFilePicker
     Task<string?> PickFileAsync(CancellationToken ct = default);
     /// <summary>Opens the native file dialog showing only download files (AD-21).</summary>
     Task<string?> PickDownloadFileAsync(CancellationToken ct = default);
+
+    /// <summary>The file dialog where several files can be chosen at once (AD-19); empty when cancelled.</summary>
+    async Task<IReadOnlyList<string>> PickFilesAsync(CancellationToken ct = default) =>
+        await PickFileAsync(ct) is { } path ? [path] : [];
+
+    /// <summary>The native folder dialog (AD-7, amended); null when cancelled.</summary>
+    Task<string?> PickFolderAsync(CancellationToken ct = default) => Task.FromResult<string?>(null);
 }
 
 public interface IClipboard
@@ -265,6 +272,14 @@ public interface IFileSystem
     void WriteNewFile(string path, byte[] content);
     /// <summary>Opens a file for reading only, while others may still read, write or delete it; throws when that fails.</summary>
     Stream OpenRead(string path);
+
+    bool FolderExists(string path) => false;
+
+    /// <summary>
+    /// The files in a folder and the folders inside it, as paths relative to it, in a stable order;
+    /// hidden and system files and links to elsewhere are left out. Throws when the folder cannot be read.
+    /// </summary>
+    IReadOnlyList<string> ListFiles(string folder) => [];
 }
 
 public interface IAppPaths

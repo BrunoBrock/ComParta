@@ -111,6 +111,15 @@ body {
   gap: var(--space);
 }
 
+/* Share a folder: under the main action, quieter. */
+.rail-folder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space);
+  min-height: var(--target);
+}
+
 .rail nav ul {
   list-style: none;
   margin: 0;
@@ -832,6 +841,7 @@ dialog textarea {
   }
 
   .rail button.big,
+  .rail .rail-folder,
   .nav-item {
     flex-direction: column;
     justify-content: center;
@@ -845,6 +855,7 @@ dialog textarea {
   }
 
   .rail button.big span,
+  .rail .rail-folder span,
   .nav-label {
     flex: none;
     text-align: center;

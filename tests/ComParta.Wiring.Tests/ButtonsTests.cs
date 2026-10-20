@@ -151,13 +151,41 @@ public sealed class ButtonsTests : IAsyncLifetime
         _files.Files[path] = 200_000;
         _picker.NextPick = path;
 
-        var id = (await ClickAsync(Commands.SharesAdd)).GetProperty("id").GetString()!;
+        var id = (await ClickAsync(Commands.SharesAdd)).GetProperty("share").GetProperty("id").GetString()!;
         await ScreenShowsAsync(Events.SharesChanged, shares => shares.EnumerateArray().Any(s =>
             s.GetProperty("id").GetString() == id && s.GetProperty("status").GetString() == "ready"));
         // Once the router has mapped the port, stopping the last file used to wait for it to unmap.
         for (var i = 0; i < 100 && _engine.PortMapper!.Mappings.Created.Count == 0; i++)
             await Task.Delay(50);
         return id;
+    }
+
+    [Fact]
+    public async Task A_folder_and_several_named_files_each_become_one_share_kept_in_the_database()
+    {
+        var folder = Path.Combine(_folder, "originals", "Trip");
+        Directory.CreateDirectory(Path.Combine(folder, "day 2"));
+        foreach (var name in new[] { "beach.jpg", Path.Combine("day 2", "hill.jpg") })
+        {
+            File.WriteAllBytes(Path.Combine(folder, name), RandomNumberGenerator.GetBytes(1_000));
+            _files.Files[Path.Combine(folder, name)] = 1_000;
+        }
+
+        _picker.NextFolder = folder;
+        var shared = await ClickAsync(Commands.SharesAddFolder);
+        Assert.Equal(("Trip", "folder", 2), (shared.GetProperty("name").GetString(), shared.GetProperty("kind").GetString(), shared.GetProperty("itemCount").GetInt32()));
+        await ScreenShowsAsync(Events.SharesChanged, list => list.EnumerateArray().Any(s => s.GetProperty("kind").GetString() == "folder"));
+
+        _picker.NextPicks = [Path.Combine(folder, "beach.jpg"), Path.Combine(folder, "day 2", "hill.jpg")];
+        Assert.Equal(2, (await ClickAsync(Commands.SharesAdd)).GetProperty("filesToName").GetInt32());
+        var named = await ClickAsync(Commands.SharesAddPicked, new AddPickedArgs("Best of the trip"));
+        Assert.Equal(("collection", 2000L), (named.GetProperty("kind").GetString(), named.GetProperty("sizeBytes").GetInt64()));
+
+        var stored = await ((IShareRepository)await SqliteStore.OpenAsync(_paths.DatabasePath)).GetAllAsync();
+        Assert.Equal([ShareKind.Folder, ShareKind.Collection], stored.Select(s => s.Kind));
+        Assert.Equal(["beach.jpg", "day 2/hill.jpg"], stored[0].Items.Select(i => i.RelativePath));
+        Assert.Equal(Path.Combine(folder, "day 2", "hill.jpg"), stored[1].Items[1].ContentRef);
+        _picker.NextPicks = null;
     }
 
     [Fact]

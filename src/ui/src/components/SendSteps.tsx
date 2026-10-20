@@ -33,8 +33,19 @@ export default function SendSteps({ bridge, shares, onError, onInfo, onClose }: 
       if (!result.ok) {
         onError(result.error.code)
         onClose({ shared: false, hide: false })
-      } else if (result.value === null) onClose({ shared: false, hide: false })
-      else setId(result.value.id)
+      } else if (result.value.share) setId(result.value.share.id)
+      else if (result.value.filesToName > 0)
+        // The guide keeps to its three steps: several files are named "{count} files", which the details can show.
+        void bridge
+          .invoke('shares.addPicked', { name: t('shares.nameDefault', { count: result.value.filesToName }) })
+          .then((named) => {
+            if (named.ok && named.value) setId(named.value.id)
+            else {
+              if (!named.ok) onError(named.error.code)
+              onClose({ shared: false, hide: false })
+            }
+          })
+      else onClose({ shared: false, hide: false })
     })
   }, [bridge, onClose, onError])
 

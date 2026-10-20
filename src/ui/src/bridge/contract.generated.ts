@@ -33,6 +33,15 @@ export interface ShareDto {
   kind: ShareKindDto;
 }
 
+export interface AddedDto {
+  share: ShareDto | null;
+  filesToName: number;
+}
+
+export interface AddPickedArgs {
+  name: string | null;
+}
+
 export interface IdArgs {
   id: string;
 }
@@ -203,6 +212,9 @@ export const errorCodes = [
   "share.dropFailed",
   "file.saveFailed",
   "media.notPlayable",
+  "share.folderEmpty",
+  "share.folderTooLarge",
+  "share.nameInvalid",
   "unexpected",
 ] as const;
 
@@ -210,7 +222,9 @@ export type ErrorCode = (typeof errorCodes)[number];
 
 export interface Commands {
   "shares.list": { args: undefined; result: ShareDto[] };
-  "shares.add": { args: undefined; result: ShareDto | null };
+  "shares.add": { args: undefined; result: AddedDto };
+  "shares.addPicked": { args: AddPickedArgs; result: ShareDto | null };
+  "shares.addFolder": { args: undefined; result: ShareDto | null };
   "shares.remove": { args: IdArgs; result: null };
   "shares.copyInvite": { args: CopyInviteArgs; result: null };
   "shares.saveDownloadFile": { args: IdArgs; result: string };

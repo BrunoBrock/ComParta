@@ -196,6 +196,12 @@ internal sealed class FakeFilePicker : IFilePicker
     public string? NextPick { get; set; }
     public Task<string?> PickFileAsync(CancellationToken ct = default) => Task.FromResult(NextPick);
     public Task<string?> PickDownloadFileAsync(CancellationToken ct = default) => Task.FromResult(NextPick);
+    /// <summary>Several files chosen together; when null, the one in <see cref="NextPick"/>.</summary>
+    public IReadOnlyList<string>? NextPicks { get; set; }
+    public Task<IReadOnlyList<string>> PickFilesAsync(CancellationToken ct = default) =>
+        Task.FromResult(NextPicks ?? (NextPick is null ? [] : [NextPick]));
+    public string? NextFolder { get; set; }
+    public Task<string?> PickFolderAsync(CancellationToken ct = default) => Task.FromResult(NextFolder);
 }
 
 /// <summary>Holds sizes only; it has no way to change, move or delete a file.</summary>
@@ -205,6 +211,21 @@ internal sealed class FakeFileSystem : IFileSystem
     public HashSet<string> Locked { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public bool FileExists(string path) => Files.ContainsKey(path);
+
+    /// <summary>Folders that exist but hold nothing; any folder above a file exists too.</summary>
+    public HashSet<string> EmptyFolders { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public bool FolderExists(string path) =>
+        EmptyFolders.Contains(path) || Files.Keys.Any(file => file.StartsWith(Path.TrimEndingDirectorySeparator(path) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+
+    public IReadOnlyList<string> ListFiles(string folder)
+    {
+        if (!FolderExists(folder))
+            throw new DirectoryNotFoundException(folder);
+        var root = Path.TrimEndingDirectorySeparator(folder) + Path.DirectorySeparatorChar;
+        return [.. Files.Keys.Where(file => file.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+            .Select(file => file[root.Length..]).Order(StringComparer.OrdinalIgnoreCase)];
+    }
 
     public Dictionary<string, byte[]> Contents { get; } = new(StringComparer.OrdinalIgnoreCase);
 

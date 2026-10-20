@@ -101,6 +101,14 @@ export const ptBR: Catalog = {
 
   'shares.heading': 'Compartilhados por mim',
   'shares.add': 'Compartilhar um arquivo',
+  'shares.addFolder': 'Compartilhar uma pasta',
+  'shares.itemCount': '{count} arquivos',
+  'shares.nameDefault': '{count} arquivos',
+  'shares.nameTitle': 'Dê um nome a estes {count} arquivos',
+  'shares.nameHint': 'Eles vão juntos, com um só convite, numa pasta com este nome.',
+  'shares.nameLabel': 'Nome',
+  'shares.nameShare': 'Compartilhar',
+  'shares.nameCancel': 'Cancelar',
   'shares.empty':
     'Você ainda não está compartilhando nada. Escolha “Compartilhar um arquivo” para escolher um deste computador.',
   'shares.chip.preparing': 'Preparando',
@@ -145,7 +153,6 @@ export const ptBR: Catalog = {
   'shares.removed': 'Você parou de compartilhar “{name}”. O arquivo continua no seu computador.',
 
   'drop.here': 'Solte os arquivos aqui para compartilhá-los',
-  'drop.folderNotYet': 'Ainda não dá para compartilhar pastas. Abra a pasta e solte os arquivos que estão nela.',
   'drop.sharedOne': '1 arquivo compartilhado. Copie o convite para enviá-lo.',
   'drop.sharedMany': '{count} arquivos compartilhados. Copie cada convite para enviá-los.',
   'steps.label': 'Enviar um arquivo',
@@ -348,6 +355,9 @@ export const ptBR: Catalog = {
   'error.received.openFailed': 'O ComParta não conseguiu abrir este arquivo. Escolha Mostrar na pasta para vê-lo.',
   'error.share.dropFailed': 'O ComParta não conseguiu pegar esses arquivos. Escolha “Compartilhar um arquivo” para escolhê-los.',
   'error.file.saveFailed': 'O ComParta não conseguiu salvar o arquivo de download. Veja se há espaço na sua pasta Downloads e tente de novo.',
+  'error.share.folderEmpty': 'Esta pasta não tem arquivos para compartilhar.',
+  'error.share.folderTooLarge': 'Esta pasta tem arquivos demais para enviar de uma vez. Compartilhe as pastas que estão dentro dela uma a uma.',
+  'error.share.nameInvalid': 'Use um nome sem estes caracteres: < > : " / \\ | ? *',
   'error.media.notPlayable': 'Não é possível reproduzir este arquivo. Abrir a pasta onde ele está?',
   'error.settings.invalid': 'Não foi possível guardar essa escolha. Tente de novo.',
   'error.unexpected': 'Algo deu errado. Feche o ComParta, abra de novo e tente mais uma vez.',

@@ -1,6 +1,7 @@
 import type { Bridge } from './bridge.ts'
 import type {
   ActivityDto,
+  AddPickedArgs,
   CommandResult,
   ConnectionDto,
   ConnectionHealthDto,
@@ -32,6 +33,11 @@ import { readPublicServers } from '../publicServers.ts'
 export interface PickedFile {
   name: string
   sizeBytes: number
+}
+
+/** A folder in the fake's folder dialog or dropped on the window: its name, size and how many files it holds. */
+export interface PickedFolder extends PickedFile {
+  itemCount: number
 }
 
 export interface FakeBridgeOptions {
@@ -66,8 +72,12 @@ export interface FakeBridgeOptions {
 }
 
 export interface FakeBridge extends Bridge {
-  /** What the next "file dialog" returns; null means the person cancelled. */
-  nextPick: PickedFile | null
+  /** What the next "file dialog" returns; several files wait for a name; null means the person cancelled. */
+  nextPick: PickedFile | PickedFile[] | null
+  /** What the next folder dialog returns; null means the person cancelled. */
+  nextFolder: PickedFolder | null
+  /** Dropped items with these names are folders, as the window would find. */
+  folders: Record<string, PickedFolder>
   /** Make the next command fail with this code. */
   failNextWith: ErrorCode | null
   /** What the next "open a download file" dialog returns; null means cancelled, 'invalid' a wrong file. */
@@ -374,6 +384,20 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     return ok(share)
   }
 
+  // Several files chosen together, waiting for their name.
+  let picked: PickedFile[] | null = null
+
+  const shareItems = (name: string, kind: 'folder' | 'collection', itemCount: number, sizeBytes: number) => {
+    const made = shareFile({ name, sizeBytes })
+    if (!made.ok) return made
+    shares = shares.map((s) => (s.id === made.value.id ? { ...s, itemCount, kind } : s))
+    emitShares()
+    return ok(shares.find((s) => s.id === made.value.id)!)
+  }
+
+  const shareFolder = (folder: PickedFolder) =>
+    folder.itemCount === 0 ? fail('share.folderEmpty') : shareItems(folder.name, 'folder', folder.itemCount, folder.sizeBytes)
+
   // Files the page handed over with a drop, by token, as the window does in the app.
   const dropped = new Map<string, PickedFile[]>()
 
@@ -382,9 +406,36 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
 
     'shares.add': () => {
       const pick = fake.nextPick
-      if (pick === null) return ok(null)
+      picked = null
+      if (pick === null || (Array.isArray(pick) && pick.length === 0)) return ok({ share: null, filesToName: 0 })
       fake.nextPick = samplePicks[++nextSample % samplePicks.length]
-      return shareFile(pick)
+      if (Array.isArray(pick) && pick.length > 1) {
+        picked = pick
+        return ok({ share: null, filesToName: pick.length })
+      }
+      const one = shareFile(Array.isArray(pick) ? pick[0] : pick)
+      return one.ok ? ok({ share: one.value, filesToName: 0 }) : one
+    },
+
+    // As core: the name is trimmed, and refused when empty, too long or not possible for a folder.
+    'shares.addPicked': (args) => {
+      const { name } = args as AddPickedArgs
+      const files = picked
+      if (name === null || files === null) {
+        picked = null
+        return ok(null)
+      }
+      const trimmed = name.trim()
+      // eslint-disable-next-line no-control-regex
+      if (!trimmed || trimmed.length > 100 || trimmed.endsWith('.') || /[<>:"/\\|?*\u0000-\u001f]/.test(trimmed))
+        return fail('share.nameInvalid')
+      picked = null
+      return shareItems(trimmed, 'collection', files.length, files.reduce((sum, file) => sum + file.sizeBytes, 0))
+    },
+
+    'shares.addFolder': () => {
+      const folder = fake.nextFolder
+      return folder === null ? ok(null) : shareFolder(folder)
     },
 
     'shares.addDropped': (args) => {
@@ -395,7 +446,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       let added = 0
       let problem: ErrorCode | null = null
       for (const file of files) {
-        const result = shareFile(file)
+        const result = fake.folders[file.name] ? shareFolder(fake.folders[file.name]) : shareFile(file)
         if (result.ok) added++
         else problem ??= result.error.code
       }
@@ -661,7 +712,9 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     openedReceived: [] as string[],
     revealedReceived: [] as string[],
     revealedShares: [] as string[],
-    nextPick: samplePicks[0] as PickedFile | null,
+    nextPick: samplePicks[0] as PickedFile | PickedFile[] | null,
+    nextFolder: { name: 'Holiday photos', sizeBytes: 734_003_200, itemCount: 200 } as PickedFolder | null,
+    folders: {} as Record<string, PickedFolder>,
     nextDownloadFile: { name: 'Free documentary.mkv', sizeBytes: 2_147_483_648 } as PickedFile | 'invalid' | null,
     failNextWith: null as ErrorCode | null,
     copiedInvite: null as string | null,

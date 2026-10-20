@@ -111,6 +111,20 @@ public sealed class BridgeRouter
             case Commands.SharesAdd:
             {
                 var added = await _shares.AddAsync();
+                return added.Ok
+                    ? CommandResult.Success(new AddedDto(added.Value!.Share is { } one ? ToDto(one) : null, added.Value.FilesToName))
+                    : Failure(added.Error);
+            }
+
+            case Commands.SharesAddPicked:
+            {
+                var added = await _shares.AddPickedAsync(Args<AddPickedArgs>(argsJson)?.Name);
+                return added.Ok ? CommandResult.Success(added.Value is null ? null : ToDto(added.Value)) : Failure(added.Error);
+            }
+
+            case Commands.SharesAddFolder:
+            {
+                var added = await _shares.AddFolderAsync();
                 return added.Ok ? CommandResult.Success(added.Value is null ? null : ToDto(added.Value)) : Failure(added.Error);
             }
 
@@ -480,6 +494,9 @@ public sealed class BridgeRouter
         ErrorKind.ShareDropFailed => ErrorCodes.ShareDropFailed,
         ErrorKind.SaveFailed => ErrorCodes.FileSaveFailed,
         ErrorKind.NotPlayable => ErrorCodes.MediaNotPlayable,
+        ErrorKind.FolderEmpty => ErrorCodes.ShareFolderEmpty,
+        ErrorKind.FolderTooLarge => ErrorCodes.ShareFolderTooLarge,
+        ErrorKind.ShareNameInvalid => ErrorCodes.ShareNameInvalid,
         _ => ErrorCodes.Unexpected,
     };
 }

@@ -288,8 +288,18 @@ public enum ErrorKind
     SaveFailed,
     /// <summary>The file cannot be shown or played inside ComParta; the person may open its folder instead.</summary>
     NotPlayable,
+    /// <summary>A folder with no files in it, once hidden ones are left out.</summary>
+    FolderEmpty,
+    /// <summary>A folder with more files than one share can hold.</summary>
+    FolderTooLarge,
+    /// <summary>The name given to several files shared together is empty, too long or has characters a folder cannot have.</summary>
+    ShareNameInvalid,
     Unexpected,
 }
+
+/// <summary>What the file dialog gave: one file shared at once, or several that wait for a name.</summary>
+/// <param name="FilesToName">How many files wait for a name; 0 when nothing waits.</param>
+public sealed record AddedShare(ShareView? Share, int FilesToName = 0);
 
 public readonly record struct Result(ErrorKind? Error)
 {

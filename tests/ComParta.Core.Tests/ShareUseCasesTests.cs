@@ -19,7 +19,7 @@ public sealed class ShareUseCasesTests
     {
         _files.Files[Video] = 5_000;
         _picker.NextPick = Video;
-        return (await shares.AddAsync()).Value!;
+        return (await shares.AddAsync()).Value!.Share!;
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public sealed class ShareUseCasesTests
         var result = await shares.AddAsync();
 
         Assert.True(result.Ok);
-        Assert.Null(result.Value);
+        Assert.Equal(new AddedShare(null), result.Value);
         Assert.Empty(await shares.ListAsync());
     }
 
@@ -169,7 +169,7 @@ public sealed class ShareUseCasesTests
         var big = Path.Combine(Path.GetTempPath(), "big.iso");
         _files.Files[big] = 9;
         _picker.NextPick = big;
-        var preparing = (await shares.AddAsync()).Value!;
+        var preparing = (await shares.AddAsync()).Value!.Share!;
         Assert.Equal(ErrorKind.ShareNotReady, (await shares.SaveDownloadFileAsync(preparing.Share.Id)).Error);
         Assert.Equal(ErrorKind.ShareNotFound, (await shares.SaveDownloadFileAsync(ShareId.New())).Error);
     }
@@ -186,7 +186,7 @@ public sealed class ShareUseCasesTests
         var big = Path.Combine(Path.GetTempPath(), "big.iso");
         _files.Files[big] = 9;
         _picker.NextPick = big;
-        var preparing = (await shares.AddAsync()).Value!;
+        var preparing = (await shares.AddAsync()).Value!.Share!;
 
         Assert.Equal(ErrorKind.ShareNotReady, (await shares.GetInviteAsync(preparing.Share.Id)).Error);
         Assert.Equal(ErrorKind.ShareNotFound, (await shares.GetInviteAsync(ShareId.New())).Error);
@@ -359,5 +359,93 @@ public sealed class ShareUseCasesTests
         Assert.Equal(ErrorKind.FileUnreadable, (await shares.AddItemsAsync(Trip, "Trip", ShareKind.Folder, [])).Error);
         Assert.Empty(await shares.ListAsync());
         Assert.Empty(_repository.Items);
+    }
+
+    [Fact]
+    public async Task Several_files_chosen_together_wait_for_a_name_then_become_one_share()
+    {
+        var shares = Create();
+        var folder = Path.Combine(Path.GetTempPath(), "Party");
+        string[] files = [Path.Combine(folder, "a.jpg"), Path.Combine(folder, "b.jpg"), Path.Combine(folder, "c.mp4")];
+        foreach (var file in files)
+            _files.Files[file] = 10;
+        _picker.NextPicks = files;
+
+        var picked = await shares.AddAsync();
+
+        Assert.Equal(new AddedShare(null, 3), picked.Value);
+        Assert.Empty(await shares.ListAsync());
+        Assert.Equal(ErrorKind.ShareNameInvalid, (await shares.AddPickedAsync("  ")).Error);
+        Assert.Equal(ErrorKind.ShareNameInvalid, (await shares.AddPickedAsync("a/b")).Error);
+        Assert.Equal(ErrorKind.ShareNameInvalid, (await shares.AddPickedAsync(new string('x', ShareUseCases.MaxNameLength + 1))).Error);
+
+        var named = (await shares.AddPickedAsync(" Party photos ")).Value!;
+
+        Assert.Equal(("Party photos", ShareKind.Collection, 30L), (named.Share.Name, named.Share.Kind, named.Share.SizeBytes));
+        Assert.Equal(["a.jpg", "b.jpg", "c.mp4"], named.Share.Items.Select(i => i.RelativePath));
+        Assert.Null((await shares.AddPickedAsync("Again")).Value);
+        Assert.Single(await shares.ListAsync());
+    }
+
+    [Fact]
+    public async Task Cancelling_the_name_forgets_the_files_chosen()
+    {
+        var shares = Create();
+        var folder = Path.Combine(Path.GetTempPath(), "Party");
+        _files.Files[Path.Combine(folder, "a.jpg")] = 10;
+        _files.Files[Path.Combine(folder, "b.jpg")] = 10;
+        _picker.NextPicks = [Path.Combine(folder, "a.jpg"), Path.Combine(folder, "b.jpg")];
+        await shares.AddAsync();
+
+        Assert.Null((await shares.AddPickedAsync(null)).Value);
+        Assert.Null((await shares.AddPickedAsync("Party")).Value);
+        Assert.Empty(await shares.ListAsync());
+    }
+
+    [Fact]
+    public async Task A_folder_chosen_in_the_folder_dialog_is_shared_with_every_file_in_it()
+    {
+        var shares = Create();
+        foreach (var file in TripFiles)
+            _files.Files[Path.Combine(Trip, file)] = 100;
+        _picker.NextFolder = Trip + Path.DirectorySeparatorChar;
+
+        var added = (await shares.AddFolderAsync()).Value!;
+
+        Assert.Equal(("Trip", ShareKind.Folder, 3), (added.Share.Name, added.Share.Kind, added.Share.Items.Count));
+        Assert.Equal(Trip, added.Share.FilePath);
+        Assert.Equal(ErrorKind.ShareDuplicate, (await shares.AddFolderAsync()).Error);
+        _picker.NextFolder = null;
+        Assert.True((await shares.AddFolderAsync()).Ok);
+        Assert.Single(await shares.ListAsync());
+    }
+
+    [Fact]
+    public async Task An_empty_folder_or_one_that_cannot_be_read_is_refused()
+    {
+        var shares = Create();
+        var empty = Path.Combine(Path.GetTempPath(), "Empty");
+        _files.EmptyFolders.Add(empty);
+
+        _picker.NextFolder = empty;
+        Assert.Equal(ErrorKind.FolderEmpty, (await shares.AddFolderAsync()).Error);
+        _picker.NextFolder = Path.Combine(Path.GetTempPath(), "Gone");
+        Assert.Equal(ErrorKind.FileUnreadable, (await shares.AddFolderAsync()).Error);
+        Assert.Empty(await shares.ListAsync());
+    }
+
+    [Fact]
+    public async Task A_dropped_folder_is_shared_whole_beside_dropped_files()
+    {
+        var shares = Create();
+        foreach (var file in TripFiles)
+            _files.Files[Path.Combine(Trip, file)] = 100;
+        _files.Files[Video] = 5_000;
+
+        var (added, problem) = await shares.AddDroppedAsync([Trip, Video]);
+
+        Assert.Equal((2, (ErrorKind?)null), (added, problem));
+        var listed = await shares.ListAsync();
+        Assert.Equal([ShareKind.Folder, ShareKind.File], listed.Select(v => v.Share.Kind));
     }
 }

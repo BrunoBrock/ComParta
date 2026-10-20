@@ -9,6 +9,7 @@ import {
   FileSpreadsheet,
   FileText,
   FileVideo,
+  Folder,
   Presentation,
   type LucideIcon,
 } from 'lucide-react'
@@ -29,10 +30,12 @@ const byExtension = new Map(kinds.flatMap(([icon, extensions]) => extensions.map
 interface FileIconProps {
   name: string
   size?: number
+  /** A folder, or several files shared together. */
+  folder?: boolean
 }
 
 /** A picture for the kind of file, chosen from its extension (UX design, Items). */
-export default function FileIcon({ name, size = 40 }: FileIconProps) {
-  const icon = byExtension.get(extensionOf(name)) ?? File
+export default function FileIcon({ name, size = 40, folder = false }: FileIconProps) {
+  const icon = folder ? Folder : (byExtension.get(extensionOf(name)) ?? File)
   return createElement(icon, { className: 'file-icon', size, strokeWidth: 1.5, 'aria-hidden': true })
 }

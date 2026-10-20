@@ -34,4 +34,20 @@ public sealed class LocalFileSystem : IFileSystem
 
     public Stream OpenRead(string path) =>
         new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 64 * 1024, useAsync: true);
+
+    public bool FolderExists(string path) => Directory.Exists(path);
+
+    public IReadOnlyList<string> ListFiles(string folder)
+    {
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            // Links to elsewhere could lead out of the folder, or round in a circle.
+            AttributesToSkip = FileAttributes.Hidden | FileAttributes.System | FileAttributes.ReparsePoint,
+        };
+        return [.. Directory.EnumerateFiles(folder, "*", options)
+            .Select(path => Path.GetRelativePath(folder, path))
+            .Order(StringComparer.OrdinalIgnoreCase)];
+    }
 }

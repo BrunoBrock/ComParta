@@ -30,7 +30,7 @@ public sealed class BackgroundUseCasesTests
         _background = new BackgroundUseCases(_engine, _shares, _transfers, sending, _settings, _store, _notifications, _presence, _clock);
     }
 
-    private async Task<ShareId> ShareAsync() => (await _shares.AddAsync()).Value!.Share.Id;
+    private async Task<ShareId> ShareAsync() => (await _shares.AddAsync()).Value!.Share!.Share.Id;
 
     private async Task<TransferId> ReceiveAsync(string name)
     {

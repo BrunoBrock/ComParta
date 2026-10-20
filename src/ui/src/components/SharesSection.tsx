@@ -6,6 +6,7 @@ import { formatSize, formatTimeLeft, t } from '../i18n/index.ts'
 import { inOrder, type SortOrder } from '../order.ts'
 import { matches } from '../search.ts'
 import type { DetailsOf } from './DetailsWindow.tsx'
+import FileIcon from './ui/FileIcon.tsx'
 import Thumbnail from './ui/Thumbnail.tsx'
 import { moveBetweenItems } from './itemKeys.ts'
 import { shareToggle } from './itemToggles.ts'
@@ -180,7 +181,11 @@ export default function SharesSection(props: SharesSectionProps) {
               <ItemView
                 key={share.id}
                 name={share.name}
-                size={formatSize(share.sizeBytes)}
+                size={
+                  share.itemCount > 1
+                    ? `${formatSize(share.sizeBytes)} · ${t('shares.itemCount', { count: share.itemCount })}`
+                    : formatSize(share.sizeBytes)
+                }
                 tone={stoppedHere || pausedHere ? 'paused' : sending ? 'busy' : tones[share.status]}
                 chip={stoppedHere ? t('stopped.chip') : chipOf(share)}
                 note={stoppedHere ? t('stopped.note') : noteOf(share)}
@@ -200,6 +205,9 @@ export default function SharesSection(props: SharesSectionProps) {
                 onMain={share.status === 'ready' ? () => copyInvite(share) : undefined}
                 onRemove={() => setRemoving(share)}
                 picture={
+                  share.kind !== 'file' ? (
+                    <FileIcon name={share.name} folder />
+                  ) : (
                   <Thumbnail
                     bridge={bridge}
                     kind="share"
@@ -207,6 +215,7 @@ export default function SharesSection(props: SharesSectionProps) {
                     name={share.name}
                     ready={share.status !== 'unavailable' && share.status !== 'partlyUnavailable'}
                   />
+                  )
                 }
                 actions={
                   <>

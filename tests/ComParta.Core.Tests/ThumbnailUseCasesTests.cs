@@ -27,7 +27,7 @@ public sealed class ThumbnailUseCasesTests
         var path = Path.Combine(Path.GetTempPath(), "Pictures", name);
         _files.Files[path] = 2_000;
         _picker.NextPick = path;
-        return (await _shares.AddAsync()).Value!.Share.Id;
+        return (await _shares.AddAsync()).Value!.Share!.Share.Id;
     }
 
     [Fact]

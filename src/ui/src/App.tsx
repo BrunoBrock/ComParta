@@ -20,6 +20,7 @@ import type { ItemSpeed, ViewMode } from './components/ItemView.tsx'
 import { shareToggle, transferToggle } from './components/itemToggles.ts'
 import Notice from './components/Notice.tsx'
 import MediaViewer, { type ViewedItem } from './components/MediaViewer.tsx'
+import NameFilesDialog from './components/NameFilesDialog.tsx'
 import Rail, { type Section } from './components/Rail.tsx'
 import ReceiveDialog from './components/ReceiveDialog.tsx'
 import SendSteps from './components/SendSteps.tsx'
@@ -94,6 +95,8 @@ export default function App({ bridge }: AppProps) {
   // An invite pasted anywhere in the window, already read, for the confirmation.
   const [pasted, setPasted] = useState<{ text: string; preview: InvitePreviewDto } | undefined>()
   const [adding, setAdding] = useState(false)
+  // Several files chosen together wait for a name (AD-19).
+  const [naming, setNaming] = useState<number | null>(null)
   // The guided send is open (UX design, "Send a file, first time").
   const [guiding, setGuiding] = useState(false)
   // Files are being dragged over the window (epic 8 story 6).
@@ -432,25 +435,34 @@ export default function App({ bridge }: AppProps) {
     }
     setAdding(true)
     try {
-      // The app opens the file dialog; a cancel comes back as ok with no value.
+      // The app opens the file dialog; a cancel comes back with no share and nothing to name.
       const result = await bridge.invoke('shares.add')
+      if (!result.ok) showError(result.error.code)
+      else if (result.value.filesToName > 0) setNaming(result.value.filesToName)
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  async function addFolder() {
+    clearNotice()
+    setSection('shared')
+    setAdding(true)
+    try {
+      // The app opens the folder dialog and shares every file in the folder as one.
+      const result = await bridge.invoke('shares.addFolder')
       if (!result.ok) showError(result.error.code)
     } finally {
       setAdding(false)
     }
   }
 
-  // Dropped files are shared as if picked. Folders wait for epic 11; the page never sees a path,
+  // Dropped files are shared as if picked, and a dropped folder whole. The page never sees a path,
   // it only hands the files to the window under a token (AD-7).
   async function drop(data: DataTransfer) {
     clearNotice()
-    const entries = [...data.items].map((item) => item.webkitGetAsEntry?.() ?? null)
-    const files = [...data.files].filter((_, i) => !entries[i]?.isDirectory)
-    const folders = files.length < data.files.length
-    if (files.length === 0) {
-      if (folders) setNotice(t('drop.folderNotYet'))
-      return
-    }
+    const files = [...data.files]
+    if (files.length === 0) return
     setSection('shared')
     const token = crypto.randomUUID()
     if (!bridge.handOverDrop(token, files)) {
@@ -464,7 +476,6 @@ export default function App({ bridge }: AppProps) {
     }
     const { added, problem } = result.value
     if (problem) showError(problem as ErrorCode)
-    else if (folders) setNotice(t('drop.folderNotYet'))
     if (added > 0) showInfo(added === 1 ? t('drop.sharedOne') : t('drop.sharedMany', { count: added }))
   }
 
@@ -617,12 +628,13 @@ export default function App({ bridge }: AppProps) {
         onConnection={() => setHelping(true)}
         onSection={setSection}
         onAdd={add}
+        onAddFolder={addFolder}
         onReceive={startReceiving}
         onHelp={() => setOpened('help')}
         onSettings={() => setOpened('settings')}
       />
 
-      <ActionButton adding={adding} onAdd={add} onReceive={startReceiving} />
+      <ActionButton adding={adding} onAdd={add} onAddFolder={addFolder} onReceive={startReceiving} />
 
       <main className="content">
         {notice && <Notice text={notice} onDismiss={clearNotice} />}
@@ -686,6 +698,15 @@ export default function App({ bridge }: AppProps) {
           onGuidedSend={chooseGuidedSend}
           version={version}
           onClose={() => setOpened(null)}
+        />
+      )}
+
+      {naming !== null && (
+        <NameFilesDialog
+          bridge={bridge}
+          count={naming}
+          onClose={() => setNaming(null)}
+          onError={showError}
         />
       )}
 

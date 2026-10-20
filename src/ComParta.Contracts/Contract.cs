@@ -16,6 +16,8 @@ public static class Commands
     public const string SharesPause = "shares.pause";
     public const string SharesResume = "shares.resume";
     public const string SharesReveal = "shares.reveal";
+    public const string SharesAddFolder = "shares.addFolder";
+    public const string SharesAddPicked = "shares.addPicked";
     public const string TransfersList = "transfers.list";
     public const string TransfersPreview = "transfers.preview";
     public const string TransfersReceive = "transfers.receive";
@@ -77,13 +79,17 @@ public static class ErrorCodes
     public const string ShareDropFailed = "share.dropFailed";
     public const string FileSaveFailed = "file.saveFailed";
     public const string MediaNotPlayable = "media.notPlayable";
+    public const string ShareFolderEmpty = "share.folderEmpty";
+    public const string ShareFolderTooLarge = "share.folderTooLarge";
+    public const string ShareNameInvalid = "share.nameInvalid";
     public const string Unexpected = "unexpected";
 
     public static IReadOnlyList<string> All { get; } =
     [
         ShareDuplicate, ShareNotFound, ShareNotReady, FileUnreadable,
         InviteInvalid, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, DiskFull, SettingsInvalid,
-        ReceivedNotFound, ReceivedOpenFailed, ShareDropFailed, FileSaveFailed, MediaNotPlayable, Unexpected,
+        ReceivedNotFound, ReceivedOpenFailed, ShareDropFailed, FileSaveFailed, MediaNotPlayable,
+        ShareFolderEmpty, ShareFolderTooLarge, ShareNameInvalid, Unexpected,
     ];
 }
 
@@ -166,6 +172,12 @@ public sealed record CopyInviteArgs(string Id, string? Message);
 
 /// <param name="Token">The id the UI gave the drop when it handed the files to the window (AD-7).</param>
 public sealed record DropArgs(string Token);
+
+/// <summary>What Share files did: the one file shared, or how many chosen together wait for a name.</summary>
+public sealed record AddedDto(ShareDto? Share, int FilesToName);
+
+/// <summary>The name for the files chosen together; null forgets them.</summary>
+public sealed record AddPickedArgs(string? Name);
 
 /// <param name="Problem">The error code of the first file that could not be shared, or null.</param>
 public sealed record DropResultDto(int Added, string? Problem);
@@ -264,7 +276,10 @@ public static class Contract
     public static IReadOnlyList<CommandSpec> CommandSpecs { get; } =
     [
         new(Commands.SharesList, null, typeof(ShareDto[])),
-        new(Commands.SharesAdd, null, typeof(ShareDto), ResultMayBeNull: true),
+        // Several files chosen together come back as a count; the screen asks for their name (AD-19).
+        new(Commands.SharesAdd, null, typeof(AddedDto)),
+        new(Commands.SharesAddPicked, typeof(AddPickedArgs), typeof(ShareDto), ResultMayBeNull: true),
+        new(Commands.SharesAddFolder, null, typeof(ShareDto), ResultMayBeNull: true),
         new(Commands.SharesRemove, typeof(IdArgs), null),
         new(Commands.SharesCopyInvite, typeof(CopyInviteArgs), null),
         // The saved file's name, shown to the person; the folder opens with it selected (AD-18: no path crosses the bridge).

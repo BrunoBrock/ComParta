@@ -55,6 +55,28 @@ public sealed class NativeFilePicker : Ports.IFilePicker
 		var picked = await MainThread.InvokeOnMainThreadAsync(() => FilePicker.Default.PickAsync(new PickOptions { FileTypes = types }));
 		return picked?.FullPath;
 	}
+
+	public async Task<IReadOnlyList<string>> PickFilesAsync(CancellationToken ct = default)
+	{
+		var picked = await MainThread.InvokeOnMainThreadAsync(() => FilePicker.Default.PickMultipleAsync());
+		return [.. (picked ?? []).Where(file => file is not null).Select(file => file!.FullPath)];
+	}
+
+	/// <summary>Windows' own folder dialog, on top of ComParta's window.</summary>
+	public Task<string?> PickFolderAsync(CancellationToken ct = default) =>
+		MainThread.InvokeOnMainThreadAsync(async () =>
+		{
+			var picker = new Windows.Storage.Pickers.FolderPicker
+			{
+				SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary,
+			};
+			// Every file type, or Windows shows the folder dialog with nothing to choose.
+			picker.FileTypeFilter.Add("*");
+			if (Application.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView is Microsoft.UI.Xaml.Window window)
+				WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(window));
+			var folder = await picker.PickSingleFolderAsync();
+			return folder?.Path;
+		});
 }
 
 public sealed class NativeClipboard : Ports.IClipboard

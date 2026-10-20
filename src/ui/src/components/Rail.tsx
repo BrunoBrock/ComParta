@@ -1,4 +1,4 @@
-import { CircleHelp, Download, Inbox, Plus, Settings, Upload } from 'lucide-react'
+import { CircleHelp, Download, FolderPlus, Inbox, Plus, Settings, Upload } from 'lucide-react'
 import type { ConnectionHealthDto } from '../bridge/index.ts'
 import { t } from '../i18n/index.ts'
 import ConnectionIndicator from './ConnectionIndicator.tsx'
@@ -16,6 +16,7 @@ interface RailProps {
   onConnection: () => void
   onSection: (section: Section) => void
   onAdd: () => void
+  onAddFolder: () => void
   onReceive: () => void
   onHelp: () => void
   onSettings: () => void
@@ -29,7 +30,7 @@ interface RailProps {
  */
 export default function Rail(props: RailProps) {
   const { section, sharedCount, receivedCount, adding, connection, onConnection, onSection, onAdd, onReceive } = props
-  const { onHelp, onSettings, throughHelper } = props
+  const { onHelp, onSettings, throughHelper, onAddFolder } = props
   const places = [
     { id: 'shared' as const, label: t('nav.shared'), count: sharedCount, Icon: Upload },
     { id: 'received' as const, label: t('nav.received'), count: receivedCount, Icon: Inbox },
@@ -41,6 +42,10 @@ export default function Rail(props: RailProps) {
         <button type="button" className="primary big" onClick={onAdd} disabled={adding}>
           <Plus size={22} aria-hidden="true" />
           <span>{t('shares.add')}</span>
+        </button>
+        <button type="button" className="quiet rail-folder" onClick={onAddFolder} disabled={adding}>
+          <FolderPlus size={20} aria-hidden="true" />
+          <span>{t('shares.addFolder')}</span>
         </button>
         <button type="button" className="big" onClick={onReceive}>
           <Download size={22} aria-hidden="true" />
