@@ -1,5 +1,7 @@
 # The epics of initiative-comparta, in build order.
-# Releases (see roadmap-comparta): R1 = epics 1, 2, 9, 15, 6, 8, 4, 14, 10, 3, 12, 5; R2 = 11, 7; R3 = 13.
+# Releases (see roadmap-comparta): R1 = epics 1, 2, 9, 16, 15, 6, 8, 13, 18, 4, 14, 10, 3, 12, 5; R2 = 11, 7, 17.
+# Epic 16 (added 2026-10-13) is the next work: the maintainer's first goal is a file any torrent app gets from anywhere.
+# Epics 13 (friends, moved into R1), 17 (shared folders) and 18 (open and play) follow from the maintainer's asks of 2026-10-20.
 
 [[epic]]
 id = 1
@@ -22,6 +24,13 @@ covers = ["CAP-18"]
 after = [{ epic = 2, needs = "the receive path being measured and improved" }]
 
 [[epic]]
+id = 16
+slug = "epic-reachable-from-anywhere"
+title = "A shared file reaches any torrent app, anywhere, with no router setup"
+covers = ["CAP-18", "CAP-28"]
+after = [{ epic = 9, needs = "reachability facts, health and the field test" }]
+
+[[epic]]
 id = 15
 slug = "epic-speed-bar-and-details"
 title = "A person sees and stops all traffic at once, and the details of any file"
@@ -41,6 +50,20 @@ slug = "epic-drive-like-home"
 title = "ComParta looks and works like a simple file drive"
 covers = ["CAP-13", "CAP-14", "CAP-15", "CAP-23"]
 after = [{ epic = 1, needs = "the screen, bridge and commands to redesign, after the refactor sweep" }, { epic = 6, needs = "the settings store for the remembered view" }]
+
+[[epic]]
+id = 13
+slug = "epic-people-and-shared-with-me"
+title = "A person adds friends, sees what they share, and gets files only from friends unless they choose otherwise"
+covers = ["CAP-24", "CAP-31"]
+after = [{ epic = 2, needs = "invites, which carry the friend request" }, { epic = 8, needs = "the frame and Settings screen" }]
+
+[[epic]]
+id = 18
+slug = "epic-open-and-play"
+title = "A person plays songs, watches videos and sees pictures inside ComParta"
+covers = ["CAP-33"]
+after = [{ epic = 8, needs = "received items with Open and Show in folder" }]
 
 [[epic]]
 id = 4
@@ -96,11 +119,11 @@ id = 7
 slug = "epic-android"
 title = "A person uses ComParta on an Android phone"
 covers = ["CAP-10", "CAP-15", "CAP-16", "CAP-17"]
-after = [{ epic = 11, needs = "the final share model with items" }, { epic = 8, needs = "the frame and phone layout base" }, { epic = 10, needs = "the background presence port" }, { epic = 2, needs = "invite links and the receive confirmation" }, { epic = 9, needs = "reachability facts and IPv6" }]
+after = [{ epic = 11, needs = "the final share model with items" }, { epic = 8, needs = "the frame and phone layout base" }, { epic = 10, needs = "the background presence port" }, { epic = 2, needs = "invite links and the receive confirmation" }, { epic = 9, needs = "reachability facts and IPv6" }, { epic = 18, needs = "the viewer and player to carry over" }]
 
 [[epic]]
-id = 13
-slug = "epic-people-and-shared-with-me"
-title = "A person sends to the people they know, and only they can get it"
-covers = ["CAP-24"]
-after = [{ epic = 7, needs = "R2 done, so pairing works between phones and PCs from the start" }]
+id = 17
+slug = "epic-shared-folders"
+title = "A person makes folders and shares them with friends, like Google Drive, and the files travel peer to peer"
+covers = ["CAP-32"]
+after = [{ epic = 13, needs = "friends and private delivery" }, { epic = 8, needs = "drag and drop onto the window" }, { epic = 16, needs = "the helper for owners who cannot be reached" }, { epic = 11, needs = "several items per share and receiving folders" }, { epic = 7, needs = "the Android shell, so folders work on phones from the start" }]

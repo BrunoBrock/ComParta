@@ -18,11 +18,21 @@ intimidating, confusing, and often unsafe for everyday people.
 
 ## Intentions
 
-- **Cloud-free:** files travel directly between people. No central server holds your data.
+- **Cloud-free:** files travel directly between people. No central server stores your data; when two devices cannot reach each other, a helper you choose passes the file along while it is shared, and keeps nothing after.
 - **Simple:** anyone who can send a photo by chat can use it. No jargon (no "seeds", "trackers", "magnet links" in the UI).
 - **Safe by design:** downloads and shared content run in a sandbox, isolated from the rest of the computer.
 - **Private by default:** you share only with the people you choose.
 - **Open source:** transparent, auditable, and community-driven.
+
+## First goal (2026-10-13)
+
+A file shared from a PC can be downloaded from anywhere, with ComParta or with any other torrent
+app, on Windows computers and Android phones, and nobody has to change a router or open a port.
+
+## References
+
+qBittorrent (works with every torrent app, downloads any link), Stremio (media first, play while
+it arrives) and Google Drive (the look, and sharing by link). See the spec's References section.
 
 ## Target Users
 
@@ -40,14 +50,18 @@ want to exchange files with people they know and trust.
 ## Out of Scope (for now)
 
 - Public discovery or searching for content from strangers
-- Cloud storage or hosted relays as a requirement
+- Cloud storage
 
 ## Status
 
-First build done (share a file and send it with an invite, Windows). The rest of the product is
-planned in [the roadmap](initiative-comparta/roadmap-comparta/roadmap-comparta.md): R1 family
-pilot on Windows, R2 albums and Android, R3 people I share with.
+Most of the Windows app is built (share, send, receive, the Drive-like screen, speeds, Portuguese).
+The helper that lets any torrent app get a file from anywhere is being built (epic 16); next come
+friends, with files accepted only from friends by default (epic 13), and playing songs, videos and
+pictures inside the app (epic 18). The rest is planned in
+[the roadmap](initiative-comparta/roadmap-comparta/roadmap-comparta.md) and drawn in
+[roadmap.html](initiative-comparta/roadmap-comparta/roadmap.html): R1 family pilot on Windows,
+R2 folders shared with friends like Google Drive, and Android.
 
 ## License
 
-To be decided (open-source license, e.g. MIT, Apache-2.0 or AGPL-3.0).
+Zero-Clause BSD (see `LICENSE` at the repository root).
