@@ -323,7 +323,7 @@ public sealed class BridgeRouter
                 {
                     if (!ShareId.TryParse(args.Id, out var pictureShareId))
                         return CommandResult.Failure(ErrorCodes.ShareNotFound);
-                    found = await _thumbnails.ForShareAsync(pictureShareId, args.Size);
+                    found = await _thumbnails.ForShareAsync(pictureShareId, args.Size, args.Item);
                 }
                 else
                 {
@@ -442,7 +442,7 @@ public sealed class BridgeRouter
             dto.Id, dto.Name, dto.SizeBytes, dto.Status,
             Path.GetDirectoryName(view.Share.FilePath) ?? "",
             view.Share.AddedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
-            activity.SendingBytesPerSecond, activity.Connections, activity.BytesSent);
+            activity.SendingBytesPerSecond, activity.Connections, activity.BytesSent, dto.ItemCount, dto.Kind);
     }
 
     public static TransferDetailsDto ToDetails(TransferView view, ItemActivity activity)

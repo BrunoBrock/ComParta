@@ -478,6 +478,33 @@ button.link {
   border-radius: 4px;
 }
 
+/* A folder's card: its first photos side by side, two by two once there are three or four. */
+.folder-pictures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+}
+
+.folder-pictures[data-count='2'] {
+  grid-template-rows: 1fr;
+}
+
+.folder-pictures[data-count='3'] img:first-child {
+  grid-row: span 2;
+}
+
+.items-list .folder-pictures {
+  width: 40px;
+  height: 40px;
+  gap: 1px;
+}
+
+.items-list .folder-pictures img {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
 .items-grid .item-picture .file-icon {
   width: 56px;
   height: 56px;

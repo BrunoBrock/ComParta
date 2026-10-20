@@ -137,6 +137,8 @@ export interface ShareDetailsDto {
   sendingBytesPerSecond: number;
   connections: number;
   bytesSent: number;
+  itemCount: number;
+  kind: ShareKindDto;
 }
 
 export interface TransferDetailsDto {
@@ -167,6 +169,7 @@ export interface ThumbnailArgs {
   kind: ThumbnailKindDto;
   id: string;
   size: number;
+  item: number;
 }
 
 export interface QuitArgs {

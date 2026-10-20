@@ -314,6 +314,8 @@ export const en = {
   'details.openFor': 'Details of {name}',
   'details.title': 'Details of “{name}”',
   'details.size': 'Size',
+  'details.files': 'Files',
+  'details.folderSnapshot': 'Files added to this folder later are not included. Share the folder again to include them.',
   'details.sizeReceived': '{total}, {received} received ({percent}%)',
   'details.state': 'State',
   'details.state.receiving': 'Receiving',

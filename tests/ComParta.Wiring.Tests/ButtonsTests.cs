@@ -175,6 +175,12 @@ public sealed class ButtonsTests : IAsyncLifetime
         var shared = await ClickAsync(Commands.SharesAddFolder);
         Assert.Equal(("Trip", "folder", 2), (shared.GetProperty("name").GetString(), shared.GetProperty("kind").GetString(), shared.GetProperty("itemCount").GetInt32()));
         await ScreenShowsAsync(Events.SharesChanged, list => list.EnumerateArray().Any(s => s.GetProperty("kind").GetString() == "folder"));
+        var folderId = shared.GetProperty("id").GetString()!;
+        // Its card shows its photos, and its details how many files it has.
+        Assert.Equal(JsonValueKind.String, (await ClickAsync(Commands.ThumbnailsGet, new ThumbnailArgs(ThumbnailKindDto.Share, folderId, 96, 1))).ValueKind);
+        Assert.NotEqual(JsonValueKind.String, (await ClickAsync(Commands.ThumbnailsGet, new ThumbnailArgs(ThumbnailKindDto.Share, folderId, 96, 2))).ValueKind);
+        var details = await ClickAsync(Commands.SharesDetails, new IdArgs(folderId));
+        Assert.Equal((2, "folder"), (details.GetProperty("itemCount").GetInt32(), details.GetProperty("kind").GetString()));
 
         _picker.NextPicks = [Path.Combine(folder, "beach.jpg"), Path.Combine(folder, "day 2", "hill.jpg")];
         Assert.Equal(2, (await ClickAsync(Commands.SharesAdd)).GetProperty("filesToName").GetInt32());

@@ -21,12 +21,22 @@ public sealed class ThumbnailUseCases(ShareUseCases shares, ReceivedUseCases rec
         ".mp4", ".mov", ".avi", ".mkv", ".wmv", ".m4v", ".webm", ".3gp", ".mpg", ".mpeg",
     };
 
-    public async Task<Result<Thumbnail?>> ForShareAsync(ShareId id, int size, CancellationToken ct = default)
+    /// <summary>How many of a folder's photos and videos its card shows (UX design, Items).</summary>
+    public const int FolderPictures = 4;
+
+    /// <param name="item">For a folder or several files, which of its photos and videos, counted from 0; a file has only 0.</param>
+    public async Task<Result<Thumbnail?>> ForShareAsync(ShareId id, int size, int item = 0, CancellationToken ct = default)
     {
         var view = shares.Current().FirstOrDefault(v => v.Share.Id == id);
         if (view is null)
             return Result<Thumbnail?>.Fail(ErrorKind.ShareNotFound);
-        return Result<Thumbnail?>.Success(await DrawAsync(view.Share.FilePath, size, ct));
+        var share = view.Share;
+        var path = share.Kind == ShareKind.File
+            ? (item == 0 ? share.FilePath : null)
+            : item is >= 0 and < FolderPictures
+                ? share.Items.Where(i => Pictures.Contains(Path.GetExtension(i.RelativePath))).Skip(item).FirstOrDefault()?.ContentRef
+                : null;
+        return Result<Thumbnail?>.Success(path is null ? null : await DrawAsync(path, size, ct));
     }
 
     /// <summary>Only a file that has arrived has a picture; one still on its way gets none.</summary>

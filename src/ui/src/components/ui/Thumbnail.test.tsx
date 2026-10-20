@@ -20,7 +20,7 @@ describe('Thumbnail', () => {
     const { container } = render(<Thumbnail bridge={bridge} kind="share" id="s1" name="Beach.jpg" ready />)
 
     expect(container.querySelector('.file-icon')).not.toBeNull()
-    expect(invoke).toHaveBeenCalledWith('thumbnails.get', { kind: 'share', id: 's1', size: 240 })
+    expect(invoke).toHaveBeenCalledWith('thumbnails.get', { kind: 'share', id: 's1', size: 240, item: 0 })
     await answer()
 
     expect(container.querySelector('img')).toHaveAttribute('src', picture)

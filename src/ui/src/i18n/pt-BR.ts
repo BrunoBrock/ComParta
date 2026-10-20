@@ -320,6 +320,8 @@ export const ptBR: Catalog = {
   'details.openFor': 'Detalhes de {name}',
   'details.title': 'Detalhes de “{name}”',
   'details.size': 'Tamanho',
+  'details.files': 'Arquivos',
+  'details.folderSnapshot': 'Arquivos colocados nesta pasta depois não entram. Compartilhe a pasta de novo para incluí-los.',
   'details.sizeReceived': '{total}, {received} recebidos ({percent}%)',
   'details.state': 'Situação',
   'details.state.receiving': 'Recebendo',

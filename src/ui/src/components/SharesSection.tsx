@@ -6,7 +6,7 @@ import { formatSize, formatTimeLeft, t } from '../i18n/index.ts'
 import { inOrder, type SortOrder } from '../order.ts'
 import { matches } from '../search.ts'
 import type { DetailsOf } from './DetailsWindow.tsx'
-import FileIcon from './ui/FileIcon.tsx'
+import FolderPictures from './ui/FolderPictures.tsx'
 import Thumbnail from './ui/Thumbnail.tsx'
 import { moveBetweenItems } from './itemKeys.ts'
 import { shareToggle } from './itemToggles.ts'
@@ -206,7 +206,13 @@ export default function SharesSection(props: SharesSectionProps) {
                 onRemove={() => setRemoving(share)}
                 picture={
                   share.kind !== 'file' ? (
-                    <FileIcon name={share.name} folder />
+                    <FolderPictures
+                      bridge={bridge}
+                      id={share.id}
+                      name={share.name}
+                      itemCount={share.itemCount}
+                      ready={share.status !== 'unavailable' && share.status !== 'partlyUnavailable'}
+                    />
                   ) : (
                   <Thumbnail
                     bridge={bridge}

@@ -134,7 +134,8 @@ public static class MediaAddress
 }
 
 /// <param name="Size">The picture's longest side in pixels; the app keeps it between 32 and 512.</param>
-public sealed record ThumbnailArgs(ThumbnailKindDto Kind, string Id, int Size);
+/// <param name="Item">For a shared folder or several files, which of its photos and videos, from 0 to 3.</param>
+public sealed record ThumbnailArgs(ThumbnailKindDto Kind, string Id, int Size, int Item = 0);
 
 /// <summary>Whether another device can reach this computer. The words for it live in the UI (AD-11).</summary>
 public enum ConnectionHealthDto { Good, Limited, Blocked }
@@ -241,7 +242,7 @@ public sealed record SetActivityArgs(bool SendingStopped, bool ReceivingStopped)
 /// <param name="BytesSent">Sent since the app started.</param>
 public sealed record ShareDetailsDto(
     string Id, string Name, long SizeBytes, ShareStatusDto Status, string Folder, string AddedAt,
-    long SendingBytesPerSecond, int Connections, long BytesSent);
+    long SendingBytesPerSecond, int Connections, long BytesSent, int ItemCount, ShareKindDto Kind);
 
 /// <summary>The details window of a received file (CAP-26).</summary>
 /// <param name="AddedAt">When receiving started, as an ISO 8601 time.</param>

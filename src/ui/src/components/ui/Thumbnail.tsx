@@ -27,7 +27,7 @@ export default function Thumbnail({ bridge, kind, id, name, ready, size = 240 }:
     if (!wanted) return
     let active = true
     const load = () => {
-      void bridge.invoke('thumbnails.get', { kind, id, size }).then((result) => {
+      void bridge.invoke('thumbnails.get', { kind, id, size, item: 0 }).then((result) => {
         if (active && result.ok) setUrl(result.value)
       })
     }

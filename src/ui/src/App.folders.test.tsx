@@ -108,4 +108,44 @@ describe('sharing a folder or several files', () => {
     expect(within(dialog).getByRole('textbox', { name: ptBR['shares.nameLabel'] })).toHaveValue('3 arquivos')
     expect(within(await screen.findByRole('complementary')).getByRole('button', { name: ptBR['shares.addFolder'] })).toBeInTheDocument()
   })
+
+  it("shows up to four of a folder's photos on its card, or the folder icon when it has none", async () => {
+    const { bridge, user } = setup()
+    bridge.nextFolder = { name: 'Birthday', sizeBytes: 9_000, itemCount: 9, pictures: 6 }
+    await user.click(await railButton(en['shares.addFolder']))
+    bridge.nextFolder = { name: 'Letters', sizeBytes: 900, itemCount: 3, pictures: 0 }
+    await user.click(await railButton(en['shares.addFolder']))
+
+    const birthday = (await within(sharesSection()).findByText('Birthday')).closest('li')!
+    await waitFor(() => expect(birthday.querySelectorAll('.folder-pictures img')).toHaveLength(4))
+    const letters = within(sharesSection()).getByText('Letters').closest('li')!
+    expect(letters.querySelector('img')).toBeNull()
+    expect(letters.querySelector('.lucide-folder')).not.toBeNull()
+    expect(await accessibilityProblems(sharesSection())).toEqual([])
+  })
+
+  it('says in the details how many files a folder has and that later ones are not included', async () => {
+    const { bridge, user } = setup()
+    bridge.nextFolder = { name: 'Birthday', sizeBytes: 9_000, itemCount: 9, pictures: 6 }
+    await user.click(await railButton(en['shares.addFolder']))
+
+    await user.click(await screen.findByRole('button', { name: 'Details of Birthday' }))
+
+    const details = screen.getByRole('dialog', { name: /Birthday/ })
+    expect(await within(details).findByText(en['details.files'])).toBeInTheDocument()
+    expect(within(details).getByText('9')).toBeInTheDocument()
+    expect(within(details).getByText(en['details.folderSnapshot'])).toBeInTheDocument()
+    expect(await accessibilityProblems(details)).toEqual([])
+  })
+
+  it('says in Brazilian Portuguese that files added later are not included', async () => {
+    const { bridge, user } = setup({ language: 'pt-BR' })
+    bridge.nextFolder = { name: 'Aniversário', sizeBytes: 9_000, itemCount: 9 }
+    await screen.findByText(ptBR['shares.empty'])
+    await user.click(await railButton(ptBR['shares.addFolder']))
+
+    await user.click(await screen.findByRole('button', { name: ptBR['details.openFor'].replace('{name}', 'Aniversário') }))
+
+    expect(await screen.findByText(ptBR['details.folderSnapshot'])).toBeInTheDocument()
+  })
 })

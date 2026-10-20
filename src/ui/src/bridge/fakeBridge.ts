@@ -38,6 +38,8 @@ export interface PickedFile {
 /** A folder in the fake's folder dialog or dropped on the window: its name, size and how many files it holds. */
 export interface PickedFolder extends PickedFile {
   itemCount: number
+  /** How many of its files are photos or videos; none when left out. */
+  pictures?: number
 }
 
 export interface FakeBridgeOptions {
@@ -395,8 +397,15 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     return ok(shares.find((s) => s.id === made.value.id)!)
   }
 
-  const shareFolder = (folder: PickedFolder) =>
-    folder.itemCount === 0 ? fail('share.folderEmpty') : shareItems(folder.name, 'folder', folder.itemCount, folder.sizeBytes)
+  // The photos and videos in each shared folder, as the app would count them.
+  const picturesIn = new Map<string, number>()
+
+  const shareFolder = (folder: PickedFolder) => {
+    if (folder.itemCount === 0) return fail('share.folderEmpty')
+    const made = shareItems(folder.name, 'folder', folder.itemCount, folder.sizeBytes)
+    if (made.ok) picturesIn.set(made.value.id, folder.pictures ?? 0)
+    return made
+  }
 
   // Files the page handed over with a drop, by token, as the window does in the app.
   const dropped = new Map<string, PickedFile[]>()
@@ -636,7 +645,13 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     },
 
     'thumbnails.get': (args) => {
-      const { kind, id } = args as ThumbnailArgs
+      const { kind, id, item } = args as ThumbnailArgs
+      const folder = kind === 'share' ? shares.find((s) => s.id === id && s.kind !== 'file') : undefined
+      if (folder) {
+        if (folder.status === 'unavailable' || folder.status === 'partlyUnavailable') return ok(null)
+        return ok(item >= 0 && item < Math.min(4, picturesIn.get(id) ?? 0) ? fakePicture(`${folder.name} ${item}.jpg`) : null)
+      }
+      if (item !== 0) return ok(null)
       const name =
         kind === 'share'
           ? shares.find((s) => s.id === id && s.status !== 'unavailable' && s.status !== 'partlyUnavailable')?.name
@@ -713,7 +728,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     revealedReceived: [] as string[],
     revealedShares: [] as string[],
     nextPick: samplePicks[0] as PickedFile | PickedFile[] | null,
-    nextFolder: { name: 'Holiday photos', sizeBytes: 734_003_200, itemCount: 200 } as PickedFolder | null,
+    nextFolder: { name: 'Holiday photos', sizeBytes: 734_003_200, itemCount: 200, pictures: 200 } as PickedFolder | null,
     folders: {} as Record<string, PickedFolder>,
     nextDownloadFile: { name: 'Free documentary.mkv', sizeBytes: 2_147_483_648 } as PickedFile | 'invalid' | null,
     failNextWith: null as ErrorCode | null,

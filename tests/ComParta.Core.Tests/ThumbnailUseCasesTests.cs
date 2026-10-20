@@ -85,4 +85,31 @@ public sealed class ThumbnailUseCasesTests
         Assert.Equal(ErrorKind.TransferNotFound, (await _thumbnails.ForTransferAsync(TransferId.New(), 96)).Error);
         Assert.Equal(ErrorKind.ShareNotFound, (await _thumbnails.ForShareAsync(ShareId.New(), 96)).Error);
     }
+
+    [Fact]
+    public async Task A_folder_shows_its_first_four_photos_and_videos_and_nothing_else()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "Pictures", "Trip");
+        string[] names = ["notes.txt", "a.jpg", "b.mp4", "song.mp3", "c.png", "d.jpg", "e.jpg"];
+        foreach (var name in names)
+            _files.Files[Path.Combine(folder, name)] = 100;
+        _picker.NextFolder = folder;
+        var id = (await _shares.AddFolderAsync()).Value!.Share.Id;
+
+        for (var item = 0; item < 6; item++)
+            await _thumbnails.ForShareAsync(id, 96, item);
+
+        Assert.Equal(["a.jpg", "b.mp4", "c.png", "d.jpg"], _provider.Asked.Select(a => Path.GetFileName(a.Path)));
+        Assert.Null((await _thumbnails.ForShareAsync(id, 96, -1)).Value);
+    }
+
+    [Fact]
+    public async Task A_single_file_has_only_its_own_picture()
+    {
+        var id = await ShareAsync("beach.jpg");
+
+        Assert.NotNull((await _thumbnails.ForShareAsync(id, 96, 0)).Value);
+        Assert.Null((await _thumbnails.ForShareAsync(id, 96, 1)).Value);
+        Assert.Single(_provider.Asked);
+    }
 }

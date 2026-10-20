@@ -30,6 +30,7 @@ type Details = { kind: 'share'; value: ShareDetailsDto } | { kind: 'transfer'; v
 function shareRows(share: ShareDetailsDto, stopped: boolean): [MessageKey, string][] {
   return [
     ['details.size', formatSize(share.sizeBytes)],
+    ...(share.kind === 'file' ? [] : [['details.files', String(share.itemCount)] as [MessageKey, string]]),
     ['details.state', stopped && share.status === 'ready' ? t('stopped.chip') : t(`shares.chip.${share.status}`)],
     ['details.where', share.folder],
     ['details.added', formatDateTime(share.addedAt)],
@@ -143,6 +144,9 @@ export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, 
             </div>
           ))}
         </dl>
+      )}
+      {!gone && details?.kind === 'share' && details.value.kind === 'folder' && (
+        <p className="hint">{t('details.folderSnapshot')}</p>
       )}
       <div className="dialog-actions">
         <button type="button" onClick={onClose} autoFocus>
