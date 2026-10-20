@@ -78,14 +78,16 @@ public sealed class ButtonsTests : IAsyncLifetime
         var connection = new ConnectionUseCases(_engine, new FakeFirewall());
         var activity = new ActivityUseCases(_engine, store);
         var opener = new FakeOpener();
-        var received = new ReceivedUseCases(transfers, paths, opener, _files);
+        // What has arrived is read from the real Received folder, as in the app.
+        var disk = new LocalFileSystem();
+        var received = new ReceivedUseCases(transfers, paths, opener, disk);
         var thumbnails = new ThumbnailUseCases(shares, received, new FakeThumbnails());
         var sending = new SendingUseCases(_engine, shares);
         var notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, new FakeNotifier(), new FakeWindow());
         var background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, new FakePresence());
         _router = new BridgeRouter(
             shares, transfers, settings, connection, new OpenedInvites(), activity, received, _clipboard, opener, thumbnails,
-            new DroppedFiles(), sending, notifications, background, new MediaUseCases(shares, received, new LocalFileSystem()));
+            new DroppedFiles(), sending, notifications, background, new MediaUseCases(shares, received, disk));
         _router.EventRaised += json => _events.Enqueue(JsonDocument.Parse(json).RootElement.Clone());
         _router.CommandFailed += (_, e) => _failure = e;
 
@@ -197,6 +199,43 @@ public sealed class ButtonsTests : IAsyncLifetime
         var renamed = await ShareAFileAsync("film.mp4", "MZ"u8.ToArray());
         var answer = await _router.InvokeAsync(Commands.MediaOpen, JsonSerializer.Serialize(new MediaArgs(ItemKindDto.Share, renamed), Contract.Json));
         Assert.Contains(ErrorCodes.MediaNotPlayable, answer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_received_photo_opens_in_the_viewer_from_the_Received_folder()
+    {
+        // Another device on this computer shares a photo.
+        var originals = Path.Combine(_folder, "originals");
+        Directory.CreateDirectory(originals);
+        var photo = Path.Combine(originals, "from grandma.jpg");
+        var content = RandomNumberGenerator.GetBytes(150_000);
+        new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }.CopyTo(content, 0);
+        File.WriteAllBytes(photo, content);
+        await using var sender = new MonoTorrentTransferEngine(new FakePaths(Path.Combine(_folder, "sender")));
+        await sender.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var offered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shareId = ShareId.New();
+        sender.OfferChanged += (changed, state) =>
+        {
+            if (changed == shareId && state == OfferState.Ready)
+                offered.TrySetResult();
+        };
+        await sender.OfferAsync(shareId, photo);
+        await offered.Task.WaitAsync(Timeout);
+        var invite = (await sender.GetInviteAsync(shareId))!;
+
+        var id = (await ClickAsync(Commands.TransfersReceive, new ReceiveArgs(invite))).GetProperty("id").GetString()!;
+        // Discovery is closed in tests, so the two are introduced by hand.
+        Assert.True(TransferId.TryParse(id, out var transferId));
+        await _engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+
+        var opened = await ClickAsync(Commands.MediaOpen, new MediaArgs(ItemKindDto.Transfer, id));
+        Assert.Equal(("picture", "from grandma.jpg"), (opened.GetProperty("kind").GetString(), opened.GetProperty("name").GetString()));
+        var reply = _router.ServeMedia(opened.GetProperty("url").GetString()!, null);
+        Assert.Equal((200, "image/jpeg"), (reply.Status, reply.ContentType));
+        Assert.Equal(content, ReadAll(reply));
     }
 
     private static byte[] ReadAll(MediaReply reply)

@@ -18,6 +18,8 @@ interface DetailsWindowProps {
   onClose: () => void
   onError: (code: ErrorCode) => void
   onInfo: (text: string) => void
+  /** Shows the file inside ComParta, when it is a picture that has arrived or is shared. */
+  onView?: () => void
 }
 
 /** How often the open window asks again (UX design, "Details window"). */
@@ -71,7 +73,7 @@ function transferRows(transfer: TransferDetailsDto, stopped: boolean): [MessageK
  * Everything ComParta knows about one file, refreshed every second while open (CAP-26). Escape or
  * Close shuts it, and focus goes back to the button that opened it.
  */
-export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, onError, onInfo }: DetailsWindowProps) {
+export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, onError, onInfo, onView }: DetailsWindowProps) {
   const [details, setDetails] = useState<Details | null>(null)
   const [gone, setGone] = useState(false)
 
@@ -157,7 +159,7 @@ export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, 
             <button type="button" onClick={() => runOnReceived('received.reveal')}>
               {t('received.reveal')}
             </button>
-            <button type="button" className="primary" onClick={() => runOnReceived('received.open')}>
+            <button type="button" className="primary" onClick={() => (onView ? onView() : runOnReceived('received.open'))}>
               {t('received.open')}
             </button>
           </>
@@ -172,6 +174,11 @@ export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, 
               <FileDown size={18} aria-hidden="true" />
               {t('shares.saveDownloadFile')}
             </button>
+            {onView && (
+              <button type="button" onClick={onView}>
+                {t('received.open')}
+              </button>
+            )}
             <button type="button" className="primary" onClick={() => copyInvite(details.value)}>
               {t('shares.copyInvite')}
             </button>
