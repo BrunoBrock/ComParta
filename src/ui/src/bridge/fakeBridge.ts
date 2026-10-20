@@ -422,7 +422,8 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       if (!share) return fail('share.notFound')
       if (share.status !== 'ready') return fail('share.notReady')
       fake.savedDownloadFiles.push(id)
-      // As the app: a numbered name when one is already there.
+      // As the app: a numbered name when one is already there. The app's names end in the engine's
+      // own extension, which the plain-words guard keeps out of this folder; the screen never shows them.
       const copies = fake.savedDownloadFiles.filter((saved) => saved === id).length
       return ok(copies === 1 ? `${share.name}.download` : `${share.name} (${copies}).download`)
     },
