@@ -200,6 +200,8 @@ export const en = {
   'viewer.openFolder': 'Open the folder',
   'viewer.cancel': 'Cancel',
   'received.openFor': 'Open {name}',
+  'received.openWith': 'Open with another app',
+  'received.openWithFor': 'Open {name} with another app',
   'received.reveal': 'Show in folder',
   'received.revealFor': 'Show {name} in its folder',
   'received.delete': 'Delete file',

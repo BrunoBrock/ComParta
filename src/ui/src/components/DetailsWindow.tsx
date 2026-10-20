@@ -18,7 +18,7 @@ interface DetailsWindowProps {
   onClose: () => void
   onError: (code: ErrorCode) => void
   onInfo: (text: string) => void
-  /** Shows the file inside ComParta, when it is a picture that has arrived or is shared. */
+  /** Shows the file inside ComParta, or says it cannot be played there (epic 18). */
   onView?: () => void
 }
 
@@ -158,6 +158,9 @@ export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, 
           <>
             <button type="button" onClick={() => runOnReceived('received.reveal')}>
               {t('received.reveal')}
+            </button>
+            <button type="button" onClick={() => runOnReceived('received.open')}>
+              {t('received.openWith')}
             </button>
             <button type="button" className="primary" onClick={() => (onView ? onView() : runOnReceived('received.open'))}>
               {t('received.open')}

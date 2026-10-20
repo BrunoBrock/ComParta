@@ -54,11 +54,11 @@ describe('using what was received', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('opens a received file and shows it in its folder', async () => {
+  it('opens a received file with another app and shows it in its folder', async () => {
     const { user, bridge } = setup({ transfers: [arrived] })
     await goToReceived(user)
 
-    await user.click(await button('Open Recipe.pdf'))
+    await user.click(await button('Open Recipe.pdf with another app'))
     await user.click(await button('Show Recipe.pdf in its folder'))
 
     expect(bridge.openedReceived).toEqual(['t1'])
@@ -103,7 +103,7 @@ describe('using what was received', () => {
     await goToReceived(user)
 
     bridge.failNextWith = 'received.openFailed'
-    await user.click(await button('Open Recipe.pdf'))
+    await user.click(await button('Open Recipe.pdf with another app'))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(en['error.received.openFailed'])
   })

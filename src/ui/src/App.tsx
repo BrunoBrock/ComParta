@@ -127,11 +127,17 @@ export default function App({ bridge }: AppProps) {
 
   const closeViewer = useCallback(() => setViewing(null), [])
 
-  const canView = (item: DetailsOf) => viewable(item.kind).some((file) => file.id === item.id)
+  // Any file that arrived or is shared can be opened; one ComParta cannot play shows the message
+  // that offers its folder instead (epic 18 stories 4 and 5).
+  const canView = (item: DetailsOf) =>
+    item.kind === 'share'
+      ? shares?.some((s) => s.id === item.id && s.status === 'ready')
+      : transfers?.some((tr) => tr.id === item.id && tr.state === 'done')
 
   function openViewer(item: DetailsOf) {
     const items = viewable(item.kind)
-    setViewing({ items, start: Math.max(0, items.findIndex((file) => file.id === item.id)) })
+    const at = items.findIndex((file) => file.id === item.id)
+    setViewing(at >= 0 ? { items, start: at } : { items: [item], start: 0 })
   }
 
   // Each guided send that shared a file counts; opting out ends them at once.
@@ -504,6 +510,7 @@ export default function App({ bridge }: AppProps) {
       onContinueAll={continueReceiving}
       onDetails={setDetails}
       onReceive={startReceiving}
+      onView={openViewer}
     />
   )
 

@@ -1,4 +1,4 @@
-import { CircleHelp, Download, ExternalLink, FolderOpen, FolderSearch, Inbox, Trash2, X } from 'lucide-react'
+import { CircleHelp, Download, ExternalLink, Eye, FolderOpen, FolderSearch, Inbox, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import type { Bridge, ErrorCode, TransferDto } from '../bridge/index.ts'
 import { formatSize, formatTimeLeft, percentOf, t } from '../i18n/index.ts'
@@ -43,6 +43,8 @@ interface TransfersSectionProps {
   onDetails: (item: DetailsOf) => void
   /** The section's primary action, offered when it is empty. */
   onReceive: () => void
+  /** Shows a file that arrived inside ComParta, or says it cannot be played there (epic 18). */
+  onView: (item: DetailsOf) => void
 }
 
 const tones: Record<TransferDto['state'], ChipTone> = {
@@ -103,6 +105,7 @@ export default function TransfersSection(props: TransfersSectionProps) {
     onContinueAll,
     onDetails,
     onReceive,
+    onView,
   } = props
 
   // The received file waiting for the person to confirm its deletion.
@@ -227,7 +230,7 @@ export default function TransfersSection(props: TransfersSectionProps) {
                   })}
                   onDetails={() => onDetails({ kind: 'transfer', id: transfer.id, name })}
                   picture={<Thumbnail bridge={bridge} kind="transfer" id={transfer.id} name={name} ready={finished} />}
-                  onMain={finished ? () => runOnReceived('received.open', transfer) : undefined}
+                  onMain={finished ? () => onView({ kind: 'transfer', id: transfer.id, name }) : undefined}
                   // A running file is only cancelled with its own button; Delete never stops it by accident.
                   onRemove={() => {
                     if (finished) setDeleting({ id: transfer.id, name })
@@ -240,11 +243,20 @@ export default function TransfersSection(props: TransfersSectionProps) {
                           <button
                             type="button"
                             className="primary"
-                            onClick={() => runOnReceived('received.open', transfer)}
+                            onClick={() => onView({ kind: 'transfer', id: transfer.id, name })}
                             aria-label={t('received.openFor', { name })}
                           >
-                            <ExternalLink size={18} aria-hidden="true" />
+                            <Eye size={18} aria-hidden="true" />
                             {t('received.open')}
+                          </button>
+                          <button
+                            type="button"
+                            className="quiet"
+                            onClick={() => runOnReceived('received.open', transfer)}
+                            aria-label={t('received.openWithFor', { name })}
+                          >
+                            <ExternalLink size={18} aria-hidden="true" />
+                            {t('received.openWith')}
                           </button>
                           <button
                             type="button"

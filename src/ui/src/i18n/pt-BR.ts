@@ -206,6 +206,8 @@ export const ptBR: Catalog = {
   'viewer.openFolder': 'Abrir a pasta',
   'viewer.cancel': 'Cancelar',
   'received.openFor': 'Abrir {name}',
+  'received.openWith': 'Abrir com outro app',
+  'received.openWithFor': 'Abrir {name} com outro app',
   'received.reveal': 'Mostrar na pasta',
   'received.revealFor': 'Mostrar {name} na pasta',
   'received.delete': 'Apagar arquivo',

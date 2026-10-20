@@ -136,18 +136,39 @@ describe('the picture viewer', () => {
     expect(bridge.openedReceived).toEqual([])
   })
 
-  it('leaves other files to the app that opens them, and offers no viewer for a shared one', async () => {
+  it('says a document cannot be played here, and Open with another app still hands it over', async () => {
     const letter: TransferDto = { ...arrived, id: 't2', name: 'letter.pdf' }
     const { bridge, user } = setup({ shares: [letterShare], transfers: [letter] })
 
-    const shareDetails = await openDetails(user, letterShare.name)
-    expect(within(shareDetails).queryByRole('button', { name: en['received.open'] })).not.toBeInTheDocument()
-    await user.click(within(shareDetails).getByRole('button', { name: en['details.close'] }))
+    await openPicture(user, letterShare.name)
+    const viewer = screen.getByRole('dialog', { name: letterShare.name })
+    expect(await within(viewer).findByRole('alert')).toHaveTextContent(en['error.media.notPlayable'])
+    await user.click(within(viewer).getByRole('button', { name: en['viewer.cancel'] }))
 
+    await user.click(screen.getByRole('button', { name: en['details.close'] }))
     await goToReceived(user)
     const details = await openDetails(user, letter.name!)
-    await user.click(within(details).getByRole('button', { name: en['received.open'] }))
+    await user.click(within(details).getByRole('button', { name: en['received.openWith'] }))
     expect(bridge.openedReceived).toEqual(['t2'])
+  })
+
+  it('opens what arrived from its card and on a double-click, moving through the playable ones only', async () => {
+    const song: TransferDto = { ...arrived, id: 't4', name: 'song.mp3' }
+    const letter: TransferDto = { ...arrived, id: 't2', name: 'letter.pdf' }
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue()
+    const { user } = setup({ transfers: [arrived, letter, song] })
+    await goToReceived(user)
+
+    await user.click(await screen.findByRole('button', { name: en['received.openFor'].replace('{name}', song.name!) }))
+    const viewer = await screen.findByRole('dialog', { name: song.name! })
+    expect(within(viewer).getByText('1 of 2')).toBeInTheDocument()
+    await user.click(within(viewer).getByRole('button', { name: en['viewer.next'] }))
+    expect(await within(viewer).findByRole('img', { name: arrived.name! })).toBeInTheDocument()
+    await user.click(within(viewer).getByRole('button', { name: en['viewer.close'] }))
+
+    await user.dblClick(screen.getByText(arrived.name!, { selector: '.visually-hidden, .name-start' }))
+    expect(await within(await screen.findByRole('dialog', { name: arrived.name! })).findByRole('img')).toBeInTheDocument()
+    vi.restoreAllMocks()
   })
 })
 
