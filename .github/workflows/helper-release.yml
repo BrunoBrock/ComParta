@@ -1,0 +1,65 @@
+name: Helper release
+
+# Builds the helper (src/ComParta.Helper) as one ready-to-run folder per system, so running it needs
+# no .NET installed. A tag such as helper-v1.0.0 publishes the builds in GitHub Releases; running the
+# workflow by hand only keeps them as downloads of that run.
+on:
+  push:
+    tags: ['helper-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # The free Oracle Cloud machine is linux-arm64.
+        rid: [linux-arm64, linux-x64, win-x64]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish
+        run: >
+          dotnet publish src/ComParta.Helper -c Release -r ${{ matrix.rid }} --self-contained
+          -p:PublishSingleFile=true -p:DebugType=none -o out/comparta-helper
+
+      - name: Package
+        run: |
+          cp src/ComParta.Helper/README.md src/ComParta.Helper/comparta-helper.service LICENSE out/comparta-helper/
+          cd out
+          if [[ "${{ matrix.rid }}" == win-* ]]; then
+            zip -qr "comparta-helper-${{ matrix.rid }}.zip" comparta-helper
+          else
+            tar -czf "comparta-helper-${{ matrix.rid }}.tar.gz" comparta-helper
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: comparta-helper-${{ matrix.rid }}
+          path: out/comparta-helper-${{ matrix.rid }}.*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/helper-v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: builds
+          merge-multiple: true
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "${{ github.ref_name }}" builds/* --repo "${{ github.repository }}"
+          --title "ComParta helper ${GITHUB_REF_NAME#helper-v}" --notes "How to run it: docs/helper.md"

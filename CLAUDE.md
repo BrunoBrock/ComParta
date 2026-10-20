@@ -29,3 +29,7 @@ fake is fixed. Whatever still needs a person at a Windows PC is listed in the pu
   passes, including the wiring tests in the Windows CI job; anything else waits for the maintainer.
 - No technical words reach the person (AD-5): see the guard tests in `tests/ComParta.Core.Tests`.
 - Things that need a real Windows PC or real people are listed in the pull request for the maintainer.
+- When an epic is finished (its last story merged into `main`), update the roadmap in the same
+  change or right after: mark the epic done and move "next up" forward, both in
+  `Planning/initiative-comparta/roadmap-comparta/roadmap.html` (and `roadmap-comparta.md`) and in
+  the published "ComParta Roadmap" page, as a new version of that same link.

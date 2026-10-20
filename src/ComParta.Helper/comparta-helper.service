@@ -1,0 +1,38 @@
+# Runs the ComParta helper on Linux, started with the computer and restarted if it stops.
+# The guide is docs/helper.md. Install:
+#   sudo cp comparta-helper.service /etc/systemd/system/
+#   sudo systemctl enable --now comparta-helper
+[Unit]
+Description=ComParta helper
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+# A user of its own, made once with: sudo useradd --system --no-create-home comparta-helper
+User=comparta-helper
+Group=comparta-helper
+# The program and helper.json live here; the address and key come from the settings file below.
+WorkingDirectory=/opt/comparta-helper
+ExecStart=/opt/comparta-helper/comparta-helper
+EnvironmentFile=/etc/comparta-helper/helper.env
+# The files the helper holds survive restarts in /var/lib/comparta-helper.
+StateDirectory=comparta-helper
+Environment=Helper__DataFolder=/var/lib/comparta-helper
+Restart=on-failure
+RestartSec=5
+
+# Nothing more than it needs: no root, a read-only system, its own folder to write in.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

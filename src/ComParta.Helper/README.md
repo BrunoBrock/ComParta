@@ -49,4 +49,4 @@ Every request carries `Authorization: Bearer <key>`.
 - An app may name an address for itself only if the request came from that address, so nobody can
   make the server send apps to a third party.
 
-The full guide to running a helper on a free cloud machine is a later story (docs/helper.md).
+The guide to running a helper on the free Oracle Cloud machine, or on a Windows PC, is [docs/helper.md](../../docs/helper.md).
