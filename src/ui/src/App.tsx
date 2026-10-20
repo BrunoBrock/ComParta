@@ -25,7 +25,7 @@ import Rail, { type Section } from './components/Rail.tsx'
 import ReceiveDialog from './components/ReceiveDialog.tsx'
 import SendSteps from './components/SendSteps.tsx'
 import QuitDialog from './components/QuitDialog.tsx'
-import SettingsDialog, { type Theme } from './components/SettingsDialog.tsx'
+import SettingsDialog, { type SpeedLimits, type Theme } from './components/SettingsDialog.tsx'
 import SharesSection from './components/SharesSection.tsx'
 import SpeedBar from './components/SpeedBar.tsx'
 import TransfersSection from './components/TransfersSection.tsx'
@@ -82,11 +82,14 @@ export default function App({ bridge }: AppProps) {
     yourName: null,
     theme: null,
     welcomeDone: false,
+    receiveLimit: null,
+    sendLimit: null,
   })
   const [yourName, setYourName] = useState('')
   const [theme, setTheme] = useState<Theme>('system')
   const [version, setVersion] = useState('')
   const [guidedSend, setGuidedSend] = useState(true)
+  const [speedLimits, setSpeedLimits] = useState<SpeedLimits>({ receive: null, send: null })
   const [welcoming, setWelcoming] = useState(false)
   const welcomeChecked = useRef(false)
   const [startWithWindows, setStartWithWindows] = useState(false)
@@ -184,6 +187,8 @@ export default function App({ bridge }: AppProps) {
         yourName: stored.yourName,
         theme: stored.theme,
         welcomeDone: stored.welcomeDone,
+        receiveLimit: stored.receiveLimit,
+        sendLimit: stored.sendLimit,
       }
       // The welcome shows once per install, the first time the settings arrive (epic 12 story 3).
       if (!welcomeChecked.current) {
@@ -198,6 +203,7 @@ export default function App({ bridge }: AppProps) {
       else document.documentElement.dataset.theme = shownTheme
       setVersion(stored.version)
       setGuidedSend(stored.sendStepsSeen < sendStepsShown)
+      setSpeedLimits({ receive: stored.receiveLimit, send: stored.sendLimit })
       setStartWithWindows(stored.startWithWindows)
       setPublicServers(stored.publicServers)
       setHelper({ address: stored.helperAddress, key: stored.helperKey })
@@ -404,6 +410,11 @@ export default function App({ bridge }: AppProps) {
   function chooseGuidedSend(on: boolean) {
     setGuidedSend(on)
     void saveSettings({ sendStepsSeen: on ? 0 : sendStepsShown })
+  }
+
+  function chooseSpeedLimits(next: SpeedLimits) {
+    setSpeedLimits(next)
+    void saveSettings({ receiveLimit: next.receive, sendLimit: next.send })
   }
 
   async function choosePublicServers(servers: string[]) {
@@ -723,6 +734,8 @@ export default function App({ bridge }: AppProps) {
           onTheme={chooseTheme}
           guidedSend={guidedSend}
           onGuidedSend={chooseGuidedSend}
+          speedLimits={speedLimits}
+          onSpeedLimits={chooseSpeedLimits}
           version={version}
           onClose={() => setOpened(null)}
         />

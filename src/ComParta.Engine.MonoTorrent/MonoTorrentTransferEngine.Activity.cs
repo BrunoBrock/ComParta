@@ -8,6 +8,25 @@ namespace ComParta.Engine.MonoTorrent;
 // Activity (AD-22) of the engine; the class is split by area, see MonoTorrentTransferEngine.cs.
 public sealed partial class MonoTorrentTransferEngine
 {
+    // The speed limits the person chose, kept so a restarted engine starts with them.
+    private (long? Receive, long? Send) _limits;
+
+    public async Task SetSpeedLimitsAsync(long? receiveBytesPerSecond, long? sendBytesPerSecond, CancellationToken ct = default)
+    {
+        _limits = (receiveBytesPerSecond, sendBytesPerSecond);
+        if (_engine is { } engine)
+            await engine.UpdateSettingsAsync(WithLimits(engine.Settings));
+    }
+
+    /// <summary>The settings with the person's speed limits; 0 is MonoTorrent's "no limit".</summary>
+    private EngineSettings WithLimits(EngineSettings settings) => new EngineSettingsBuilder(settings)
+    {
+        MaximumDownloadRate = Rate(_limits.Receive),
+        MaximumUploadRate = Rate(_limits.Send),
+    }.ToSettings();
+
+    private static int Rate(long? limit) => limit is { } bytes ? (int)Math.Min(bytes, int.MaxValue) : 0;
+
     public EngineActivity GetActivity()
     {
         if (_engine is not { } engine)

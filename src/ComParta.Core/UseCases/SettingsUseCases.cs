@@ -19,10 +19,12 @@ namespace ComParta.Core.UseCases;
 /// <param name="Theme">"light" or "dark", or null to follow the system.</param>
 /// <param name="Version">The app's version, for the About section.</param>
 /// <param name="WelcomeDone">The first-run welcome was finished or skipped; it shows once per install.</param>
+/// <param name="ReceiveLimit">At most this many bytes a second received, for ComParta as a whole; null for no limit.</param>
+/// <param name="SendLimit">At most this many bytes a second sent, for ComParta as a whole; null for no limit.</param>
 public sealed record Settings(
     string? Language, string SystemLanguage, string? View = null, string? Sort = null, int SendStepsSeen = 0, bool StartWithWindows = false,
     IReadOnlyList<string>? PublicServers = null, string? HelperAddress = null, string? HelperKey = null, string? YourName = null,
-    string? Theme = null, string Version = "", bool WelcomeDone = false)
+    string? Theme = null, string Version = "", bool WelcomeDone = false, long? ReceiveLimit = null, long? SendLimit = null)
 {
     public IReadOnlyList<string> PublicServers { get; init; } = PublicServers ?? [];
 }
@@ -42,6 +44,12 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
     private const string YourNameKey = "yourName";
     private const string ThemeKey = "theme";
     private const string WelcomeDoneKey = "welcomeDone";
+    private const string ReceiveLimitKey = "receiveLimit";
+    private const string SendLimitKey = "sendLimit";
+
+    /// <summary>The slowest and fastest speed limits, in bytes a second (epic 14 story 4).</summary>
+    public const long MinSpeedLimit = 10_000;
+    public const long MaxSpeedLimit = 1_000_000_000;
 
     /// <summary>The longest name a person can give; it has to fit in an invite message.</summary>
     public const int MaxNameLength = 40;
@@ -81,7 +89,9 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
         await repository.GetAsync(YourNameKey, ct),
         await repository.GetAsync(ThemeKey, ct),
         system.AppVersion,
-        await repository.GetAsync(WelcomeDoneKey, ct) == "true");
+        await repository.GetAsync(WelcomeDoneKey, ct) == "true",
+        ReadLimit(await repository.GetAsync(ReceiveLimitKey, ct)),
+        ReadLimit(await repository.GetAsync(SendLimitKey, ct)));
 
     /// <summary>Hands the stored public servers to the engine; call after it starts and before anything is shared.</summary>
     public async Task StartAsync(CancellationToken ct = default)
@@ -91,6 +101,8 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
         await engine.SetPublicServersAsync(ToUris(ReadServers(await repository.GetAsync(PublicServersKey, ct))), ct);
         await engine.SetHelperAsync(
             ReadHelper(await repository.GetAsync(HelperAddressKey, ct), await repository.GetAsync(HelperKeyKey, ct)), ct);
+        await engine.SetSpeedLimitsAsync(
+            ReadLimit(await repository.GetAsync(ReceiveLimitKey, ct)), ReadLimit(await repository.GetAsync(SendLimitKey, ct)), ct);
     }
 
     /// <summary>
@@ -101,8 +113,11 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
     public async Task<Result> SetAsync(
         string? language, string? view, string? sort, int sendStepsSeen = 0, bool startWithWindows = false,
         IReadOnlyList<string>? publicServers = null, string? helperAddress = null, string? helperKey = null,
-        string? yourName = null, string? theme = null, bool welcomeDone = false, CancellationToken ct = default)
+        string? yourName = null, string? theme = null, bool welcomeDone = false, long? receiveLimit = null, long? sendLimit = null,
+        CancellationToken ct = default)
     {
+        if (receiveLimit is < MinSpeedLimit or > MaxSpeedLimit || sendLimit is < MinSpeedLimit or > MaxSpeedLimit)
+            return Result.Fail(ErrorKind.SettingsInvalid);
         yourName = string.IsNullOrWhiteSpace(yourName) ? null : yourName.Trim();
         if (yourName is not null && (yourName.Length > MaxNameLength || yourName.Any(char.IsControl)))
             return Result.Fail(ErrorKind.SettingsInvalid);
@@ -123,6 +138,7 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
             return Result.Fail(ErrorKind.SettingsInvalid);
         var serversBefore = ReadServers(await repository.GetAsync(PublicServersKey, ct));
         var helperBefore = ReadHelper(await repository.GetAsync(HelperAddressKey, ct), await repository.GetAsync(HelperKeyKey, ct));
+        var limitsBefore = (ReadLimit(await repository.GetAsync(ReceiveLimitKey, ct)), ReadLimit(await repository.GetAsync(SendLimitKey, ct)));
         await repository.SetAsync(LanguageKey, language, ct);
         await repository.SetAsync(ViewKey, view, ct);
         await repository.SetAsync(SortKey, sort, ct);
@@ -134,13 +150,24 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
         await repository.SetAsync(YourNameKey, yourName, ct);
         await repository.SetAsync(ThemeKey, theme, ct);
         await repository.SetAsync(WelcomeDoneKey, welcomeDone ? "true" : null, ct);
+        await repository.SetAsync(ReceiveLimitKey, receiveLimit?.ToString(System.Globalization.CultureInfo.InvariantCulture), ct);
+        await repository.SetAsync(SendLimitKey, sendLimit?.ToString(System.Globalization.CultureInfo.InvariantCulture), ct);
         if (engine is not null && !servers.SequenceEqual(serversBefore))
             await engine.SetPublicServersAsync(ToUris(servers), ct);
         if (engine is not null && helper != helperBefore)
             await engine.SetHelperAsync(helper, ct);
+        if (engine is not null && (receiveLimit, sendLimit) != limitsBefore)
+            await engine.SetSpeedLimitsAsync(receiveLimit, sendLimit, ct);
         Changed?.Invoke();
         return Result.Success;
     }
+
+    // A stored limit that is not a number in range counts as no limit.
+    private static long? ReadLimit(string? stored) =>
+        long.TryParse(stored, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var limit)
+        && limit is >= MinSpeedLimit and <= MaxSpeedLimit
+            ? limit
+            : null;
 
     /// <summary>
     /// The servers without blank lines or repeats, or null when one is not an internet address the

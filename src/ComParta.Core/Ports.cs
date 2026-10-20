@@ -141,6 +141,11 @@ public interface ITransferEngine
     /// </summary>
     Task SetHelperAsync(HelperComputer? helper, CancellationToken ct = default);
     /// <summary>
+    /// The most ComParta as a whole receives and sends each second, in bytes; null for no limit.
+    /// Holds from now on, for every file, until changed.
+    /// </summary>
+    Task SetSpeedLimitsAsync(long? receiveBytesPerSecond, long? sendBytesPerSecond, CancellationToken ct = default) => Task.CompletedTask;
+    /// <summary>
     /// The invite text for a share that is ready, or null when it is not. It is a link the person
     /// can send as it is, and that other apps of the engine's kind open too (AD-16, amended).
     /// </summary>

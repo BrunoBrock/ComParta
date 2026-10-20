@@ -111,6 +111,35 @@ describe('the Settings page', () => {
     await waitFor(async () => expect((await stored(bridge)).sendStepsSeen).toBe(0))
   })
 
+  it('limits the speed of receiving and sending, keeps it, and can go back to no limit', async () => {
+    const { bridge, user } = setup()
+    const dialog = await openSettings(user)
+    const speed = within(dialog).getByRole('group', { name: en['settings.speed'] })
+    const receive = within(speed).getByRole('combobox', { name: en['settings.receiveLimit'] })
+    const send = within(speed).getByRole('combobox', { name: en['settings.sendLimit'] })
+    expect(receive).toHaveDisplayValue(en['settings.noLimit'])
+
+    await user.selectOptions(receive, '1.0 MB/s')
+    await user.selectOptions(send, '256 KB/s')
+
+    await waitFor(async () => expect((await stored(bridge)).sendLimit).toBe(256 * 1024))
+    expect((await stored(bridge)).receiveLimit).toBe(1024 ** 2)
+    reopen(bridge)
+    const again = within(await openSettings(user)).getByRole('combobox', { name: en['settings.receiveLimit'] })
+    await waitFor(() => expect(again).toHaveDisplayValue('1.0 MB/s'))
+
+    await user.selectOptions(again, en['settings.noLimit'])
+
+    await waitFor(async () => expect((await stored(bridge)).receiveLimit).toBeNull())
+    expect((await stored(bridge)).sendLimit).toBe(256 * 1024)
+  })
+
+  it('shows a limit that is not one of the choices as it is', async () => {
+    const { user } = setup({ sendLimit: 300_000 })
+    const send = within(await openSettings(user)).getByRole('combobox', { name: en['settings.sendLimit'] })
+    await waitFor(() => expect(send).toHaveDisplayValue('293 KB/s'))
+  })
+
   it('shows the version and that ComParta is open source, and passes the accessibility check', async () => {
     const { user } = setup()
     const dialog = await openSettings(user)
@@ -134,7 +163,14 @@ describe('the Settings page', () => {
   it('refuses in the fake bridge what core refuses', async () => {
     const { bridge } = setup()
     const { systemLanguage: _, version: __, ...base } = await stored(bridge)
-    for (const change of [{ yourName: 'x'.repeat(41) }, { yourName: 'line\nbreak' }, { theme: 'blue' }]) {
+    for (const change of [
+      { yourName: 'x'.repeat(41) },
+      { yourName: 'line\nbreak' },
+      { theme: 'blue' },
+      { receiveLimit: 9_999 },
+      { sendLimit: 1.5e9 },
+      { sendLimit: 20_000.5 },
+    ]) {
       expect((await bridge.invoke('settings.set', { ...base, ...change })).ok).toBe(false)
     }
     expect((await bridge.invoke('settings.set', { ...base, yourName: 'x'.repeat(40), theme: 'light' })).ok).toBe(true)

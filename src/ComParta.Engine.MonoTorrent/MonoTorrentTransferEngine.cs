@@ -149,7 +149,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
                 listener.StatusChanged += (_, _) => ReportReachability();
                 return _probe.Track(endPoint, listener);
             });
-        _engine = new ClientEngine(ToEngineSettings(_policy, _cacheFolder, AcceptIncoming), factories);
+        _engine = new ClientEngine(WithLimits(ToEngineSettings(_policy, _cacheFolder, AcceptIncoming)), factories);
         _progressTimer = new Timer(_ => ReportProgress(), null, ProgressInterval, ProgressInterval);
         _reachabilityTimer = new Timer(_ => ReportReachability(), null, ReachabilityInterval, ReachabilityInterval);
         _activityTimer = new Timer(_ => _ = TickActivityAsync(), null, ActivityInterval, ActivityInterval);

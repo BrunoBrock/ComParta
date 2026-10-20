@@ -653,6 +653,41 @@ public sealed class BridgeRouterTests
     }
 
     [Fact]
+    public async Task Speed_limits_are_stored_and_reach_the_engine_only_when_they_change()
+    {
+        var set = (object args) => InvokeAsync(Commands.SettingsSet, args);
+
+        Assert.True((await set(new { receiveLimit = 500_000, sendLimit = 1_000_000 })).GetProperty("ok").GetBoolean());
+        Assert.Equal((500_000L, 1_000_000L), ((long, long))(_engine.SpeedLimits.Receive!.Value, _engine.SpeedLimits.Send!.Value));
+        var stored = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.Equal((500_000, 1_000_000), (stored.GetProperty("receiveLimit").GetInt64(), stored.GetProperty("sendLimit").GetInt64()));
+
+        await set(new { receiveLimit = 500_000, sendLimit = 1_000_000, language = "en" });
+        Assert.Equal(1, _engine.SpeedLimitCalls);
+
+        foreach (var wrong in new object[] { new { receiveLimit = 9_999 }, new { sendLimit = 0 }, new { sendLimit = -5 }, new { receiveLimit = 2_000_000_000 } })
+            Assert.Equal("settings.invalid", ErrorCode(await set(wrong)));
+        Assert.Equal(1, _engine.SpeedLimitCalls);
+
+        // Left out means no limit again.
+        await set(new { language = "en" });
+        Assert.Equal((null, null), _engine.SpeedLimits);
+        stored = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.Equal(JsonValueKind.Null, stored.GetProperty("receiveLimit").ValueKind);
+    }
+
+    [Fact]
+    public async Task Stored_speed_limits_reach_the_engine_at_start()
+    {
+        await new SettingsUseCases(_settings, new FakeSystem("en")).SetAsync(null, null, null, receiveLimit: 250_000);
+        var engine = new FakeEngine();
+
+        await new SettingsUseCases(_settings, new FakeSystem("en"), engine).StartAsync();
+
+        Assert.Equal((250_000L, (long?)null), engine.SpeedLimits);
+    }
+
+    [Fact]
     public async Task Stored_public_servers_reach_the_engine_at_start()
     {
         await new SettingsUseCases(_settings, new FakeSystem("en")).SetAsync(null, null, null, publicServers: ["udp://open.example.org:6969"]);

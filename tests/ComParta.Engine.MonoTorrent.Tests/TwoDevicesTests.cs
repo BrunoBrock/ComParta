@@ -141,6 +141,31 @@ public sealed class TwoDevicesTests : IAsyncLifetime
         Assert.Null(receiver.GetReceiveKey(transferId));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_speed_limit_on_either_side_slows_the_file_down_and_it_still_arrives_whole(bool limitTheSender)
+    {
+        // 600 KB at 100 KB a second takes about six seconds; without a limit it takes well under one.
+        var original = CreateFile("limited.bin", 600_000);
+        var (sender, _) = await StartDeviceAsync("sender");
+        var (receiver, receiverPaths) = await StartDeviceAsync("receiver");
+        await (limitTheSender ? sender.SetSpeedLimitsAsync(null, 100_000) : receiver.SetSpeedLimitsAsync(100_000, null));
+        var shareId = ShareId.New();
+        Assert.Equal(OfferState.Ready, await OfferAndWaitAsync(sender, shareId, original));
+        var invite = (await sender.GetInviteAsync(shareId))!;
+        var done = WhenFinished(receiver);
+        var transferId = TransferId.New();
+        Assert.True(await receiver.ReceiveAsync(transferId, invite));
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await receiver.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        Assert.True((await done.Task.WaitAsync(Timeout)).Done);
+
+        Assert.True(watch.Elapsed > TimeSpan.FromSeconds(3), $"It arrived in {watch.Elapsed}.");
+        Assert.Equal(Checksum(original), Checksum(Path.Combine(receiverPaths.ReceivedRoot, "limited.bin")));
+    }
+
     private static async Task<OfferState> OfferItemsAndWaitAsync(MonoTorrentTransferEngine engine, ShareId id, string name, IReadOnlyList<ShareItem> items)
     {
         var outcome = new TaskCompletionSource<OfferState>(TaskCreationOptions.RunContinuationsAsynchronously);

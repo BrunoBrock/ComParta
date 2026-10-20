@@ -298,6 +298,42 @@ public sealed class ButtonsTests : IAsyncLifetime
         Assert.Equal(content, ReadAll(reply));
     }
 
+    [Fact]
+    public async Task A_receive_limit_chosen_in_settings_slows_a_file_down_and_is_kept()
+    {
+        await ClickAsync(Commands.SettingsSet, new SetSettingsArgs(null, null, null, 0, false, null, WelcomeDone: true, ReceiveLimit: 100_000));
+        await ScreenShowsAsync(Events.SettingsChanged, s => s.GetProperty("receiveLimit").ValueKind == JsonValueKind.Number);
+
+        var originals = Path.Combine(_folder, "originals");
+        Directory.CreateDirectory(originals);
+        var file = Path.Combine(originals, "slow.bin");
+        File.WriteAllBytes(file, RandomNumberGenerator.GetBytes(600_000));
+        await using var sender = new MonoTorrentTransferEngine(new FakePaths(Path.Combine(_folder, "sender")));
+        await sender.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var offered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shareId = ShareId.New();
+        sender.OfferChanged += (changed, state) =>
+        {
+            if (changed == shareId && state == OfferState.Ready)
+                offered.TrySetResult();
+        };
+        await sender.OfferAsync(shareId, file);
+        await offered.Task.WaitAsync(Timeout);
+        var invite = (await sender.GetInviteAsync(shareId))!;
+
+        var id = (await ClickAsync(Commands.TransfersReceive, new ReceiveArgs(invite))).GetProperty("id").GetString()!;
+        Assert.True(TransferId.TryParse(id, out var transferId));
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await _engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+
+        // 600 KB at 100 KB a second: about six seconds, where it would otherwise take under one.
+        Assert.True(watch.Elapsed > TimeSpan.FromSeconds(3), $"It arrived in {watch.Elapsed}.");
+        var store = await SqliteStore.OpenAsync(_paths.DatabasePath);
+        Assert.Equal(100_000, (await new SettingsUseCases(store, new FakeSystem("en")).GetAsync()).ReceiveLimit);
+    }
+
     private static byte[] ReadAll(MediaReply reply)
     {
         using var body = reply.Body!;

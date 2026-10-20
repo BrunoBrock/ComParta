@@ -89,6 +89,8 @@ export interface SettingsDto {
   theme: string | null;
   version: string;
   welcomeDone: boolean;
+  receiveLimit: number | null;
+  sendLimit: number | null;
 }
 
 export interface SetSettingsArgs {
@@ -103,6 +105,8 @@ export interface SetSettingsArgs {
   yourName: string | null;
   theme: string | null;
   welcomeDone: boolean | null;
+  receiveLimit: number | null;
+  sendLimit: number | null;
 }
 
 export interface ConnectionDto {

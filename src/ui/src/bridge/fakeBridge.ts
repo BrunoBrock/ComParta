@@ -70,6 +70,9 @@ export interface FakeBridgeOptions {
   helper?: { address: string; key: string }
   /** Whether the first-run welcome was done; done when left out, so only its own tests see it. */
   welcomeDone?: boolean
+  /** The speed limits chosen in Settings, in bytes a second. */
+  receiveLimit?: number
+  sendLimit?: number
   /** The name and colors the person chose in Settings. */
   yourName?: string
   theme?: 'light' | 'dark'
@@ -159,6 +162,10 @@ export function fakePicture(name: string): string {
     `<path d="M0 160 L80 80 L140 130 L180 100 L240 160 Z" fill="hsl(${hue} 40% 30%)"/></svg>`
   return `data:image/svg+xml;base64,${btoa(svg)}`
 }
+
+// As core's MinSpeedLimit and MaxSpeedLimit.
+const minSpeedLimit = 10_000
+const maxSpeedLimit = 1_000_000_000
 
 const ok = <T>(value: T): CommandResult<T> => ({ ok: true, value })
 const fail = (code: ErrorCode): CommandResult<never> => ({ ok: false, error: { code } })
@@ -337,6 +344,8 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     theme: options.theme ?? null,
     version: '1.2.0',
     welcomeDone: options.welcomeDone ?? true,
+    receiveLimit: options.receiveLimit ?? null,
+    sendLimit: options.sendLimit ?? null,
   }
   // What quitting would stop: shares someone is getting and files arriving, as the app counts them.
   const moving = () => [
@@ -589,6 +598,11 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
         return fail('settings.invalid')
       const theme = (args as SetSettingsArgs).theme ?? null
       if (theme !== null && theme !== 'light' && theme !== 'dark') return fail('settings.invalid')
+      // As core: a limit is a whole number of bytes a second, from 10 thousand to a billion.
+      const { receiveLimit = null, sendLimit = null } = args as SetSettingsArgs
+      const limitOk = (limit: number | null) =>
+        limit === null || (Number.isInteger(limit) && limit >= minSpeedLimit && limit <= maxSpeedLimit)
+      if (!limitOk(receiveLimit) || !limitOk(sendLimit)) return fail('settings.invalid')
       const connectionBefore = connectionDto()
       settings = {
         ...settings,
@@ -603,6 +617,8 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
         yourName,
         theme,
         welcomeDone: (args as SetSettingsArgs).welcomeDone ?? false,
+        receiveLimit,
+        sendLimit,
       }
       emit({ event: 'settings.changed', payload: { ...settings } })
       const connectionAfter = connectionDto()

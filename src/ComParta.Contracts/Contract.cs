@@ -207,16 +207,20 @@ public sealed record InvitePreviewDto(
 /// <param name="WelcomeDone">The first-run welcome was finished or skipped.</param>
 public sealed record SettingsDto(
     string? Language, string SystemLanguage, string? View, string? Sort, int SendStepsSeen, bool StartWithWindows, string[] PublicServers,
-    string? HelperAddress, string? HelperKey, string? YourName, string? Theme, string Version, bool WelcomeDone);
+    string? HelperAddress, string? HelperKey, string? YourName, string? Theme, string Version, bool WelcomeDone,
+    long? ReceiveLimit, long? SendLimit);
 
 /// <summary>Every choice at once; the UI sends what it has, with the one it changed.</summary>
 /// <param name="Language">A language tag, or null to follow the system again.</param>
 /// <param name="PublicServers">Addresses of public servers, one per entry; null or empty for none.</param>
 /// <param name="HelperAddress">Where the helper computer takes files; null or empty for none. Goes with <paramref name="HelperKey"/>.</param>
 /// <param name="HelperKey">The helper computer's key; null or empty for none.</param>
+/// <param name="ReceiveLimit">The most received each second, in bytes, for the whole app; null for no limit.</param>
+/// <param name="SendLimit">The most sent each second, in bytes, for the whole app; null for no limit.</param>
 public sealed record SetSettingsArgs(
     string? Language, string? View, string? Sort, int? SendStepsSeen, bool? StartWithWindows, string[]? PublicServers,
-    string? HelperAddress = null, string? HelperKey = null, string? YourName = null, string? Theme = null, bool? WelcomeDone = null);
+    string? HelperAddress = null, string? HelperKey = null, string? YourName = null, string? Theme = null, bool? WelcomeDone = null,
+    long? ReceiveLimit = null, long? SendLimit = null);
 
 /// <param name="Force">True once the person confirmed quitting although files are moving.</param>
 public sealed record QuitArgs(bool Force);

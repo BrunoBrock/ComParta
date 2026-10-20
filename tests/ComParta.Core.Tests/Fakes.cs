@@ -128,6 +128,16 @@ internal sealed class FakeEngine : ITransferEngine
         return Task.CompletedTask;
     }
 
+    public (long? Receive, long? Send) SpeedLimits { get; private set; }
+    public int SpeedLimitCalls { get; private set; }
+
+    public Task SetSpeedLimitsAsync(long? receiveBytesPerSecond, long? sendBytesPerSecond, CancellationToken ct = default)
+    {
+        SpeedLimits = (receiveBytesPerSecond, sendBytesPerSecond);
+        SpeedLimitCalls++;
+        return Task.CompletedTask;
+    }
+
     public Task<string?> GetInviteAsync(ShareId id, CancellationToken ct = default) =>
         Task.FromResult(Offered.ContainsKey(id) ? InvitePrefix + id : null);
 

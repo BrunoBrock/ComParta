@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { type Language, languageNames, languages, t } from '../i18n/index.ts'
+import { formatRate, type Language, languageNames, languages, t } from '../i18n/index.ts'
 import { readHelper } from '../helper.ts'
 import { maxPublicServers, readPublicServers } from '../publicServers.ts'
 import Button from './ui/Button.tsx'
@@ -9,6 +9,14 @@ export type Theme = 'system' | 'light' | 'dark'
 const themes: readonly Theme[] = ['system', 'light', 'dark']
 /** As core's MaxNameLength: the name has to fit in an invite message. */
 export const maxNameLength = 40
+
+/** The most ComParta receives and sends each second, in bytes; null for no limit (epic 14 story 4). */
+export interface SpeedLimits {
+  receive: number | null
+  send: number | null
+}
+/** The limits offered, from 256 KB to 20 MB a second. */
+const speedChoices = [256 * 1024, 512 * 1024, 1024 ** 2, 2 * 1024 ** 2, 5 * 1024 ** 2, 10 * 1024 ** 2, 20 * 1024 ** 2]
 
 interface SettingsDialogProps {
   language: Language
@@ -30,6 +38,8 @@ interface SettingsDialogProps {
   /** The step-by-step help runs when the person shares a file. */
   guidedSend: boolean
   onGuidedSend: (on: boolean) => void
+  speedLimits: SpeedLimits
+  onSpeedLimits: (limits: SpeedLimits) => void
   version: string
   onClose: () => void
 }
@@ -55,6 +65,8 @@ export default function SettingsDialog({
   onTheme,
   guidedSend,
   onGuidedSend,
+  speedLimits,
+  onSpeedLimits,
   version,
   onClose,
 }: SettingsDialogProps) {
@@ -177,6 +189,21 @@ export default function SettingsDialog({
       <p id="settings-guided-hint" className="hint">
         {t('settings.guidedSendHint')}
       </p>
+      <fieldset className="settings-speed" aria-describedby="settings-speed-hint">
+        <legend>{t('settings.speed')}</legend>
+        <p id="settings-speed-hint" className="hint">
+          {t('settings.speedHint')}
+        </p>
+        {(['receive', 'send'] as const).map((way) => (
+          <SpeedChoice
+            key={way}
+            id={`settings-${way}-limit`}
+            label={t(way === 'receive' ? 'settings.receiveLimit' : 'settings.sendLimit')}
+            limit={speedLimits[way]}
+            onChange={(limit) => onSpeedLimits({ ...speedLimits, [way]: limit })}
+          />
+        ))}
+      </fieldset>
       <label htmlFor="settings-servers">{t('settings.servers')}</label>
       <textarea
         id="settings-servers"
@@ -239,5 +266,35 @@ export default function SettingsDialog({
         </Button>
       </div>
     </Dialog>
+  )
+}
+
+interface SpeedChoiceProps {
+  id: string
+  label: string
+  limit: number | null
+  onChange: (limit: number | null) => void
+}
+
+function SpeedChoice({ id, label, limit, onChange }: SpeedChoiceProps) {
+  // A limit stored by an earlier version that is not offered any more still shows as it is.
+  const offered = limit === null || speedChoices.includes(limit) ? speedChoices : [...speedChoices, limit].sort((a, b) => a - b)
+  return (
+    <>
+      <label htmlFor={id}>{label}</label>
+      <select
+        id={id}
+        className="settings-select"
+        value={limit ?? ''}
+        onChange={(event) => onChange(event.target.value === '' ? null : Number(event.target.value))}
+      >
+        <option value="">{t('settings.noLimit')}</option>
+        {offered.map((choice) => (
+          <option key={choice} value={choice}>
+            {formatRate(choice)}
+          </option>
+        ))}
+      </select>
+    </>
   )
 }
