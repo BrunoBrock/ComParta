@@ -26,6 +26,21 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
         return store;
     }
 
+    /// <summary>
+    /// Copies a database whole into a new file, even while another copy of the app has it open
+    /// (epic 5 story 5). The copy is upgraded like any other when it is opened.
+    /// </summary>
+    public static void CopyDatabase(string from, string to)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(to))!);
+        using var source = new SqliteConnection(
+            new SqliteConnectionStringBuilder { DataSource = from, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString());
+        using var target = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = to, Pooling = false }.ToString());
+        source.Open();
+        target.Open();
+        source.BackupDatabase(target);
+    }
+
     private async Task UpgradeAsync(CancellationToken ct)
     {
         await using var connection = await ConnectAsync(ct);

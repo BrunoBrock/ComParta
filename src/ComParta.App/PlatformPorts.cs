@@ -19,14 +19,26 @@ public sealed class AppPaths : Ports.IAppPaths
 			: Path.Combine(_root, "Received");
 	}
 
-	/// <summary>The folder that holds the database and engine data, and names the running copy (AD-14).</summary>
+	/// <summary>
+	/// The folder that holds the database and engine data, and names the running copy (AD-14). The
+	/// packaged install keeps its own in the package's folder, which Windows removes with it.
+	/// </summary>
 	public static string DataRoot()
 	{
 		var home = Environment.GetEnvironmentVariable("COMPARTA_HOME");
-		return string.IsNullOrWhiteSpace(home)
-			? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ComParta")
-			: Path.GetFullPath(home);
+		if (!string.IsNullOrWhiteSpace(home))
+			return Path.GetFullPath(home);
+		return Packaged.IsPackaged
+			? Path.Combine(global::Windows.Storage.ApplicationData.Current.LocalFolder.Path, "ComParta")
+			: PilotRoot();
 	}
+
+	/// <summary>Where the unpackaged build keeps its data; the packaged install imports it once (epic 5 story 5).</summary>
+	public static string PilotRoot() =>
+		Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ComParta");
+
+	/// <summary>True when the data folder is the usual one, not one COMPARTA_HOME chose for testing.</summary>
+	public static bool IsUsualRoot => string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("COMPARTA_HOME"));
 
 	public string DatabasePath => Path.Combine(_root, "comparta.db");
 	public string EngineRoot => Path.Combine(_root, "engine");

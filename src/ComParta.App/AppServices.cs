@@ -50,6 +50,12 @@ public sealed class AppServices
 		try
 		{
 			Directory.CreateDirectory(_paths.ReceivedRoot);
+			// The first packaged run brings over what the pilot build kept (epic 5 story 5).
+			if (Packaged.IsPackaged && AppPaths.IsUsualRoot)
+			{
+				try { PilotData.Import(AppPaths.PilotRoot(), AppPaths.DataRoot(), SqliteStore.CopyDatabase); }
+				catch (Exception e) { Log(e); }
+			}
 			var store = await SqliteStore.OpenAsync(_paths.DatabasePath);
 			_engine = new MonoTorrentTransferEngine(_paths);
 			var shares = new ShareUseCases(store, _engine, new NativeFilePicker(), new LocalFileSystem(), paths: _paths);
