@@ -9,6 +9,7 @@ using ComParta.Core.Ports;
 using ComParta.Core.Tests;
 using ComParta.Core.UseCases;
 using ComParta.Engine.MonoTorrent;
+using ComParta.Shell;
 using ComParta.Storage.Sqlite;
 using MonoTorrent.Connections.TrackerServer;
 using MonoTorrent.PortForwarding;
@@ -84,7 +85,7 @@ public sealed class ButtonsTests : IAsyncLifetime
         var background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, new FakePresence());
         _router = new BridgeRouter(
             shares, transfers, settings, connection, new OpenedInvites(), activity, received, _clipboard, opener, thumbnails,
-            new DroppedFiles(), sending, notifications, background);
+            new DroppedFiles(), sending, notifications, background, new MediaUseCases(shares, received, new LocalFileSystem()));
         _router.EventRaised += json => _events.Enqueue(JsonDocument.Parse(json).RootElement.Clone());
         _router.CommandFailed += (_, e) => _failure = e;
 
@@ -135,12 +136,15 @@ public sealed class ButtonsTests : IAsyncLifetime
         throw new TimeoutException($"The screen never showed the expected {eventName}.");
     }
 
-    private async Task<string> ShareAFileAsync(string name)
+    /// <param name="head">The bytes the file starts with, as a picture, song or video would.</param>
+    private async Task<string> ShareAFileAsync(string name, byte[]? head = null)
     {
         var folder = Path.Combine(_folder, "originals");
         Directory.CreateDirectory(folder);
         var path = Path.Combine(folder, name);
-        File.WriteAllBytes(path, RandomNumberGenerator.GetBytes(200_000));
+        var content = RandomNumberGenerator.GetBytes(200_000);
+        head?.CopyTo(content, 0);
+        File.WriteAllBytes(path, content);
         _files.Files[path] = 200_000;
         _picker.NextPick = path;
 
@@ -151,6 +155,56 @@ public sealed class ButtonsTests : IAsyncLifetime
         for (var i = 0; i < 100 && _engine.PortMapper!.Mappings.Created.Count == 0; i++)
             await Task.Delay(50);
         return id;
+    }
+
+    [Theory]
+    [InlineData("photo.jpg", "picture", "image/jpeg", new byte[] { 0xFF, 0xD8, 0xFF, 0xE1 })]
+    [InlineData("song.mp3", "song", "audio/mpeg", new byte[] { (byte)'I', (byte)'D', (byte)'3', 4 })]
+    [InlineData("party.mp4", "video", "video/mp4", new byte[] { 0, 0, 0, 0x20, (byte)'f', (byte)'t', (byte)'y', (byte)'p' })]
+    public async Task Opening_a_shared_picture_song_or_video_streams_it_from_disk_in_the_parts_a_player_asks_for(
+        string name, string kind, string type, byte[] head)
+    {
+        var id = await ShareAFileAsync(name, head);
+        var onDisk = File.ReadAllBytes(Path.Combine(_folder, "originals", name));
+
+        var opened = await ClickAsync(Commands.MediaOpen, new MediaArgs(ItemKindDto.Share, id));
+        Assert.Equal((kind, name), (opened.GetProperty("kind").GetString(), opened.GetProperty("name").GetString()));
+        Assert.DoesNotContain(_folder, opened.GetRawText(), StringComparison.OrdinalIgnoreCase);
+        var url = opened.GetProperty("url").GetString()!;
+
+        // As the web view asks: the start, then a jump near the end, as a player seeking does.
+        var whole = _router.ServeMedia(url, null);
+        Assert.Equal((200, type, 200_000L), (whole.Status, whole.ContentType, whole.Length));
+        Assert.Equal(onDisk, ReadAll(whole));
+        var seek = _router.ServeMedia(url, "bytes=150000-150999");
+        Assert.Equal((206, "bytes 150000-150999/200000"), (seek.Status, seek.ContentRange));
+        Assert.Equal(onDisk[150_000..151_000], ReadAll(seek));
+        Assert.Equal(416, _router.ServeMedia(url, "bytes=200000-").Status);
+    }
+
+    [Fact]
+    public async Task Opening_a_program_or_an_unknown_file_answers_that_it_cannot_be_played()
+    {
+        foreach (var name in new[] { "setup.exe", "notes.xyz" })
+        {
+            var id = await ShareAFileAsync(name, "MZ"u8.ToArray());
+            var json = await _router.InvokeAsync(Commands.MediaOpen, JsonSerializer.Serialize(new MediaArgs(ItemKindDto.Share, id), Contract.Json));
+            var result = JsonDocument.Parse(json).RootElement;
+            Assert.Equal(ErrorCodes.MediaNotPlayable, result.GetProperty("error").GetProperty("code").GetString());
+        }
+
+        // A program renamed to look like a video is refused too.
+        var renamed = await ShareAFileAsync("film.mp4", "MZ"u8.ToArray());
+        var answer = await _router.InvokeAsync(Commands.MediaOpen, JsonSerializer.Serialize(new MediaArgs(ItemKindDto.Share, renamed), Contract.Json));
+        Assert.Contains(ErrorCodes.MediaNotPlayable, answer, StringComparison.Ordinal);
+    }
+
+    private static byte[] ReadAll(MediaReply reply)
+    {
+        using var body = reply.Body!;
+        using var copy = new MemoryStream();
+        body.CopyTo(copy);
+        return copy.ToArray();
     }
 
     [Fact]

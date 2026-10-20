@@ -39,6 +39,7 @@ public static class Commands
     public const string ThumbnailsGet = "thumbnails.get";
     public const string SharesAddDropped = "shares.addDropped";
     public const string AppQuit = "app.quit";
+    public const string MediaOpen = "media.open";
 }
 
 public static class Events
@@ -74,13 +75,14 @@ public static class ErrorCodes
     public const string ReceivedOpenFailed = "received.openFailed";
     public const string ShareDropFailed = "share.dropFailed";
     public const string FileSaveFailed = "file.saveFailed";
+    public const string MediaNotPlayable = "media.notPlayable";
     public const string Unexpected = "unexpected";
 
     public static IReadOnlyList<string> All { get; } =
     [
         ShareDuplicate, ShareNotFound, ShareNotReady, FileUnreadable,
         InviteInvalid, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, DiskFull, SettingsInvalid,
-        ReceivedNotFound, ReceivedOpenFailed, ShareDropFailed, FileSaveFailed, Unexpected,
+        ReceivedNotFound, ReceivedOpenFailed, ShareDropFailed, FileSaveFailed, MediaNotPlayable, Unexpected,
     ];
 }
 
@@ -93,6 +95,34 @@ public enum ThumbnailKindDto { Share, Transfer }
 public enum ItemKindDto { Share, Transfer }
 
 public sealed record DetailsTargetDto(ItemKindDto Kind, string Id, string Name);
+
+public enum MediaKindDto { Picture, Song, Video }
+
+public sealed record MediaArgs(ItemKindDto Kind, string Id);
+
+/// <param name="Url">Where the web view reads the file from; it serves this one file and nothing else (AD-26).</param>
+public sealed record MediaDto(string Url, MediaKindDto Kind, string Name);
+
+/// <summary>
+/// The address the web view reads opened files from (AD-26). The shell answers requests to it with
+/// <see cref="BridgeRouter.ServeMedia"/>; nothing there is ever fetched from a network.
+/// </summary>
+public static class MediaAddress
+{
+    public const string Root = "https://media.comparta.invalid/";
+
+    public static string For(string token) => Root + token;
+
+    /// <summary>The token in an address under <see cref="Root"/>, or null for any other address.</summary>
+    public static string? TokenOf(string url)
+    {
+        if (!url.StartsWith(Root, StringComparison.OrdinalIgnoreCase))
+            return null;
+        var token = url[Root.Length..];
+        var end = token.IndexOfAny(['?', '#', '/']);
+        return end >= 0 ? token[..end] : token;
+    }
+}
 
 /// <param name="Size">The picture's longest side in pixels; the app keeps it between 32 and 512.</param>
 public sealed record ThumbnailArgs(ThumbnailKindDto Kind, string Id, int Size);
@@ -259,6 +289,8 @@ public static class Contract
         new(Commands.SharesAddDropped, typeof(DropArgs), typeof(DropResultDto)),
         new(Commands.ThumbnailsGet, typeof(ThumbnailArgs), typeof(string), ResultMayBeNull: true),
         new(Commands.AppQuit, typeof(QuitArgs), typeof(QuitAnswerDto)),
+        // Fails with media.notPlayable when the file cannot be shown or played here.
+        new(Commands.MediaOpen, typeof(MediaArgs), typeof(MediaDto)),
     ];
 
     public static IReadOnlyList<EventSpec> EventSpecs { get; } =

@@ -154,36 +154,6 @@ public sealed class WindowsThumbnails : Ports.IThumbnailProvider
 	}
 }
 
-public sealed class LocalFileSystem : Ports.IFileSystem
-{
-	public bool FileExists(string path) => File.Exists(path);
-
-	public long GetReadableFileSize(string path)
-	{
-		using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-		return stream.Length;
-	}
-
-	public void DeleteFile(string path) => File.Delete(path);
-
-	public void WriteNewFile(string path, byte[] content)
-	{
-		Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-		using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-		stream.Write(content);
-	}
-
-	public byte[] ReadSmallFile(string path, int maxBytes)
-	{
-		using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-		if (stream.Length > maxBytes)
-			throw new IOException("The file is larger than allowed.");
-		var content = new byte[stream.Length];
-		stream.ReadExactly(content);
-		return content;
-	}
-}
-
 public sealed class SystemInfo : Ports.ISystemInfo
 {
 	public string UiLanguage => System.Globalization.CultureInfo.CurrentUICulture.Name is { Length: > 0 } name ? name : "en";

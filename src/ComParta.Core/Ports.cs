@@ -260,6 +260,8 @@ public interface IFileSystem
     void DeleteFile(string path);
     /// <summary>Writes a file that must not exist yet, making its folder when needed; throws when that fails.</summary>
     void WriteNewFile(string path, byte[] content);
+    /// <summary>Opens a file for reading only, while others may still read, write or delete it; throws when that fails.</summary>
+    Stream OpenRead(string path);
 }
 
 public interface IAppPaths
