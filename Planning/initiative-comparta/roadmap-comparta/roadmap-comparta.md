@@ -148,10 +148,10 @@ recorded where it binds.
 | D-3 | ~~If the field test shows homes often cannot connect, may a family member's always-on PC relay transfers for others?~~ | **Answered 2026-10-13 by P-17:** yes, through a helper every torrent app can use (AD-23). | Epic 16 |
 | D-5 | Where does the first helper run? | **The free Oracle Cloud machine** (Always Free: Arm, up to 4 cores and 24 GB, about 10 TB a month out, São Paulo region; needs a card to sign up, and an idle machine can be reclaimed). For development, the maintainer's second PC with one forwarded port. AWS and Azure are free for 12 months only; Google Cloud's free machine has about 1 GB a month out, too little. Check the offers before signing up. | Epic 16 stories 5 and 6 |
 | D-6 | Once people outside the family use ComParta, does the app ship with the project's helper turned on for everyone? | **Yes for the family pilot, decide again before a public release:** the cost, abuse (strangers storing files) and who can read what passes through it all grow with users. The alternative is that each family runs its own helper from the guide. | Epic 16 story 3 (the default), epic 5 (public release) |
-| D-7 | Do download links and download files from websites count as unknown sources, so they are refused while the switch is off? | **Yes**: one rule the person can understand ("only from friends unless I turn this on"); pasting a website link while it is off says so and points to the switch. The alternative keeps website links always allowed, since the person chose them. | Epic 13 stories 7 and 8 |
+| D-7 | ~~Do download links and download files from websites count as unknown sources, so they are refused while the switch is off?~~ | **Answered 2026-10-20: yes.** One rule the person can understand ("only from friends unless I turn this on"); pasting a website link while it is off says so and points to the switch. | Epic 13 stories 7 and 8 |
 | D-4 | Publish on Google Play (one-time US$25 developer fee)? | **Yes, at R2**, plus the signed APK on GitHub Releases. | Epic 7 story 11 |
 
-D-2, D-5 and D-7 are asked now; D-6 waits for a public release; D-4 waits for R2.
+D-2 and D-5 are asked now; D-6 waits for a public release; D-4 waits for R2.
 
 ## Readiness check
 
