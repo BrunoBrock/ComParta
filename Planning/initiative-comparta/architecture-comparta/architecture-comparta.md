@@ -7,7 +7,7 @@ paradigm: 'hexagonal (ports and adapters), web-view UI as a driving adapter'
 scope: 'ComParta whole product: Windows (R1), folders and Android (R2), people I share with (R3)'
 status: final
 created: '2026-10-08'
-updated: '2026-10-13'
+updated: '2026-10-20'
 binds: []
 sources:
   - '../../ReadMe.md'
@@ -145,6 +145,27 @@ An arrow means "may depend on". `ComParta.Core` depends on no other project and 
 - **Rule:** The helper is an ordinary BitTorrent peer with a public server (tracker), built on the same engine as the app, on a computer everyone can reach (the free Oracle Cloud machine, or a PC with one forwarded port). A sharing ComParta that has a helper set connects out to it, hands it the share's description over HTTPS with the helper key, and announces to its server; the helper fetches the bytes over that outgoing connection and serves them to anyone holding the link. The link (AD-16) names the helper's server (`tr=`) and address (`x.pe=`) first, so every torrent app on any device finds it. The helper keeps a full copy only while the share exists, within a set space, dropping the oldest first; stopping a share removes it. Only installs holding the key can add files. The engine adapter is the only code that talks to the helper; core sees a setting and a reachability fact.
 - **Accepted trade-off (2026-10-13), for the family pilot:** the helper holds a copy of what it passes along and whoever runs it could read it; peer connections stay encrypted. The person is told in plain words that a copy passes through their helper computer. Who runs a helper for people outside the maintainer's family is decision D-6.
 
+### AD-24 — Friends are device keys; core owns who is a friend and what is accepted
+
+- **Binds:** core, storage, engine, contracts, UI
+- **Prevents:** accounts or a server that knows who is friends with whom; a file from a stranger written to disk before anyone decided to accept it; each screen deciding on its own who may send.
+- **Rule:** Each device has a key pair kept on the device (AD-9). Two devices become friends by exchanging public keys: an invite from ComParta carries the sender's key, and accepting an invite from someone new asks to add them as a friend first; "Add a friend" carries the key without a file. Core owns the friend list (storage) and the known-sources rule: `SharingPolicy.AcceptFromUnknown`, off on a new install, set only from the first Settings screen. Core decides, before any receive starts, whether an invite or a request to connect comes from a friend; the engine adapter authenticates devices by key and refuses unknown ones when the rule says so, before writing a byte. "What you share with me" and "new share for you" messages travel only between friends' devices. Sharing out to the open internet (AD-23) is not governed by this rule. The spike in epic 13 settles the wire details and may revise AD-8.
+- **Added 2026-10-20** (the maintainer's ask, roadmap P-19). Open: whether website download links count as unknown sources (decision D-7, recommended yes).
+
+### AD-25 — A shared folder is a signed list; each file in it is its own transfer
+
+- **Binds:** core, storage, engine, contracts, UI
+- **Prevents:** re-sending a whole folder when one file changes; a folder that copies or moves the person's originals; friends seeing a folder someone else forged.
+- **Rule:** A folder in ComParta is kept by core as a list of items (name, relative place, size, content fingerprint), not as files on disk; the originals stay where they are (AD-6). Sharing a folder with friends makes each file its own transfer and sends the friends a version of the list signed by the owner's device key. A friend's device keeps the newest valid version it has seen and offers the files in "Shared with me"; a newer version arrives whenever both devices are on, or from the helper (AD-23) when the owner cannot be reached, and the helper serves a folder only to the owner's friends. Received folder files land under the Received root in a folder of the same name. AD-19 (a share is a set of items) still describes one transfer; a folder is a list of such shares.
+- **Added 2026-10-20** (P-19). The spike in epic 17 confirms the format and how versions travel.
+
+### AD-26 — Files are shown and played by the web view, from a stream core checks
+
+- **Binds:** core, contracts, shell, UI
+- **Prevents:** the UI naming a file path (AD-7); a media library or codec pack inside the app; a program started from the viewer.
+- **Rule:** To open a file inside ComParta the UI asks core for an item by id; core checks it is a shared or received item, that its kind can be shown or played (pictures, songs and videos the system web view plays without extra codecs), and serves its bytes to the web view through a local stream that supports ranges, scoped to that one item. Anything else gets the error `media.notPlayable`, which the UI turns into "It is not possible to play this file. Open the folder it is in instead?"; Open the folder uses the existing reveal command. Programs and scripts are never served (AD-13). On Android the same stream reads through the content port (AD-20).
+- **Added 2026-10-20** (P-20).
+
 ### AD-13 — Received content is marked and checked by Windows, not by us
 
 - **Binds:** core, shell, UI
@@ -277,13 +298,13 @@ Operational envelope: the product is an installed desktop app with no servers an
 
 | Item | Why it can wait | Revisit when |
 | --- | --- | --- |
-| Stronger privacy model: per-person keys so that only chosen people can download, and no fingerprint on the public lookup network | The first release uses the invite-as-secret model in AD-8. A design spike (epic 13 story 1) comes first; one candidate is announcing a value derived from a secret in the invite instead of the content fingerprint. | R3, or before the app is offered outside the maintainer's circle, whichever is first. |
+| Stronger privacy model: per-person keys so that only chosen people can download, and no fingerprint on the public lookup network | Now part of friends (AD-24, epic 13, moved into R1 on 2026-10-20). A design spike (epic 13 story 1) comes first; one candidate is announcing a value derived from a secret in the invite instead of the content fingerprint. | Epic 13, in R1. |
 | Hardening considered and not decided: an upload rate limit and connection cap, invites that expire, an option to turn the public lookup network off | The AD-8 trade-off is accepted for family and friends (2026-10-12). | Before the app is offered outside the maintainer's circle. |
 | A relay for two devices that cannot reach each other | Closed 2026-10-13: answered by AD-23, a helper every torrent app can use (epic 16). | Closed. |
 | A helper that serves pieces on demand without keeping a copy, and a browser download page on the helper | AD-23 keeps a full copy while a share exists, which is simpler and enough for the family pilot. | When helper space or privacy becomes the limit. |
 | Another engine with uTP and hole punching | AD-2 keeps a swap cheap; MonoTorrent works on the same network and when one side is reachable. | Only if the field test shows failures a different engine would fix. |
-| Open source license | Does not affect code structure; MonoTorrent's MIT license fits MIT, Apache-2.0 and GPL-3.0. Decision D-1. | Before the repository is made public. |
-| iOS, macOS and Linux shells | AD-1 keeps the path open; not in R1 to R3. | After R3. |
+| Open source license | Answered 2026-10-20: Zero-Clause BSD (PR #29, decision D-1). | Closed. |
+| iOS, macOS and Linux shells | AD-1 keeps the path open; not in R1 or R2. | After R2. |
 | Type generation tool for `ComParta.Contracts` → TypeScript | Built in the first release as `tools/ComParta.Contracts.TypeGen`. | Closed. |
 | Packaging, code signing and updates | Answered by AD-17; the channel is decision D-2. | Closed once D-2 is answered. |
 | Operating-system sandbox on Windows, and scanning or marking of received files | Answered by AD-13. | Closed. |

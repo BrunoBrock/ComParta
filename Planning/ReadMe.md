@@ -55,11 +55,13 @@ want to exchange files with people they know and trust.
 ## Status
 
 Most of the Windows app is built (share, send, receive, the Drive-like screen, speeds, Portuguese).
-Next is reaching any torrent app from anywhere with no router setup (epic 16). The rest is planned
-in [the roadmap](initiative-comparta/roadmap-comparta/roadmap-comparta.md) and drawn in
+The helper that lets any torrent app get a file from anywhere is being built (epic 16); next come
+friends, with files accepted only from friends by default (epic 13), and playing songs, videos and
+pictures inside the app (epic 18). The rest is planned in
+[the roadmap](initiative-comparta/roadmap-comparta/roadmap-comparta.md) and drawn in
 [roadmap.html](initiative-comparta/roadmap-comparta/roadmap.html): R1 family pilot on Windows,
-R2 albums and Android, R3 people I share with.
+R2 folders shared with friends like Google Drive, and Android.
 
 ## License
 
-To be decided (open-source license, e.g. MIT, Apache-2.0 or AGPL-3.0).
+Zero-Clause BSD (see `LICENSE` at the repository root).

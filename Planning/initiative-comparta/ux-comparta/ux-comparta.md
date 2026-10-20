@@ -67,13 +67,21 @@ errors, no error numbers on screen (the codes go to the report).
 ```text
 ComParta
 ├── Shared by me        (Compartilhados por mim)   files and folders I offer
+├── My folders          (Minhas pastas)            folders I made and share with friends (R2, epic 17)
 ├── Received            (Recebidos)                files and folders others sent me
 │     └── On the way    (A caminho)                transfers still running, pinned on top
-├── My people           (Minhas pessoas)           R3 only
-├── Shared with me      (Compartilhados comigo)    R3 only
+├── Friends             (Amigos)                   people I added (R1, epic 13)
+├── Shared with me      (Compartilhados comigo)    what friends share with me, by friend (R1, epic 13)
 ├── Help                (Ajuda)
-└── Settings            (Configurações)
+└── Settings            (Configurações)            first screen: "Accept files from people who are
+                                                   not my friends" (Aceitar arquivos de quem não é
+                                                   meu amigo), off by default (epic 13)
 ```
+
+Opening a picture, song or video shows it in a viewer over the current section (epic 18). A file
+that cannot be played shows "It is not possible to play this file. Open the folder it is in
+instead?" ("Não é possível reproduzir este arquivo. Abrir a pasta onde ele está?") with Open the
+folder and Cancel. Added 2026-10-20.
 
 Two primary actions are always visible, like Drive's "New" button:
 

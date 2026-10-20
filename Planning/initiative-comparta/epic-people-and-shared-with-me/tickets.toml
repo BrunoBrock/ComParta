@@ -1,25 +1,26 @@
 # Stories of epic-people-and-shared-with-me, in build order.
 # Stories after 1 are refined once the spike's design is accepted.
+# Re-scoped 2026-10-20 (roadmap P-19): friends, their shared files, and only friends by default.
 
 [[entry]]
 id = 1
 type = "story"
-title = "Spike: private sharing between known people"
-description = "Designs pairing, device keys, private delivery and blinded lookup within AD-2 and AD-9, tests the riskiest part (blinded announce with MonoTorrent) in a throwaway branch, sketches the My people and Shared with me screens in the UX design, and proposes the architecture changes."
+title = "Spike: friends and private sharing"
+description = "Designs device keys, adding a friend (from an invite and without one), the known-sources rule, private delivery and blinded lookup within AD-2, AD-9 and AD-24, for phones and PCs. Tests the riskiest part (refusing a stranger before any byte is written, and blinded announce with MonoTorrent) in a throwaway branch, sketches the Friends, Shared with me and friend request screens in the UX design, and proposes the architecture changes."
 verify = "A design note in this folder, a working prototype of the riskiest part, and a draft architecture update the maintainer accepts or rejects."
-covers = ["CAP-24"]
-after = ["7.1"]
+covers = ["CAP-24", "CAP-31"]
+after = []
 hitl = true                 # The maintainer accepts the design
 risk = "high"
 
 [[entry]]
 id = 2
 type = "story"
-title = "Device identity and pairing"
-description = "A key pair per device, kept on the device; accepting an invite offers 'Add {name} to My people', which pairs the two devices."
+title = "Device identity and adding a friend"
+description = "A key pair per device, kept on the device. An invite from someone new asks 'Add {name} as a friend?' before the file; 'Add a friend' also makes a link or code without a file. Both devices remember each other."
 verify = "Set when refined."
 covers = ["CAP-24"]
-after = [1]
+after = [1, "2.4"]
 hitl = false
 risk = "high"
 refine = true
@@ -27,8 +28,8 @@ refine = true
 [[entry]]
 id = 3
 type = "story"
-title = "My people"
-description = "A section listing paired people with their name and devices, rename and remove."
+title = "Friends"
+description = "A section listing friends with their name and devices, with rename and remove. Removing a friend stops what they can get from this person and what this person accepts from them."
 verify = "Set when refined."
 covers = ["CAP-24"]
 after = [2]
@@ -39,8 +40,8 @@ refine = true
 [[entry]]
 id = 4
 type = "story"
-title = "Send to a person from inside ComParta"
-description = "'Send to…' on a share picks people from My people; the share is delivered privately to their devices when both are on."
+title = "Share with friends from inside ComParta"
+description = "'Share with…' on a file picks friends; the share is delivered privately to their devices when both are on, without copying a link."
 verify = "Set when refined."
 covers = ["CAP-24"]
 after = [2]
@@ -51,8 +52,8 @@ refine = true
 [[entry]]
 id = 5
 type = "story"
-title = "Shared with me"
-description = "A section listing shares sent to this person, with Get and Not now, and a notification when a new one arrives."
+title = "Shared with me: what each friend shares with you"
+description = "A section listing everything friends share with this person, grouped by friend, with Get and Not now, and a notification when something new arrives. Opening a friend shows all they share with you."
 verify = "Set when refined."
 covers = ["CAP-24", "CAP-20"]
 after = [4]
@@ -64,10 +65,45 @@ refine = true
 id = 6
 type = "story"
 title = "Blinded lookup"
-description = "Shares sent this way are found on the lookup network without announcing their real fingerprint; AD-8's trade-off is closed for them."
+description = "Shares sent to friends are found on the lookup network without announcing their real fingerprint; AD-8's trade-off is closed for them."
 verify = "Set when refined."
 covers = ["CAP-24"]
 after = [1]
 hitl = false
 risk = "high"
 refine = true
+
+[[entry]]
+id = 7
+type = "story"
+title = "Only friends by default"
+description = "A new install refuses invites, files and requests to connect from people who are not friends, before any byte is written, with a plain message saying who tried and how to accept them. Invites from friends, and files the person shares, work as before."
+verify = "Set when refined."
+covers = ["CAP-31"]
+after = [2]
+hitl = false
+risk = "high"
+refine = true
+
+[[entry]]
+id = 8
+type = "story"
+title = "Unknown sources switch on the first Settings screen"
+description = "'Accept files from people who are not my friends', off by default, at the top of the first Settings screen. Turning it on asks once in plain words; turning it off takes effect at once. Remembered after a restart; also decides download links from websites (D-7)."
+verify = "Set when refined."
+covers = ["CAP-31"]
+after = [7, "8.2"]
+hitl = false
+risk = "medium"
+refine = true
+
+[[entry]]
+id = 9
+type = "story"
+title = "Field test: friends in two homes"
+description = "Two relatives in different homes add each other as friends from a first invite, share in both directions from inside ComParta, and a third person who is not a friend tries to send a file. Records what confused them."
+verify = "Results recorded in this folder: the friend request was understood, both shares arrived, the stranger was refused with a message the person understood."
+covers = ["CAP-24", "CAP-31"]
+after = [5, 8]
+hitl = true                 # needs two homes and real people
+risk = "medium"

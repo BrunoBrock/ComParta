@@ -26,11 +26,11 @@ The products ComParta measures itself against (decided 2026-10-13). They are ref
 | --- | --- |
 | qBittorrent | Works with every other torrent app through the standard protocol and links; downloads from any public link or download file (CAP-25); details of a file; pause and continue; speeds. Its power-user screens stay out of the main view. |
 | Stremio | Media first: pictures on every card, and a video that plays while it is still arriving (CAP-30, proposed). It runs on Windows and Android with the same feel. |
-| Google Drive | The look and the way of working: a grid or list of files, a details panel, search and sort, share by copying a link, and later "Shared with me" (CAP-13, CAP-14, CAP-24). |
+| Google Drive | The look and the way of working: a grid or list of files, a details panel, search and sort, share by copying a link, "Shared with me" from friends, and folders a person makes and shares with friends (CAP-13, CAP-14, CAP-24, CAP-32). |
 
 ## Capabilities
 
-Capabilities marked **[MVP]** form the first build (Windows desktop: add or remove a shared file, and send it to another person's computer with an invite). CAP-6, CAP-7 and a first form of CAP-8 were pulled into the first build on 2026-10-08. Each later capability names its release: **[R1]** family pilot on Windows, **[R2]** albums and Android, **[R3]** people I share with (see the roadmap companion). CAP-13 to CAP-24 were added on 2026-10-10 when the rest of the product was planned; CAP-26 and CAP-27 on 2026-10-12; CAP-28 to CAP-30 on 2026-10-13.
+Capabilities marked **[MVP]** form the first build (Windows desktop: add or remove a shared file, and send it to another person's computer with an invite). CAP-6, CAP-7 and a first form of CAP-8 were pulled into the first build on 2026-10-08. Each later capability names its release: **[R1]** family pilot on Windows, **[R2]** albums, folders and Android; **[R3]** was people I share with, moved into R1 on 2026-10-20 (see the roadmap companion). CAP-13 to CAP-24 were added on 2026-10-10 when the rest of the product was planned; CAP-26 and CAP-27 on 2026-10-12; CAP-28 to CAP-30 on 2026-10-13; CAP-31 to CAP-33 on 2026-10-20.
 
 - **CAP-1 [MVP] Add a share**
   - **intent:** A person picks a file on their PC and it joins the list of things they share.
@@ -122,9 +122,18 @@ Capabilities marked **[MVP]** form the first build (Windows desktop: add or remo
 - **CAP-30 [R2, proposed] Watch while it arrives**
   - **intent:** Like Stremio, a person starts a received video before the whole file is in.
   - **success:** A video that is arriving shows Play once its start is in; playing fetches the next part first, and seeking far ahead waits plainly instead of failing. Proposed 2026-10-13 from the Stremio reference; the maintainer confirms before an epic is written.
-- **CAP-24 [R3] People I share with**
-  - **intent:** After the first invite, a person sends to the same person again without copying anything, and only the people a share was sent to can get it.
-  - **success:** Accepting an invite can also add the sender to "My people"; later shares sent to someone in "My people" appear in their "Shared with me" view when both devices are on; the content's fingerprint is no longer announced in the clear on the public lookup network. The design is settled by the spike in epic 13 before stories are written.
+- **CAP-24 [R1] Friends and their shared files** (was [R3] People I share with; changed 2026-10-20)
+  - **intent:** A person adds a friend, sees everything that friend shares with them, and sends to friends again without copying anything; only the friends a share was sent to can get it.
+  - **success:** Accepting an invite from someone new asks to add them as a friend, and "Add a friend" works without a file; everything a friend shares with this person appears in their "Shared with me" view when both devices are on, and they get it with one click; the content's fingerprint is no longer announced in the clear on the public lookup network. The design is settled by the spike in epic 13 before later stories are written. Asked by the maintainer 2026-10-20 (roadmap decision P-19).
+- **CAP-31 [R1] Only friends by default**
+  - **intent:** Like a phone that installs apps only from its store, a new ComParta accepts files only from friends, so nobody unknown can push a file onto the computer.
+  - **success:** On a new install, an invite, a file or a request to connect from someone who is not a friend is refused before any byte is written, with a plain message saying who tried and how to accept them. The first Settings screen has one switch, "Accept files from people who are not my friends", off by default; turning it on asks once in plain words, and is remembered. Sharing out (CAP-28) is not affected. Asked by the maintainer 2026-10-20 (P-19); whether website download links count as unknown is decision D-7.
+- **CAP-32 [R2] Folders like Google Drive, shared with friends**
+  - **intent:** Like Google Drive or OneDrive, a person makes folders in ComParta, puts files in them and shares a folder with chosen friends, but the files travel between their devices instead of through a cloud.
+  - **success:** A person creates, renames and deletes folders and moves files into them without touching the originals; a folder shared with friends appears in their "Shared with me", opens like the person's own, and gets one file or all; files the owner adds, renames or removes reach every friend who has the folder the next time both devices are on; it works on Windows and Android, and through the helper when the owner cannot be reached. Asked by the maintainer 2026-10-20 (P-19).
+- **CAP-33 [R1] Open, play and view inside the app**
+  - **intent:** A person plays a song, watches a video or looks at a picture without leaving ComParta, and is never stuck when a file cannot be played.
+  - **success:** Common pictures, songs and videos (JPG, PNG, GIF, WebP; MP3, M4A, WAV, FLAC, OGG; MP4, WebM) open inside ComParta from a card, the details window or a double-click, with zoom for pictures and play, pause, seek and full screen for songs and videos, on Windows and Android. Any other file shows "It is not possible to play this file. Open the folder it is in instead?", and Open the folder shows it with the file selected. Programs never open this way (CAP-9). Asked by the maintainer 2026-10-20 (P-20).
 
 ## Constraints
 
@@ -132,6 +141,7 @@ Capabilities marked **[MVP]** form the first build (Windows desktop: add or remo
 - No account, no cloud, no hosted service, no telemetry (AD-9). One exception since 2026-10-13: the helper (AD-23), open source and named in Settings, which carries files only while they are shared.
 - No person ever changes a router setting or opens a port, on the sharing side or the receiving side (2026-10-13).
 - A shared file is consumable by any standard torrent app, not only ComParta (2026-10-13).
+- A new install accepts files only from friends; accepting anyone else is the person's own choice in Settings (2026-10-20).
 - The target user can use a smartphone and email but nothing more complex; any step needing networking or torrent knowledge is a defect.
 - Private by default: content reaches only people who hold its invite; nothing is listed or searchable. The invite itself is the secret: anyone holding it can download, so the app never presents it as safe to post publicly. The limits of this are stated in AD-8.
 - Sharing never copies, moves, changes or deletes the original file (AD-6).
@@ -173,8 +183,9 @@ Capabilities marked **[MVP]** form the first build (Windows desktop: add or remo
 
 - OQ-1: Answered for the first release by AD-8 (invite carries the sender's address, plus local discovery and the public lookup network). On 2026-10-12 the maintainer accepted that shared files are reachable from the whole internet, with the limits stated in AD-8. The stronger model where only chosen people can download is CAP-24, settled by the epic 13 spike. Reliable connection when both people are behind strict routers is CAP-18; whether a chosen relay is allowed is decision D-3 in the roadmap.
 - OQ-2: Answered 2026-10-10 by AD-13: no AppContainer; received files carry the Windows internet mark and go through the attachment services API, which runs the installed antivirus; programs and scripts ask before opening.
-- OQ-3: Which open source license? Recommendation Apache-2.0; decision D-1 in the roadmap. Needed before the repository goes public and before epic 5 story 1.
+- OQ-3: Answered 2026-10-20: Zero-Clause BSD (PR #29, decision D-1).
 - OQ-4: Answered in part by AD-17: no in-app update check; updates come from the store. The channel (Microsoft Store recommended, or paid code signing) is decision D-2 in the roadmap.
 - OQ-5: Answered 2026-10-10: folders and several files are CAP-19, in R2, before Android.
 - OQ-6: What success rate between homes is good enough to call CAP-18 met? Set from the epic 9 field test.
 - OQ-7: Who runs the helper, and pays for it, once people outside the maintainer's family use ComParta? Decisions D-5 and D-6 in the roadmap.
+- OQ-8: Do download links and download files from websites count as unknown sources (CAP-31)? Recommended yes; decision D-7 in the roadmap.

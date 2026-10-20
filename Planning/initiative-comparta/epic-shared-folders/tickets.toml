@@ -1,0 +1,96 @@
+# Stories of epic-shared-folders, in build order.
+# Added 2026-10-20 (roadmap P-19). Stories after 1 are refined once the folder list design is accepted.
+
+[[entry]]
+id = 1
+type = "story"
+title = "Spike: a folder list friends can follow"
+description = "Designs the signed, versioned folder list of AD-25 and how a friend's device gets new versions (between friends' devices, and through the helper), on top of epic 13's friends. Prototypes a list with two files, then a third added, reaching a second engine. Sketches My folders and a friend's folder in the UX design."
+verify = "A design note in this folder, a working prototype of a list update reaching a friend, and AD-25 accepted or changed by the maintainer."
+covers = ["CAP-32"]
+after = ["13.1", "11.1"]
+hitl = true                 # The maintainer accepts the design
+risk = "high"
+
+[[entry]]
+id = 2
+type = "story"
+title = "My folders: create, rename, delete, move files in"
+description = "Folders kept by core and storage; files are added by picker or drag and drop and stay where they are on disk. Deleting a folder or removing a file from it never deletes the original."
+verify = "Set when refined."
+covers = ["CAP-32"]
+after = [1, "8.6"]
+hitl = false
+risk = "medium"
+refine = true
+
+[[entry]]
+id = 3
+type = "story"
+title = "Share a folder with friends"
+description = "'Share with friends' on a folder picks friends; each file becomes its own transfer and the signed list goes to the chosen friends' devices. Stop sharing takes it back from everyone, or from one friend."
+verify = "Set when refined."
+covers = ["CAP-32", "CAP-24"]
+after = [2, "13.4"]
+hitl = false
+risk = "high"
+refine = true
+
+[[entry]]
+id = 4
+type = "story"
+title = "A friend's folder in Shared with me"
+description = "The folder opens like one of the person's own: grid or list, pictures, details. Get one file, several or all; they land under the Received root in a folder of the same name."
+verify = "Set when refined."
+covers = ["CAP-32"]
+after = [3, "13.5", "11.4"]
+hitl = false
+risk = "medium"
+refine = true
+
+[[entry]]
+id = 5
+type = "story"
+title = "Changes reach friends"
+description = "Adding, renaming or removing a file makes a new version of the list; friends see it the next time both devices are on. 'Keep this folder up to date' gets new files automatically; removed files stay on the friend's computer unless they delete them."
+verify = "Set when refined."
+covers = ["CAP-32"]
+after = [4]
+hitl = false
+risk = "high"
+refine = true
+
+[[entry]]
+id = 6
+type = "story"
+title = "Folders through the helper"
+description = "When the owner cannot be reached, the helper holds the folder's list and files and serves them only to the owner's friends."
+verify = "Set when refined."
+covers = ["CAP-32", "CAP-28"]
+after = [5, "16.3"]
+hitl = false
+risk = "high"
+refine = true
+
+[[entry]]
+id = 7
+type = "story"
+title = "Folders on Android"
+description = "My folders and a friend's folder on the phone, with the phone layout; adding files from the phone's share menu."
+verify = "Set when refined."
+covers = ["CAP-32", "CAP-10"]
+after = [5, "7.5"]
+hitl = false
+risk = "medium"
+refine = true
+
+[[entry]]
+id = 8
+type = "story"
+title = "Field test: a family folder"
+description = "One relative shares a folder of photos with two others, one on a PC in another home and one on a phone on mobile data; adds files the next day. Records what confused them."
+verify = "Results recorded in this folder: both got the folder, the added files arrived, and the words were understood."
+covers = ["CAP-32"]
+after = [6, 7]
+hitl = true                 # needs real people, two homes and a phone
+risk = "medium"

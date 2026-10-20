@@ -59,3 +59,4 @@ The helper program, ComParta's side of it, the link a person copies, and the gui
 - Risk: the helper sees what it passes along. For the family pilot it is run by the maintainer; the trade-off is stated in AD-23.
 - Risk: a helper that accepts anything can be abused. Only ComParta installs holding the helper's key can add files, with a size limit per file and in total (story 2).
 - Later, not planned: a browser download page on the helper (`https://helper/f/<id>`), so a phone needs no torrent app at all.
+- Built since 2026-10-13: story 2, the helper program (PR #25), and story 3, ComParta hands shared files to a helper computer set in Settings (PR #30, with the fix that names the helper's server only once it holds the file). Story 4 is being built.

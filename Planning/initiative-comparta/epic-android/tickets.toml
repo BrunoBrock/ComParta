@@ -124,3 +124,15 @@ after = [10]
 hitl = true                 # The maintainer's Play developer account
 risk = "medium"
 unknown = "Decision D-4: publish on Google Play."
+
+[[entry]]
+id = 12
+type = "story"
+title = "Open and play on the phone"
+description = "Epic 18's picture viewer and song and video player on the phone layout, reading through the content port (AD-20); when a file cannot be played, the fallback opens the phone's files app at it. Added 2026-10-20 (roadmap P-20)."
+verify = "Set when refined."
+covers = ["CAP-33", "CAP-10"]
+after = [4, "18.5"]
+hitl = false
+risk = "medium"
+refine = true

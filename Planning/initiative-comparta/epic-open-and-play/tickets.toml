@@ -1,0 +1,68 @@
+# Stories of epic-open-and-play, in build order.
+# Added 2026-10-20 (roadmap P-20).
+
+[[entry]]
+id = 1
+type = "story"
+title = "Stream a file to the screen"
+description = "Core opens a shared or received item by id and serves its bytes to the web view through a stream with range requests (AD-26); the UI never names a path. Decides from the file's content and extension whether it can be shown or played; programs and scripts are never served."
+verify = "Core and wiring tests: a picture, a song and a video stream with ranges through the real router and storage; an executable and an unknown file are refused with `media.notPlayable`."
+covers = ["CAP-33"]
+after = ["8.5"]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 2
+type = "story"
+title = "Picture viewer"
+description = "A picture opens full size over the home, with zoom, next and previous by arrow keys or swipe, and Close or Esc."
+verify = "UI tests for zoom, next, previous and close; a wiring test opens a received JPG."
+covers = ["CAP-33"]
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 3
+type = "story"
+title = "Song and video player"
+description = "Songs and videos play with play/pause, a seek bar, volume, full screen for video, and keyboard control; playback stops when the viewer closes."
+verify = "UI tests for the controls and keys; a wiring test streams an MP3 and an MP4 with seeking."
+covers = ["CAP-33"]
+after = [1]
+hitl = false
+risk = "medium"
+
+[[entry]]
+id = 4
+type = "story"
+title = "When a file cannot be played: open its folder instead"
+description = "The message 'It is not possible to play this file. Open the folder it is in instead?' with Open the folder and Cancel, in English and pt-BR; Open the folder selects the file in Explorer. Also shown when playback fails part way."
+verify = "UI tests for both buttons and both languages; a wiring test opens an unplayable file and gets the fallback event, then reveals it."
+covers = ["CAP-33"]
+after = [1]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 5
+type = "story"
+title = "Open from cards, details and double-click"
+description = "Open on a card, in the details window and a double-click use the viewer when the file can be played, the fallback otherwise; 'Open with another app' stays in the menu."
+verify = "UI tests for each entry point; the guarded Open of epic 3 still asks before a program."
+covers = ["CAP-33", "CAP-14"]
+after = [2, 3, 4]
+hitl = false
+risk = "low"
+
+[[entry]]
+id = 6
+type = "story"
+title = "Check playback on real Windows PCs"
+description = "On two Windows PCs, plays the sample set (JPG, PNG, WebP, MP3, M4A, FLAC, MP4, WebM) and checks that MKV and HEVC fall back with the message."
+verify = "Results recorded in this folder for each format."
+covers = ["CAP-33"]
+after = [5]
+hitl = true                 # needs real Windows PCs
+risk = "low"
