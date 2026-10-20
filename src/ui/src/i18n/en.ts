@@ -283,6 +283,7 @@ export const en = {
   'error.received.openFailed': 'ComParta could not open this file. Choose Show in folder to see it.',
   'error.share.dropFailed': 'ComParta could not take those files. Choose “Share a file” to pick them instead.',
   'error.file.saveFailed': 'ComParta could not save the download file. Check that your Downloads folder has room, then try again.',
+  'error.media.notPlayable': 'It is not possible to play this file. Open the folder it is in instead?',
   'error.settings.invalid': 'That choice could not be saved. Try again.',
   'error.unexpected': 'Something went wrong. Close ComParta, open it again and try once more.',
 

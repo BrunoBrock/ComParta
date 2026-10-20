@@ -19,12 +19,13 @@ import type {
   ShareDetailsDto,
   ShareDto,
   DropArgs,
+  MediaArgs,
   ThumbnailArgs,
   TransferDetailsDto,
   TransferDto,
   TransferSourceDto,
 } from './contract.generated.ts'
-import { isPicture } from '../fileNames.ts'
+import { isPicture, playableKind } from '../fileNames.ts'
 import { readHelper } from '../helper.ts'
 import { readPublicServers } from '../publicServers.ts'
 
@@ -155,6 +156,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   let connection: ConnectionHealthDto | null = options.connection === undefined ? 'good' : options.connection
   let nextId = 1
   let nextSample = 0
+  let mediaOpened = 0
   const stepMs = options.stepMs ?? 0
   const listeners = new Set<(event: EventEnvelope) => void>()
 
@@ -532,6 +534,28 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       if (!(args as QuitArgs).force && names.length > 0) return ok({ quitting: false, moving: names })
       fake.quits++
       return ok({ quitting: true, moving: [] })
+    },
+
+    'media.open': (args) => {
+      const { kind, id } = args as MediaArgs
+      let name: string
+      if (kind === 'share') {
+        const share = shares.find((s) => s.id === id)
+        if (!share) return fail('share.notFound')
+        // The app cannot read a file that has gone from its place.
+        if (share.status === 'unavailable') return fail('media.notPlayable')
+        name = share.name
+      } else {
+        const transfer = transfers.find((t) => t.id === id)
+        if (!transfer) return fail('transfer.notFound')
+        if (transfer.state !== 'done' || !transfer.name) return fail('received.notFound')
+        name = transfer.name
+      }
+      const playing = playableKind(name)
+      if (!playing) return fail('media.notPlayable')
+      // As the app: an address that reads this one file, never its path.
+      mediaOpened++
+      return ok({ url: `https://media.comparta.invalid/${mediaOpened.toString(16).padStart(32, '0')}`, kind: playing, name })
     },
 
     'thumbnails.get': (args) => {

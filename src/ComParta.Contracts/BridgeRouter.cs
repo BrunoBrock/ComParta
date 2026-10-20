@@ -25,6 +25,7 @@ public sealed class BridgeRouter
     private readonly DroppedFiles _dropped;
     private readonly SendingUseCases _sending;
     private readonly BackgroundUseCases _background;
+    private readonly MediaUseCases _media;
 
     public BridgeRouter(
         ShareUseCases shares,
@@ -40,8 +41,10 @@ public sealed class BridgeRouter
         DroppedFiles dropped,
         SendingUseCases sending,
         NotificationUseCases notifications,
-        BackgroundUseCases background)
+        BackgroundUseCases background,
+        MediaUseCases media)
     {
+        _media = media;
         _background = background;
         _background.QuitAsked += answer => Raise(Events.QuitChanged, ToDto(answer));
         notifications.OpenRequested += (kind, id, name) => Raise(
@@ -73,6 +76,13 @@ public sealed class BridgeRouter
 
     /// <summary>A command failed unexpectedly; the UI only hears "unexpected", so this is where the cause goes.</summary>
     public event Action<string, Exception>? CommandFailed;
+
+    /// <summary>
+    /// The web view's request for an opened file (AD-26): the address it asked for and its Range
+    /// header, if any. Any address that is not an opened file gets 404.
+    /// </summary>
+    public MediaReply ServeMedia(string url, string? range) =>
+        MediaAddress.TokenOf(url) is { } token ? _media.Serve(token, range) : new MediaReply(404, null, 0, null, null);
 
     /// <summary>Runs one command and returns its result as JSON. Never throws.</summary>
     public async Task<string> InvokeAsync(string command, string? argsJson)
@@ -264,6 +274,22 @@ public sealed class BridgeRouter
                 return CommandResult.Success(new DropResultDto(added, problem is { } kind ? ToCode(kind) : null));
             }
 
+            case Commands.MediaOpen:
+            {
+                var args = Args<MediaArgs>(argsJson);
+                var opened = _media.Open(args?.Kind == ItemKindDto.Share ? MediaSource.Share : MediaSource.Received, args?.Id);
+                if (!opened.Ok)
+                    return Failure(opened.Error);
+                var item = opened.Value!;
+                var kind = item.Kind switch
+                {
+                    MediaKind.Picture => MediaKindDto.Picture,
+                    MediaKind.Song => MediaKindDto.Song,
+                    _ => MediaKindDto.Video,
+                };
+                return CommandResult.Success(new MediaDto(MediaAddress.For(item.Token), kind, item.Name));
+            }
+
             case Commands.ThumbnailsGet:
             {
                 var args = Args<ThumbnailArgs>(argsJson);
@@ -434,6 +460,7 @@ public sealed class BridgeRouter
         ErrorKind.ReceivedOpenFailed => ErrorCodes.ReceivedOpenFailed,
         ErrorKind.ShareDropFailed => ErrorCodes.ShareDropFailed,
         ErrorKind.SaveFailed => ErrorCodes.FileSaveFailed,
+        ErrorKind.NotPlayable => ErrorCodes.MediaNotPlayable,
         _ => ErrorCodes.Unexpected,
     };
 }

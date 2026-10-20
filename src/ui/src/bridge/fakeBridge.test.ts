@@ -85,3 +85,71 @@ describe('the fake bridge: connection health', () => {
     expect(await bridge.invoke('connection.get')).toEqual({ ok: true, value: { health: 'good', throughHelper: false } })
   })
 })
+
+describe('the fake bridge: opening a file inside the app', () => {
+  const share = (name: string, status: 'ready' | 'unavailable' = 'ready') => ({
+    id: name,
+    name,
+    sizeBytes: 10,
+    status,
+    activity: 'idle' as const,
+    receiverCount: 0,
+    percent: 0,
+    finishedCount: 0,
+    secondsLeft: null,
+    paused: false,
+  })
+  const transfer = (id: string, name: string, state: 'done' | 'receiving') => ({
+    id,
+    name,
+    sizeBytes: 10,
+    receivedBytes: state === 'done' ? 10 : 5,
+    state,
+    bytesPerSecond: 0,
+    secondsLeft: null,
+    neededBytes: null,
+  })
+
+  it('gives an address for a picture, song or video, as the app does, and never a path', async () => {
+    const bridge = createFakeBridge({
+      shares: [share('beach.JPG'), share('song.mp3')],
+      transfers: [transfer('t1', 'party.webm', 'done')],
+    })
+
+    const picture = await bridge.invoke('media.open', { kind: 'share', id: 'beach.JPG' })
+    const song = await bridge.invoke('media.open', { kind: 'share', id: 'song.mp3' })
+    const video = await bridge.invoke('media.open', { kind: 'transfer', id: 't1' })
+
+    expect(picture).toMatchObject({ ok: true, value: { kind: 'picture', name: 'beach.JPG' } })
+    expect(song).toMatchObject({ ok: true, value: { kind: 'song' } })
+    expect(video).toMatchObject({ ok: true, value: { kind: 'video', name: 'party.webm' } })
+    const urls = [picture, song, video].map((r) => (r.ok ? r.value.url : ''))
+    for (const url of urls) expect(url).toMatch(/^https:\/\/media\.comparta\.invalid\/[0-9a-f]{32}$/)
+    expect(new Set(urls).size).toBe(3)
+  })
+
+  it('answers that a program, an unknown kind or a missing file cannot be played', async () => {
+    const bridge = createFakeBridge({
+      shares: [share('setup.exe'), share('film.mkv'), share('gone.mp4', 'unavailable')],
+      transfers: [transfer('t1', 'later.mp3', 'receiving')],
+    })
+
+    for (const id of ['setup.exe', 'film.mkv', 'gone.mp4'])
+      expect(await bridge.invoke('media.open', { kind: 'share', id })).toEqual({
+        ok: false,
+        error: { code: 'media.notPlayable' },
+      })
+    expect(await bridge.invoke('media.open', { kind: 'transfer', id: 't1' })).toEqual({
+      ok: false,
+      error: { code: 'received.notFound' },
+    })
+    expect(await bridge.invoke('media.open', { kind: 'share', id: 'nope' })).toEqual({
+      ok: false,
+      error: { code: 'share.notFound' },
+    })
+    expect(await bridge.invoke('media.open', { kind: 'transfer', id: 'nope' })).toEqual({
+      ok: false,
+      error: { code: 'transfer.notFound' },
+    })
+  })
+})

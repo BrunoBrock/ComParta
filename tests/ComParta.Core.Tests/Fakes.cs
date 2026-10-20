@@ -233,6 +233,10 @@ internal sealed class FakeFileSystem : IFileSystem
         Locked.Contains(path) || !Contents.TryGetValue(path, out var content) ? throw new UnauthorizedAccessException()
         : content.Length > maxBytes ? throw new IOException()
         : content;
+
+    public Stream OpenRead(string path) =>
+        Locked.Contains(path) || !Contents.TryGetValue(path, out var content) ? throw new UnauthorizedAccessException()
+        : new MemoryStream(content, writable: false);
 }
 
 internal sealed class FakePaths(string root) : IAppPaths

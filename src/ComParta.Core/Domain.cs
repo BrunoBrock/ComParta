@@ -253,6 +253,8 @@ public enum ErrorKind
     ShareDropFailed,
     /// <summary>A file the person asked to save could not be written.</summary>
     SaveFailed,
+    /// <summary>The file cannot be shown or played inside ComParta; the person may open its folder instead.</summary>
+    NotPlayable,
     Unexpected,
 }
 

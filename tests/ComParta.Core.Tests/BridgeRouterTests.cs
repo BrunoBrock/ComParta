@@ -41,7 +41,8 @@ public sealed class BridgeRouterTests
         _notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, new FakeNotifier(), new FakeWindow());
         _router = new BridgeRouter(shares, transfers, settings, connection, _opened, activity, received, _shell, _shell, thumbnails, _dropped,
             sending, _notifications,
-            new BackgroundUseCases(_engine, shares, transfers, sending, settings, _settings, _notifications, _presence, _clock));
+            new BackgroundUseCases(_engine, shares, transfers, sending, settings, _settings, _notifications, _presence, _clock),
+            new MediaUseCases(shares, received, _files));
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
         _picker.NextPick = Video;
@@ -369,6 +370,46 @@ public sealed class BridgeRouterTests
         Assert.Equal([(Video, 96)], _thumbnails.Asked);
         Assert.Equal(ErrorCodes.ShareNotFound, ErrorCode(await InvokeAsync(Commands.ThumbnailsGet, new { kind = "share", id = "nope", size = 96 })));
         Assert.Equal(ErrorCodes.TransferNotFound, ErrorCode(await InvokeAsync(Commands.ThumbnailsGet, new { kind = "transfer", id = TransferId.New().ToString(), size = 96 })));
+    }
+
+    [Fact]
+    public async Task A_video_opens_by_its_id_and_the_web_view_reads_parts_of_it_from_the_address_given()
+    {
+        var content = new byte[5_000];
+        MediaUseCasesTests.Heads.Mp4.CopyTo(content, 0);
+        content[4_999] = 42;
+        _files.Contents[Video] = content;
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
+
+        var opened = (await InvokeAsync(Commands.MediaOpen, new { kind = "share", id })).GetProperty("value");
+
+        Assert.Equal(("video", "birthday.mp4"), (opened.GetProperty("kind").GetString(), opened.GetProperty("name").GetString()));
+        var url = opened.GetProperty("url").GetString()!;
+        Assert.StartsWith(MediaAddress.Root, url, StringComparison.Ordinal);
+        Assert.DoesNotContain("Videos", opened.GetRawText());
+
+        var reply = _router.ServeMedia(url, "bytes=4999-");
+        Assert.Equal((206, "video/mp4", "bytes 4999-4999/5000"), (reply.Status, reply.ContentType, reply.ContentRange));
+        using (var body = reply.Body!)
+            Assert.Equal(42, body.ReadByte());
+
+        Assert.Equal(404, _router.ServeMedia(url + "x", null).Status);
+        Assert.Equal(404, _router.ServeMedia("https://elsewhere.example/" + MediaAddress.TokenOf(url), null).Status);
+        Assert.Equal(200, _router.ServeMedia(url + "?again#start", null).Status);
+    }
+
+    [Fact]
+    public async Task A_file_the_screen_cannot_play_is_answered_with_not_playable()
+    {
+        var program = Path.Combine(Path.GetTempPath(), "Downloads", "setup.exe");
+        _files.Files[program] = 100;
+        _files.Contents[program] = [.. "MZ"u8, 0, 0];
+        _picker.NextPick = program;
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
+
+        Assert.Equal(ErrorCodes.MediaNotPlayable, ErrorCode(await InvokeAsync(Commands.MediaOpen, new { kind = "share", id })));
+        Assert.Equal(ErrorCodes.ShareNotFound, ErrorCode(await InvokeAsync(Commands.MediaOpen, new { kind = "share", id = "nope" })));
+        Assert.Equal(ErrorCodes.TransferNotFound, ErrorCode(await InvokeAsync(Commands.MediaOpen, new { kind = "transfer", id = TransferId.New().ToString() })));
     }
 
     [Fact]

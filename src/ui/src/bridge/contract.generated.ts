@@ -14,6 +14,8 @@ export type ThumbnailKindDto = "share" | "transfer";
 
 export type ItemKindDto = "share" | "transfer";
 
+export type MediaKindDto = "picture" | "song" | "video";
+
 export interface ShareDto {
   id: string;
   name: string;
@@ -158,6 +160,17 @@ export interface QuitAnswerDto {
   moving: string[];
 }
 
+export interface MediaArgs {
+  kind: ItemKindDto;
+  id: string;
+}
+
+export interface MediaDto {
+  url: string;
+  kind: MediaKindDto;
+  name: string;
+}
+
 export interface DetailsTargetDto {
   kind: ItemKindDto;
   id: string;
@@ -180,6 +193,7 @@ export const errorCodes = [
   "received.openFailed",
   "share.dropFailed",
   "file.saveFailed",
+  "media.notPlayable",
   "unexpected",
 ] as const;
 
@@ -217,6 +231,7 @@ export interface Commands {
   "shares.addDropped": { args: DropArgs; result: DropResultDto };
   "thumbnails.get": { args: ThumbnailArgs; result: string | null };
   "app.quit": { args: QuitArgs; result: QuitAnswerDto };
+  "media.open": { args: MediaArgs; result: MediaDto };
 }
 
 export interface Events {

@@ -39,3 +39,26 @@ const pictures = new Set([
 
 /** Whether the file is a photo or video, so a thumbnail is worth asking for. */
 export const isPicture = (name: string) => pictures.has(extensionOf(name))
+
+// The kinds ComParta shows or plays itself (same list as core's MediaUseCases); core also checks
+// that the file's first bytes agree, so a renamed program is never played.
+const playable: Record<string, 'picture' | 'song' | 'video'> = {
+  jpg: 'picture',
+  jpeg: 'picture',
+  png: 'picture',
+  gif: 'picture',
+  webp: 'picture',
+  mp3: 'song',
+  aac: 'song',
+  m4a: 'song',
+  wav: 'song',
+  flac: 'song',
+  ogg: 'song',
+  oga: 'song',
+  mp4: 'video',
+  m4v: 'video',
+  webm: 'video',
+}
+
+/** Whether the file can be shown or played inside ComParta, and how; null when it cannot. */
+export const playableKind = (name: string) => playable[extensionOf(name)] ?? null

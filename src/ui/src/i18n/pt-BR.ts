@@ -289,6 +289,7 @@ export const ptBR: Catalog = {
   'error.received.openFailed': 'O ComParta não conseguiu abrir este arquivo. Escolha Mostrar na pasta para vê-lo.',
   'error.share.dropFailed': 'O ComParta não conseguiu pegar esses arquivos. Escolha “Compartilhar um arquivo” para escolhê-los.',
   'error.file.saveFailed': 'O ComParta não conseguiu salvar o arquivo de download. Veja se há espaço na sua pasta Downloads e tente de novo.',
+  'error.media.notPlayable': 'Não é possível reproduzir este arquivo. Abrir a pasta onde ele está?',
   'error.settings.invalid': 'Não foi possível guardar essa escolha. Tente de novo.',
   'error.unexpected': 'Algo deu errado. Feche o ComParta, abra de novo e tente mais uma vez.',
 
