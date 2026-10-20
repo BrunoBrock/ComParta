@@ -87,6 +87,36 @@ jobs:
         working-directory: src/ui
         run: npm audit --audit-level=high
 
+  # Sends the NuGet packages, the ones they bring in too, to the dependency graph, so Dependabot
+  # alerts cover them. Replaces GitHub's automatic submission, which restores the whole solution
+  # on Linux and always fails on the app shell ("submit-nuget"). Turn that one off in Settings →
+  # Advanced Security → Dependency graph → Automatic dependency submission.
+  dependency-submission:
+    name: Dependency submission
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore NuGet packages
+        shell: pwsh
+        run: |
+          # Every project except the app shell, which needs the Windows MAUI workload to restore.
+          foreach ($project in Get-ChildItem src, tests, tools -Filter *.csproj -Recurse | Where-Object Name -ne 'ComParta.App.csproj') {
+            dotnet restore $project.FullName --nologo -v quiet
+            if ($LASTEXITCODE -ne 0) { throw "$($project.Name) did not restore." }
+          }
+
+      - uses: actions/component-detection-dependency-submission-action@98beaea5a1227f3db476e4c9ca959a0cacd7ac4f
+        with:
+          detectorsCategories: NuGet
+
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
