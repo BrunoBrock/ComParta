@@ -8,7 +8,11 @@ namespace ComParta.Engine.MonoTorrent;
 public sealed partial class MonoTorrentTransferEngine
 {
     /// <summary>The facts about being reachable as they are right now. For tests and the report loop.</summary>
-    internal ReachabilityFacts ReadReachability() => _probe.Read(_policy, _engine, _portMapper?.ExternalAddress);
+    internal ReachabilityFacts ReadReachability() =>
+        _probe.Read(_policy, _engine, _portMapper?.ExternalAddress) with
+        {
+            ReachableThroughHelper = _helper is not null && _helperHoldsEverything,
+        };
 
     /// <summary>Raises <see cref="ReachabilityChanged"/> when the facts differ from the last report.</summary>
     internal void ReportReachability()

@@ -25,6 +25,7 @@ import type {
   TransferSourceDto,
 } from './contract.generated.ts'
 import { isPicture } from '../fileNames.ts'
+import { readHelper } from '../helper.ts'
 import { readPublicServers } from '../publicServers.ts'
 
 export interface PickedFile {
@@ -56,6 +57,8 @@ export interface FakeBridgeOptions {
   startWithWindows?: boolean
   /** The public servers the person named, as the app stored them. */
   publicServers?: string[]
+  /** The helper computer the person named, as the app stored it. */
+  helper?: { address: string; key: string }
 }
 
 export interface FakeBridge extends Bridge {
@@ -190,7 +193,9 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     emit({ event: 'transfers.changed', payload: [...transfers] })
     emitActivity()
   }
-  const connectionDto = (): ConnectionDto => ({ health: connection })
+  // As the app: a helper computer that holds the files makes them reachable whatever this computer's connection.
+  const connectionDto = (): ConnectionDto =>
+    settings.helperAddress !== null ? { health: 'good', throughHelper: true } : { health: connection, throughHelper: false }
   const emitConnection = () => emit({ event: 'connection.changed', payload: connectionDto() })
   const newId = () => `fake-${nextId++}`
 
@@ -298,6 +303,8 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     sendStepsSeen: options.sendStepsSeen ?? 0,
     startWithWindows: options.startWithWindows ?? false,
     publicServers: options.publicServers ?? [],
+    helperAddress: options.helper?.address ?? null,
+    helperKey: options.helper?.key ?? null,
   }
   // What quitting would stop: shares someone is getting and files arriving, as the app counts them.
   const moving = () => [
@@ -474,8 +481,24 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       const entries = (args as SetSettingsArgs).publicServers ?? []
       const read = readPublicServers(entries.join('\n'))
       if (!('servers' in read) || entries.some((entry) => entry.includes('\n'))) return fail('settings.invalid')
-      settings = { ...settings, language, view, sort, sendStepsSeen, startWithWindows, publicServers: read.servers }
+      const helper = readHelper((args as SetSettingsArgs).helperAddress ?? '', (args as SetSettingsArgs).helperKey ?? '')
+      if (!('helper' in helper)) return fail('settings.invalid')
+      const connectionBefore = connectionDto()
+      settings = {
+        ...settings,
+        language,
+        view,
+        sort,
+        sendStepsSeen,
+        startWithWindows,
+        publicServers: read.servers,
+        helperAddress: helper.helper?.address ?? null,
+        helperKey: helper.helper?.key ?? null,
+      }
       emit({ event: 'settings.changed', payload: { ...settings } })
+      const connectionAfter = connectionDto()
+      if (connectionAfter.health !== connectionBefore.health || connectionAfter.throughHelper !== connectionBefore.throughHelper)
+        emitConnection()
       return ok(null)
     },
 

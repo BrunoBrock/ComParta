@@ -13,9 +13,11 @@ namespace ComParta.Core.UseCases;
 /// Addresses of public servers the person named, which help other devices find what this computer
 /// shares; empty until they add some (AD-8). Every shared file is announced to them and every invite carries them.
 /// </param>
+/// <param name="HelperAddress">Where the helper computer the person named takes files (AD-23); null for none.</param>
+/// <param name="HelperKey">The helper's key, set exactly when <paramref name="HelperAddress"/> is.</param>
 public sealed record Settings(
     string? Language, string SystemLanguage, string? View = null, string? Sort = null, int SendStepsSeen = 0, bool StartWithWindows = false,
-    IReadOnlyList<string>? PublicServers = null)
+    IReadOnlyList<string>? PublicServers = null, string? HelperAddress = null, string? HelperKey = null)
 {
     public IReadOnlyList<string> PublicServers { get; init; } = PublicServers ?? [];
 }
@@ -30,6 +32,13 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
     private const string SendStepsKey = "sendStepsSeen";
     private const string StartWithWindowsKey = "startWithWindows";
     private const string PublicServersKey = "publicServers";
+    private const string HelperAddressKey = "helperAddress";
+    private const string HelperKeyKey = "helperKey";
+
+    /// <summary>The shortest helper key the helper accepts (its MinimumKeyLength).</summary>
+    public const int MinHelperKeyLength = 16;
+    private const int MaxHelperKeyLength = 200;
+    private static readonly string[] HelperSchemes = ["http", "https"];
 
     /// <summary>At most this many public servers, so a pasted list cannot slow every share down.</summary>
     public const int MaxPublicServers = 20;
@@ -54,13 +63,18 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
         await repository.GetAsync(SortKey, ct),
         int.TryParse(await repository.GetAsync(SendStepsKey, ct), out var seen) ? Math.Clamp(seen, 0, SendStepsShown) : 0,
         await repository.GetAsync(StartWithWindowsKey, ct) == "true",
-        ReadServers(await repository.GetAsync(PublicServersKey, ct)));
+        ReadServers(await repository.GetAsync(PublicServersKey, ct)),
+        await repository.GetAsync(HelperAddressKey, ct),
+        await repository.GetAsync(HelperKeyKey, ct));
 
     /// <summary>Hands the stored public servers to the engine; call after it starts and before anything is shared.</summary>
     public async Task StartAsync(CancellationToken ct = default)
     {
-        if (engine is not null)
-            await engine.SetPublicServersAsync(ToUris(ReadServers(await repository.GetAsync(PublicServersKey, ct))), ct);
+        if (engine is null)
+            return;
+        await engine.SetPublicServersAsync(ToUris(ReadServers(await repository.GetAsync(PublicServersKey, ct))), ct);
+        await engine.SetHelperAsync(
+            ReadHelper(await repository.GetAsync(HelperAddressKey, ct), await repository.GetAsync(HelperKeyKey, ct)), ct);
     }
 
     /// <summary>
@@ -70,7 +84,7 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
     /// </summary>
     public async Task<Result> SetAsync(
         string? language, string? view, string? sort, int sendStepsSeen = 0, bool startWithWindows = false,
-        IReadOnlyList<string>? publicServers = null, CancellationToken ct = default)
+        IReadOnlyList<string>? publicServers = null, string? helperAddress = null, string? helperKey = null, CancellationToken ct = default)
     {
         if (language is not null && (language.Length > 35 || !LanguageTag().IsMatch(language)))
             return Result.Fail(ErrorKind.SettingsInvalid);
@@ -80,15 +94,25 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
             return Result.Fail(ErrorKind.SettingsInvalid);
         if (NormalizeServers(publicServers ?? []) is not { } servers)
             return Result.Fail(ErrorKind.SettingsInvalid);
+        helperAddress = string.IsNullOrWhiteSpace(helperAddress) ? null : helperAddress.Trim();
+        helperKey = string.IsNullOrWhiteSpace(helperKey) ? null : helperKey.Trim();
+        var helper = ReadHelper(helperAddress, helperKey);
+        if ((helperAddress is not null || helperKey is not null) && helper is null)
+            return Result.Fail(ErrorKind.SettingsInvalid);
         var serversBefore = ReadServers(await repository.GetAsync(PublicServersKey, ct));
+        var helperBefore = ReadHelper(await repository.GetAsync(HelperAddressKey, ct), await repository.GetAsync(HelperKeyKey, ct));
         await repository.SetAsync(LanguageKey, language, ct);
         await repository.SetAsync(ViewKey, view, ct);
         await repository.SetAsync(SortKey, sort, ct);
         await repository.SetAsync(SendStepsKey, sendStepsSeen == 0 ? null : sendStepsSeen.ToString(System.Globalization.CultureInfo.InvariantCulture), ct);
         await repository.SetAsync(StartWithWindowsKey, startWithWindows ? "true" : null, ct);
         await repository.SetAsync(PublicServersKey, servers.Count == 0 ? null : string.Join('\n', servers), ct);
+        await repository.SetAsync(HelperAddressKey, helperAddress, ct);
+        await repository.SetAsync(HelperKeyKey, helperKey, ct);
         if (engine is not null && !servers.SequenceEqual(serversBefore))
             await engine.SetPublicServersAsync(ToUris(servers), ct);
+        if (engine is not null && helper != helperBefore)
+            await engine.SetHelperAsync(helper, ct);
         Changed?.Invoke();
         return Result.Success;
     }
@@ -117,6 +141,24 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
                 kept.Add(text);
         }
         return kept.Count > MaxPublicServers ? null : kept;
+    }
+
+    /// <summary>
+    /// The helper computer, or null when either part is missing or not usable: an http or https
+    /// address with a server name and no sign-in, and a key of printable characters long enough
+    /// that the helper takes it.
+    /// </summary>
+    internal static HelperComputer? ReadHelper(string? address, string? key)
+    {
+        if (address is null || key is null
+            || address.Length > MaxServerLength || address.Any(char.IsControl)
+            || key.Length is < MinHelperKeyLength or > MaxHelperKeyLength || key.Any(c => char.IsControl(c) || char.IsWhiteSpace(c))
+            || !Uri.TryCreate(address, UriKind.Absolute, out var uri)
+            || !HelperSchemes.Contains(uri.Scheme)
+            || string.IsNullOrEmpty(uri.Host)
+            || !string.IsNullOrEmpty(uri.UserInfo))
+            return null;
+        return new HelperComputer(uri, key);
     }
 
     private static IReadOnlyList<string> ReadServers(string? stored) =>

@@ -68,6 +68,8 @@ export interface SettingsDto {
   sendStepsSeen: number;
   startWithWindows: boolean;
   publicServers: string[];
+  helperAddress: string | null;
+  helperKey: string | null;
 }
 
 export interface SetSettingsArgs {
@@ -77,10 +79,13 @@ export interface SetSettingsArgs {
   sendStepsSeen: number | null;
   startWithWindows: boolean | null;
   publicServers: string[] | null;
+  helperAddress: string | null;
+  helperKey: string | null;
 }
 
 export interface ConnectionDto {
   health: ConnectionHealthDto | null;
+  throughHelper: boolean;
 }
 
 export interface ActivityDto {

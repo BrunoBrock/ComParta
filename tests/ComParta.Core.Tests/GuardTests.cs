@@ -9,13 +9,16 @@ public sealed partial class GuardTests
 {
     private static readonly string RepositoryRoot = FindRepositoryRoot();
 
-    // Folders where these words are allowed: the engine adapter and its tests (AD-5).
+    // Folders where these words are allowed: the engine adapter, the helper and their tests (AD-5).
     private static readonly string[] EngineFolders =
     [
         Path.Combine("src", "ComParta.Engine.MonoTorrent"),
         Path.Combine("tests", "ComParta.Engine.MonoTorrent.Tests"),
         // Drives the real engine through the whole app, so it hands it a download link of its own.
         Path.Combine("tests", "ComParta.Wiring.Tests"),
+        // The helper is a torrent program on a server, run by whoever sets it up, never seen by the person (AD-23).
+        Path.Combine("src", "ComParta.Helper"),
+        Path.Combine("tests", "ComParta.Helper.Tests"),
     ];
 
     // The two files that have to spell the words out in order to forbid them.

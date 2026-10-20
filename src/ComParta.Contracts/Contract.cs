@@ -149,14 +149,20 @@ public sealed record InvitePreviewDto(
 /// <param name="Sort">"added", "name" or "size", or null for the default.</param>
 /// <param name="StartWithWindows">Start hidden in the notification area when the person signs in.</param>
 /// <param name="PublicServers">Addresses of public servers that help others find what is shared; empty for none.</param>
+/// <param name="HelperAddress">Where the helper computer takes files; null for none.</param>
+/// <param name="HelperKey">The helper computer's key; null for none.</param>
 public sealed record SettingsDto(
-    string? Language, string SystemLanguage, string? View, string? Sort, int SendStepsSeen, bool StartWithWindows, string[] PublicServers);
+    string? Language, string SystemLanguage, string? View, string? Sort, int SendStepsSeen, bool StartWithWindows, string[] PublicServers,
+    string? HelperAddress, string? HelperKey);
 
 /// <summary>Every choice at once; the UI sends what it has, with the one it changed.</summary>
 /// <param name="Language">A language tag, or null to follow the system again.</param>
 /// <param name="PublicServers">Addresses of public servers, one per entry; null or empty for none.</param>
+/// <param name="HelperAddress">Where the helper computer takes files; null or empty for none. Goes with <paramref name="HelperKey"/>.</param>
+/// <param name="HelperKey">The helper computer's key; null or empty for none.</param>
 public sealed record SetSettingsArgs(
-    string? Language, string? View, string? Sort, int? SendStepsSeen, bool? StartWithWindows, string[]? PublicServers);
+    string? Language, string? View, string? Sort, int? SendStepsSeen, bool? StartWithWindows, string[]? PublicServers,
+    string? HelperAddress = null, string? HelperKey = null);
 
 /// <param name="Force">True once the person confirmed quitting although files are moving.</param>
 public sealed record QuitArgs(bool Force);
@@ -165,7 +171,8 @@ public sealed record QuitArgs(bool Force);
 public sealed record QuitAnswerDto(bool Quitting, string[] Moving);
 
 /// <param name="Health">Null while nothing is shared or received, or the router has not answered yet.</param>
-public sealed record ConnectionDto(ConnectionHealthDto? Health);
+/// <param name="ThroughHelper">Others get the files through the helper computer (AD-23).</param>
+public sealed record ConnectionDto(ConnectionHealthDto? Health, bool ThroughHelper = false);
 
 /// <summary>The speed bar: total speeds and the two Stop flags (CAP-27, AD-22).</summary>
 /// <param name="Items">The speeds of each file moving now, for its card; files standing still are left out.</param>

@@ -37,6 +37,16 @@ export const en = {
   'settings.serversSaved': 'Servers saved.',
   'settings.serversInvalid': 'This line is not a server address: {line}',
   'settings.serversTooMany': 'Use at most {count} servers.',
+  'settings.helper': 'Helper computer',
+  'settings.helperHint':
+    'Optional. A computer that is always on and that everyone can reach. A copy of each file you share goes to it, so people get your files even when they cannot reach this computer. Whoever looks after it could see that copy.',
+  'settings.helperAddress': 'Address',
+  'settings.helperKey': 'Key',
+  'settings.helperSave': 'Save helper',
+  'settings.helperSaved': 'Helper saved.',
+  'settings.helperOff': 'Helper turned off.',
+  'settings.helperInvalid':
+    'Enter the address, such as https://helper.example.org:6970, and a key of at least 16 characters, or leave both empty.',
   'help.title': 'How ComParta works',
   'help.share': 'Choose “Share a file” and pick a file on this computer. It stays where it is.',
   'help.invite': 'Copy the invite and send it to the person in WhatsApp or an email.',
@@ -189,9 +199,12 @@ export const en = {
   'connection.good': 'Others can reach this computer',
   'connection.limited': 'Limited connection',
   'connection.blocked': 'Others cannot reach this computer',
+  'connection.helper': 'Others get your files through your helper',
   'connection.open': 'Connection: {state}. What does this mean?',
   'connection.title': 'Can others reach this computer?',
   'connection.state.good': 'Yes. The people you send to can reach this computer, so files go straight across.',
+  'connection.state.helper':
+    'Yes. Your helper computer keeps a copy of what you share and passes it on, so people get your files even when they cannot reach this computer.',
   'connection.state.limited':
     'Maybe not. Files still arrive when the other computer can be reached, so most of the time this works.',
   'connection.state.blocked':

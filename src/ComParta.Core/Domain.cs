@@ -172,6 +172,10 @@ public enum PortMappingState
 /// <param name="GlobalIPv6Present">This computer has an internet-wide IPv6 address.</param>
 /// <param name="ListeningOnIPv6">The engine accepts connections on IPv6 too.</param>
 /// <param name="IncomingConnectionSeenRecently">Another device from outside the local network connected within the last hour.</param>
+/// <param name="ReachableThroughHelper">
+/// A helper computer the person named answers and holds every file that is ready (AD-23), so others
+/// get them from it whether or not they can reach this computer.
+/// </param>
 public sealed record ReachabilityFacts(
     bool Listening,
     bool ListenPortBusy,
@@ -180,7 +184,16 @@ public sealed record ReachabilityFacts(
     IPAddress? ExternalAddress,
     bool GlobalIPv6Present,
     bool ListeningOnIPv6,
-    bool IncomingConnectionSeenRecently);
+    bool IncomingConnectionSeenRecently,
+    bool ReachableThroughHelper = false);
+
+/// <summary>
+/// A helper computer the person named (AD-23): an always-reachable computer that keeps a copy of
+/// each shared file and passes it on to anyone with the invite.
+/// </summary>
+/// <param name="Address">Where the helper takes files, such as https://helper.example.org:6970.</param>
+/// <param name="Key">The secret the helper asks for before it takes a file.</param>
+public sealed record HelperComputer(Uri Address, string Key);
 
 /// <summary>Which addresses lead outside the local network.</summary>
 public static class NetworkAddresses
