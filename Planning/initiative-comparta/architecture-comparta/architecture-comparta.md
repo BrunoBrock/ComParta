@@ -150,7 +150,7 @@ An arrow means "may depend on". `ComParta.Core` depends on no other project and 
 - **Binds:** core, storage, engine, contracts, UI
 - **Prevents:** accounts or a server that knows who is friends with whom; a file from a stranger written to disk before anyone decided to accept it; each screen deciding on its own who may send.
 - **Rule:** Each device has a key pair kept on the device (AD-9). Two devices become friends by exchanging public keys: an invite from ComParta carries the sender's key, and accepting an invite from someone new asks to add them as a friend first; "Add a friend" carries the key without a file. Core owns the friend list (storage) and the known-sources rule: `SharingPolicy.AcceptFromUnknown`, off on a new install, set only from the first Settings screen. Core decides, before any receive starts, whether an invite or a request to connect comes from a friend; the engine adapter authenticates devices by key and refuses unknown ones when the rule says so, before writing a byte. "What you share with me" and "new share for you" messages travel only between friends' devices. Sharing out to the open internet (AD-23) is not governed by this rule. The spike in epic 13 settles the wire details and may revise AD-8.
-- **Added 2026-10-20** (the maintainer's ask, roadmap P-19). Open: whether website download links count as unknown sources (decision D-7, recommended yes).
+- **Added 2026-10-20** (the maintainer's ask, roadmap P-19). Decided 2026-10-20 (D-7): download links and download files from websites count as unknown sources too.
 
 ### AD-25 — A shared folder is a signed list; each file in it is its own transfer
 

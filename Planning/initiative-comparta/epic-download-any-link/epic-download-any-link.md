@@ -47,4 +47,4 @@ Downloads started by the person. Not search, RSS or queues (spec non-goals).
 - Built 2026-10-10 on the plan branch: stories 1 to 3.
 - Waits on epic-send-to-a-person because: it reuses the receive path.
 - Note 2026-10-13: qBittorrent is the reference for this epic (roadmap, References).
-- Note 2026-10-20: with friends (epic 13), website links and download files count as unknown sources if decision D-7 is answered yes, so while the switch is off, pasting one says so and points to the switch.
+- Decided 2026-10-20 (D-7): with friends (epic 13), website links and download files count as unknown sources, so while the switch is off, pasting one says so and points to the switch.
