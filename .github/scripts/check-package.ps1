@@ -28,8 +28,8 @@ foreach ($candidate in Get-Random -Minimum 20000 -Maximum 40000 -Count 20) {
     catch { }
 }
 if (-not $pilotPort) { throw 'No free port for the pilot data.' }
-Set-Content -NoNewline (Join-Path $pilot 'engine\port.txt') $pilotPort
-Get-ChildItem -Recurse -Force $pilot | ForEach-Object { Write-Host "pilot after writing: $($_.FullName)" }
+[System.IO.File]::WriteAllText((Join-Path $pilot 'engine\port.txt'), $pilotPort)
+if (-not (Test-Path (Join-Path $pilot 'engine\port.txt'))) { throw 'Could not write the pilot port.' }
 $pilotDatabase = Join-Path $pilot 'comparta.db'
 python (Join-Path $PSScriptRoot 'pilot_db.py') make $pilotDatabase
 if ($LASTEXITCODE -ne 0) { throw 'Could not write the pilot database.' }
@@ -39,7 +39,6 @@ Add-AppxPackage -Path $package.FullName
 $installed = Get-AppxPackage | Where-Object { $_.Publisher -eq 'CN=ComParta' } | Select-Object -First 1
 if (-not $installed) { throw 'The package did not install.' }
 Write-Host "Installed $($installed.PackageFullName), version $($installed.Version)"
-Get-ChildItem -Recurse -Force $pilot | ForEach-Object { Write-Host "pilot after installing: $($_.FullName)" }
 
 try {
     Write-Host "== Check what the package declares" -ForegroundColor Cyan
@@ -85,7 +84,6 @@ try {
         Get-ChildItem -Recurse $data | ForEach-Object { Write-Host "$($_.FullName) $($_.LastWriteTimeUtc.ToString('o'))" }
         Get-ChildItem (Join-Path $data 'logs') -ErrorAction SilentlyContinue | Get-Content | Write-Host
         Get-ChildItem -Recurse $pilot | ForEach-Object { Write-Host "pilot: $($_.FullName)" }
-        Get-ChildItem -Recurse (Join-Path $env:LOCALAPPDATA "Packages\$($installed.PackageFamilyName)\LocalCache") -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "cache: $($_.FullName)" }
         throw "The pilot port $pilotPort did not come over: $port"
     }
     $found = python (Join-Path $PSScriptRoot 'pilot_db.py') read (Join-Path $data 'comparta.db')
