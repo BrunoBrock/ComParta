@@ -72,9 +72,12 @@ export default function App({ bridge }: AppProps) {
     sendStepsSeen: 0,
     startWithWindows: false,
     publicServers: [],
+    helperAddress: null,
+    helperKey: null,
   })
   const [startWithWindows, setStartWithWindows] = useState(false)
   const [publicServers, setPublicServers] = useState<readonly string[]>([])
+  const [helper, setHelper] = useState<{ address: string | null; key: string | null }>({ address: null, key: null })
   // Files that would stop moving if the app quit now; the person confirms first (AD-14).
   const [quitting, setQuitting] = useState<readonly string[] | null>(null)
   const [query, setQuery] = useState('')
@@ -89,6 +92,7 @@ export default function App({ bridge }: AppProps) {
   // Mirrors the catalog's current language so the whole screen re-renders when it changes.
   const [language, setShownLanguage] = useState<Language>(getLanguage)
   const [connection, setConnection] = useState<ConnectionHealthDto | null>(null)
+  const [throughHelper, setThroughHelper] = useState(false)
   const [helping, setHelping] = useState(false)
   // Which window the header or rail opened: the short help or the settings.
   const [opened, setOpened] = useState<'help' | 'settings' | null>(null)
@@ -129,9 +133,12 @@ export default function App({ bridge }: AppProps) {
         sendStepsSeen: stored.sendStepsSeen,
         startWithWindows: stored.startWithWindows,
         publicServers: stored.publicServers,
+        helperAddress: stored.helperAddress,
+        helperKey: stored.helperKey,
       }
       setStartWithWindows(stored.startWithWindows)
       setPublicServers(stored.publicServers)
+      setHelper({ address: stored.helperAddress, key: stored.helperKey })
       setView(stored.view === 'list' ? 'list' : 'grid')
       setSort(stored.sort === 'name' || stored.sort === 'size' ? stored.sort : 'added')
       const chosen = pickLanguage(stored.language, stored.systemLanguage)
@@ -143,7 +150,10 @@ export default function App({ bridge }: AppProps) {
       if (event.event === 'shares.changed') setShares(event.payload)
       else if (event.event === 'transfers.changed') setTransfers(event.payload)
       else if (event.event === 'settings.changed') applySettings(event.payload)
-      else if (event.event === 'connection.changed') setConnection(event.payload.health)
+      else if (event.event === 'connection.changed') {
+        setConnection(event.payload.health)
+        setThroughHelper(event.payload.throughHelper)
+      }
       else if (event.event === 'activity.changed') setActivity(event.payload)
       else if (event.event === 'quit.changed') setQuitting(event.payload.moving)
       // The person clicked a system notification about this item (CAP-20).
@@ -155,7 +165,10 @@ export default function App({ bridge }: AppProps) {
     })
 
     void bridge.invoke('connection.get').then((result) => {
-      if (active && result.ok) setConnection(result.value.health)
+      if (active && result.ok) {
+        setConnection(result.value.health)
+        setThroughHelper(result.value.throughHelper)
+      }
     })
 
     void bridge.invoke('settings.get').then((result) => {
@@ -304,6 +317,20 @@ export default function App({ bridge }: AppProps) {
     }
     setPublicServers(servers)
     showInfo(t('settings.serversSaved'))
+    return true
+  }
+
+  async function chooseHelper(next: { address: string; key: string } | null) {
+    const before = choices.current
+    choices.current = { ...before, helperAddress: next?.address ?? null, helperKey: next?.key ?? null }
+    const result = await bridge.invoke('settings.set', choices.current)
+    if (!result.ok) {
+      choices.current = before
+      showError(result.error.code)
+      return false
+    }
+    setHelper({ address: next?.address ?? null, key: next?.key ?? null })
+    showInfo(t(next ? 'settings.helperSaved' : 'settings.helperOff'))
     return true
   }
 
@@ -513,6 +540,7 @@ export default function App({ bridge }: AppProps) {
         receivedCount={transfers?.length ?? null}
         adding={adding}
         connection={connection}
+        throughHelper={throughHelper}
         onConnection={() => setHelping(true)}
         onSection={setSection}
         onAdd={add}
@@ -563,6 +591,9 @@ export default function App({ bridge }: AppProps) {
           onStartWithWindows={chooseStartWithWindows}
           publicServers={publicServers}
           onPublicServers={choosePublicServers}
+          helperAddress={helper.address}
+          helperKey={helper.key}
+          onHelper={chooseHelper}
           onClose={() => setOpened(null)}
         />
       )}
@@ -570,7 +601,7 @@ export default function App({ bridge }: AppProps) {
       {quitting && <QuitDialog moving={quitting} onConfirm={quitAnyway} onCancel={() => setQuitting(null)} />}
 
       {helping && (
-        <ConnectionHelp health={connection} onOpenSettings={openConnectionSettings} onClose={() => setHelping(false)} />
+        <ConnectionHelp health={connection} throughHelper={throughHelper} onOpenSettings={openConnectionSettings} onClose={() => setHelping(false)} />
       )}
 
       {receiving && (

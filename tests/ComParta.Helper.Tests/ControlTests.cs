@@ -27,6 +27,21 @@ public sealed class ControlTests : HelperTestBase
     }
 
     [Fact]
+    public async Task The_helper_tells_an_install_holding_the_key_where_its_server_and_files_are()
+    {
+        var helper = await StartHelperAsync();
+        var about = new Uri(helper.ControlUri, "about");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Http.GetAsync(about)).StatusCode);
+
+        var request = new HttpRequestMessage(HttpMethod.Get, about);
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Key);
+        var answer = await (await Http.SendAsync(request)).Content.ReadFromJsonAsync<HelperAbout>();
+        Assert.Equal([helper.TrackerUri.OriginalString, $"udp://127.0.0.1:{helper.Options.TrackerPort}"], answer!.Trackers);
+        Assert.Equal(helper.PeerEndPoint.ToString(), answer.Peer);
+    }
+
+    [Fact]
     public async Task A_file_is_added_once_and_removed_with_everything_the_helper_kept()
     {
         var helper = await StartHelperAsync();

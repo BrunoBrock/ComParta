@@ -1451,3 +1451,28 @@ dialog.sheet {
   color: var(--color-danger);
   overflow-wrap: anywhere;
 }
+
+/* The helper computer in Settings: a heading, its hint, two fields and a save button. */
+.settings-helper {
+  margin: calc(var(--space) * 3) 0 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.settings-helper legend {
+  padding: 0;
+  font-weight: 600;
+}
+
+.settings-helper input {
+  width: 100%;
+  min-height: var(--target);
+  margin-bottom: calc(var(--space) * 2);
+  padding: var(--space) calc(var(--space) * 1.5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+}
