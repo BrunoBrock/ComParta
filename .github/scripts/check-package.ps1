@@ -15,7 +15,10 @@ Import-Certificate -FilePath (Join-Path $PackageDir 'ComParta-test.cer') -CertSt
 Write-Host "== Leave pilot data behind" -ForegroundColor Cyan
 $pilot = Join-Path $env:LOCALAPPDATA 'ComParta'
 New-Item -ItemType Directory -Force (Join-Path $pilot 'engine') | Out-Null
-Set-Content -NoNewline (Join-Path $pilot 'engine\port.txt') '51413'
+# A port free on this machine, as the pilot would have kept; Windows reserves some ranges.
+$probe = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Any, 0)
+$probe.Start(); $pilotPort = "$($probe.LocalEndpoint.Port)"; $probe.Stop()
+Set-Content -NoNewline (Join-Path $pilot 'engine\port.txt') $pilotPort
 $pilotDatabase = Join-Path $pilot 'comparta.db'
 python (Join-Path $PSScriptRoot 'pilot_db.py') make $pilotDatabase
 if ($LASTEXITCODE -ne 0) { throw 'Could not write the pilot database.' }
@@ -66,7 +69,7 @@ try {
         throw 'The pilot data was not imported.'
     }
     $port = Get-Content -Raw (Join-Path $data 'engine\port.txt')
-    if ($port -ne '51413') { throw "The pilot port did not come over: $port" }
+    if ($port -ne $pilotPort) { throw "The pilot port $pilotPort did not come over: $port" }
     $found = python (Join-Path $PSScriptRoot 'pilot_db.py') read (Join-Path $data 'comparta.db')
     $version, $name = "$found" -split ' ', 2
     if ($LASTEXITCODE -ne 0 -or [int]$version -le 1 -or $name -ne 'pilot.bin') { throw "The pilot share did not come over upgraded: $found" }
