@@ -31,6 +31,9 @@ public interface ISystemInfo
 
     /// <summary>The app's version, as the About section shows it; empty when not known.</summary>
     string AppVersion => "";
+
+    /// <summary>The operating system's name and version, for a support report; empty when not known.</summary>
+    string SystemVersion => "";
 }
 
 public enum OfferState { Preparing, Ready, Failed }

@@ -108,7 +108,12 @@ export const en = {
     'Choose “Stop sharing” on the file. The file stays on your computer; others just cannot get it from you any more. To stop everything for a while, use “Stop” on the bar at the top.',
   'help.q.getHelp': 'How do I get help?',
   'help.a.getHelp':
-    'Ask the person who usually helps you with the computer. The connection help shows whether others can reach this computer and what to try.',
+    'Ask the person who usually helps you with the computer. The connection help shows whether others can reach this computer and what to try. If they ask how ComParta is doing, copy a report for them at the bottom of this page.',
+  'help.report': 'Copy a report for whoever helps you',
+  'help.reportHint':
+    'It says how ComParta is doing on this computer, without the names of your files or your invites. Paste it in a message to them.',
+  'help.reportCopied': 'Copied. This is everything in it:',
+  'help.reportText': 'What was copied',
 
   'shares.heading': 'Shared by me',
   'shares.add': 'Share a file',

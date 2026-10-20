@@ -26,6 +26,7 @@ public sealed class BridgeRouter
     private readonly SendingUseCases _sending;
     private readonly BackgroundUseCases _background;
     private readonly MediaUseCases _media;
+    private readonly SupportUseCases _support;
 
     public BridgeRouter(
         ShareUseCases shares,
@@ -42,9 +43,11 @@ public sealed class BridgeRouter
         SendingUseCases sending,
         NotificationUseCases notifications,
         BackgroundUseCases background,
-        MediaUseCases media)
+        MediaUseCases media,
+        SupportUseCases support)
     {
         _media = media;
+        _support = support;
         _background = background;
         _background.QuitAsked += answer => Raise(Events.QuitChanged, ToDto(answer));
         notifications.OpenRequested += (kind, id, name) => Raise(
@@ -97,6 +100,16 @@ public sealed class BridgeRouter
             result = CommandResult.Failure(ErrorCodes.Unexpected);
             try { CommandFailed?.Invoke(command, e); }
             catch (Exception) { /* a listener's problem must not change the answer */ }
+        }
+        if (result.Error is { } error)
+        {
+            // Written down for the support report; failing to write it must not change the answer.
+            try { await _support.RecordAsync(error.Code); }
+            catch (Exception e)
+            {
+                try { CommandFailed?.Invoke(command, e); }
+                catch (Exception) { /* as above */ }
+            }
         }
         return JsonSerializer.Serialize(result, Contract.Json);
     }
@@ -237,6 +250,13 @@ public sealed class BridgeRouter
 
             case Commands.AppQuit:
                 return CommandResult.Success(ToDto(_background.Quit(Args<QuitArgs>(argsJson)?.Force ?? false)));
+
+            case Commands.SupportReport:
+            {
+                var report = await _support.ReportAsync();
+                await _clipboard.SetTextAsync(report);
+                return CommandResult.Success(report);
+            }
 
             case Commands.SettingsGet:
                 return CommandResult.Success(ToDto(await _settings.GetAsync()));

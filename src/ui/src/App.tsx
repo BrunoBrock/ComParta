@@ -696,6 +696,8 @@ export default function App({ bridge }: AppProps) {
 
       {opened === 'help' && (
         <HelpDialog
+          bridge={bridge}
+          onError={showError}
           onConnection={() => {
             setOpened(null)
             setHelping(true)

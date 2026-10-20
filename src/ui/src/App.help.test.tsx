@@ -4,7 +4,7 @@ import { helpQuestions } from './components/HelpDialog.tsx'
 import { en } from './i18n/en.ts'
 import { ptBR } from './i18n/pt-BR.ts'
 import { accessibilityProblems } from './test/axe.ts'
-import { railButton, setup, type User } from './test/appHarness.tsx'
+import { railButton, setup, type User, video } from './test/appHarness.tsx'
 
 type Words = Record<keyof typeof en, string>
 
@@ -40,5 +40,34 @@ describe('the Help page', () => {
     await user.click(within(help).getByText(en['help.q.strangers']))
 
     expect(within(help).getByText(en['help.a.strangers'])).toHaveTextContent(/Anyone who gets the invite/)
+  })
+
+  it('copies a report for whoever helps, shows all of it, and lists the last problem', async () => {
+    const { bridge, user } = setup({ shares: [video], yourName: 'Ana' })
+    await screen.findByText('Birthday party.mp4')
+    await bridge.invoke('shares.remove', { id: 'gone' })
+    const help = await openHelp(user, en)
+
+    await user.click(within(help).getByRole('button', { name: en['help.report'] }))
+
+    expect(await within(help).findByRole('status')).toHaveTextContent(en['help.reportCopied'])
+    const shown = within(help).getByLabelText(en['help.reportText'])
+    expect(shown.textContent).toBe(bridge.copiedReport)
+    expect(shown).toHaveTextContent('Version: 1.2.0')
+    expect(shown).toHaveTextContent('Shared: 1 (ready 1)')
+    expect(shown.textContent).toMatch(/UTC  share\.notFound\n/)
+    expect(shown).not.toHaveTextContent(/Birthday|Ana/)
+    expect(await accessibilityProblems(help)).toEqual([])
+  })
+
+  it('says so when the report cannot be made', async () => {
+    const { bridge, user } = setup()
+    const help = await openHelp(user, en)
+    bridge.failNextWith = 'unexpected'
+
+    await user.click(within(help).getByRole('button', { name: en['help.report'] }))
+
+    expect(await screen.findByText(en['error.unexpected'])).toBeInTheDocument()
+    expect(within(help).queryByLabelText(en['help.reportText'])).not.toBeInTheDocument()
   })
 })

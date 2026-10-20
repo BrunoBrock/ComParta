@@ -42,7 +42,8 @@ public sealed class BridgeRouterTests
         _router = new BridgeRouter(shares, transfers, settings, connection, _opened, activity, received, _shell, _shell, thumbnails, _dropped,
             sending, _notifications,
             new BackgroundUseCases(_engine, shares, transfers, sending, settings, _settings, _notifications, _presence, _clock),
-            new MediaUseCases(shares, received, _files));
+            new MediaUseCases(shares, received, _files),
+            new SupportUseCases(_settings, new FakeSystem("pt-BR", "1.4.2"), settings, shares, transfers, connection, _clock));
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
         _picker.NextPick = Video;
@@ -68,6 +69,20 @@ public sealed class BridgeRouterTests
     {
         Assert.False(result.GetProperty("ok").GetBoolean());
         return result.GetProperty("error").GetProperty("code").GetString()!;
+    }
+
+    [Fact]
+    public async Task The_support_report_is_copied_and_lists_the_problems_commands_answered_with()
+    {
+        Assert.Equal("share.notFound", ErrorCode(await InvokeAsync(Commands.SharesRemove, new { id = "not-an-id" })));
+        Assert.Equal("unexpected", ErrorCode(await InvokeAsync("no.such.command")));
+
+        var result = await InvokeAsync(Commands.SupportReport);
+
+        var report = result.GetProperty("value").GetString()!;
+        Assert.Equal(report, _shell.Copied);
+        Assert.Contains("Version: 1.4.2\n", report);
+        Assert.EndsWith("2026-10-12 10:00 UTC  share.notFound\n2026-10-12 10:00 UTC  unexpected\n", report);
     }
 
     [Fact]

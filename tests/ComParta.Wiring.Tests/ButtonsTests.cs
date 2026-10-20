@@ -88,7 +88,8 @@ public sealed class ButtonsTests : IAsyncLifetime
         var background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, new FakePresence());
         _router = new BridgeRouter(
             shares, transfers, settings, connection, new OpenedInvites(), activity, received, _clipboard, opener, thumbnails,
-            new DroppedFiles(), sending, notifications, background, new MediaUseCases(shares, received, disk));
+            new DroppedFiles(), sending, notifications, background, new MediaUseCases(shares, received, disk),
+            new SupportUseCases(store, new FakeSystem("en"), settings, shares, transfers, connection));
         _router.EventRaised += json => _events.Enqueue(JsonDocument.Parse(json).RootElement.Clone());
         _router.CommandFailed += (_, e) => _failure = e;
 
@@ -440,6 +441,30 @@ public sealed class ButtonsTests : IAsyncLifetime
 
         var json = await _router.InvokeAsync(Commands.SettingsSet, JsonSerializer.Serialize(new { theme = "blue" }, Contract.Json)).WaitAsync(Quick);
         Assert.Equal(ErrorCodes.SettingsInvalid, JsonDocument.Parse(json).RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task The_help_page_copies_a_report_with_the_last_problems_and_no_file_names()
+    {
+        await ShareAFileAsync("Family secrets.bin");
+        var json = await _router.InvokeAsync(Commands.SharesRemove, JsonSerializer.Serialize(new { id = Guid.NewGuid() }, Contract.Json)).WaitAsync(Quick);
+        Assert.Equal(ErrorCodes.ShareNotFound, JsonDocument.Parse(json).RootElement.GetProperty("error").GetProperty("code").GetString());
+
+        var report = (await ClickAsync(Commands.SupportReport)).GetString()!;
+
+        Assert.Equal(report, _clipboard.Text);
+        Assert.Contains("Shared: 1 (", report);
+        Assert.Contains("UTC  share.notFound\n", report);
+        Assert.DoesNotContain("secrets", report, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(_folder, report);
+
+        // The problems are kept in the app's own data, so they are still in the report after a restart.
+        var store = await SqliteStore.OpenAsync(_paths.DatabasePath);
+        var settings = new SettingsUseCases(store, new FakeSystem("en"));
+        var again = await new SupportUseCases(
+            store, new FakeSystem("en"), settings, new ShareUseCases(store, _engine, _picker, _files),
+            new TransferUseCases(store, _engine), new ConnectionUseCases(_engine)).ReportAsync();
+        Assert.Contains("UTC  share.notFound\n", again);
     }
 
     [Fact]

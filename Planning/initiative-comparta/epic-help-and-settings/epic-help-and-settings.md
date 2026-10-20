@@ -47,3 +47,4 @@ Welcome, settings, help and report screens and the settings they need. Not the s
 - Waits on epic-brazilian-portuguese because: it provides the settings store and the language choice.
 - Waits on epic-drive-like-home because: it provides the frame and components.
 - Waits on epic-connect-between-homes because: the report includes connection facts.
+- Built 2026-10-20: story 5. `support.report` puts the report on the clipboard and returns it; the Help page shows all of it under the button. The router writes down every problem code a command answers with, and the last 20 are kept in the app's own data (setting `recentProblems`), so they survive a restart. The report is in English whatever the screen's language, because it is for whoever helps; it is the one text core writes itself. It names no file, path, invite or address: the router's outside address only says whether it is public or shared with other homes.

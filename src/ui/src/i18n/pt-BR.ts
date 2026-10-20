@@ -109,7 +109,12 @@ export const ptBR: Catalog = {
     'Escolha “Parar de compartilhar” no arquivo. O arquivo continua no seu computador; só que os outros não conseguem mais baixá-lo de você. Para parar tudo por um tempo, use “Parar” na barra de cima.',
   'help.q.getHelp': 'Como consigo ajuda?',
   'help.a.getHelp':
-    'Peça para quem costuma ajudar você com o computador. A ajuda de conexão mostra se os outros conseguem alcançar este computador e o que tentar.',
+    'Peça para quem costuma ajudar você com o computador. A ajuda de conexão mostra se os outros conseguem alcançar este computador e o que tentar. Se essa pessoa perguntar como o ComParta está, copie um relatório para ela no fim desta página.',
+  'help.report': 'Copiar um relatório para quem ajuda você',
+  'help.reportHint':
+    'Ele diz como o ComParta está neste computador, sem os nomes dos seus arquivos nem os seus convites. Cole numa mensagem para essa pessoa.',
+  'help.reportCopied': 'Copiado. Isto é tudo o que ele tem:',
+  'help.reportText': 'O que foi copiado',
 
   'shares.heading': 'Compartilhados por mim',
   'shares.add': 'Compartilhar um arquivo',

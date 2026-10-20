@@ -43,6 +43,7 @@ public static class Commands
     public const string SharesAddDropped = "shares.addDropped";
     public const string AppQuit = "app.quit";
     public const string MediaOpen = "media.open";
+    public const string SupportReport = "support.report";
 }
 
 public static class Events
@@ -317,6 +318,8 @@ public static class Contract
         new(Commands.AppQuit, typeof(QuitArgs), typeof(QuitAnswerDto)),
         // Fails with media.notPlayable when the file cannot be shown or played here.
         new(Commands.MediaOpen, typeof(MediaArgs), typeof(MediaDto)),
+        // Puts the report for whoever helps the person on the clipboard and returns it, so the Help page shows what was copied.
+        new(Commands.SupportReport, null, typeof(string)),
     ];
 
     public static IReadOnlyList<EventSpec> EventSpecs { get; } =

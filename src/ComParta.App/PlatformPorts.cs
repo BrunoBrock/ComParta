@@ -181,4 +181,6 @@ public sealed class SystemInfo : Ports.ISystemInfo
 	public string UiLanguage => System.Globalization.CultureInfo.CurrentUICulture.Name is { Length: > 0 } name ? name : "en";
 
 	public string AppVersion => AppInfo.Current.VersionString;
+
+	public string SystemVersion => System.Runtime.InteropServices.RuntimeInformation.OSDescription;
 }

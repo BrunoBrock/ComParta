@@ -261,6 +261,7 @@ export interface Commands {
   "thumbnails.get": { args: ThumbnailArgs; result: string | null };
   "app.quit": { args: QuitArgs; result: QuitAnswerDto };
   "media.open": { args: MediaArgs; result: MediaDto };
+  "support.report": { args: undefined; result: string };
 }
 
 export interface Events {

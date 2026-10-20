@@ -1,9 +1,14 @@
+import { ClipboardCopy } from 'lucide-react'
+import { useState } from 'react'
+import type { Bridge, ErrorCode } from '../bridge/index.ts'
 import { t } from '../i18n/index.ts'
 import Button from './ui/Button.tsx'
 import Dialog from './ui/Dialog.tsx'
 
 interface HelpDialogProps {
+  bridge: Bridge
   onConnection: () => void
+  onError: (code: ErrorCode) => void
   onClose: () => void
 }
 
@@ -25,7 +30,16 @@ export const helpQuestions = [
  * The whole idea in three steps, the questions people ask with their answers, and the way to the
  * connection help (UX design, Help). Everything is in the app, so it works with no internet.
  */
-export default function HelpDialog({ onConnection, onClose }: HelpDialogProps) {
+export default function HelpDialog({ bridge, onConnection, onError, onClose }: HelpDialogProps) {
+  // The report as it was copied, shown whole so the person sees there is nothing private in it (epic 12 story 5).
+  const [report, setReport] = useState<string | null>(null)
+
+  async function copyReport() {
+    const result = await bridge.invoke('support.report')
+    if (result.ok) setReport(result.value)
+    else onError(result.error.code)
+  }
+
   return (
     <Dialog labelledBy="help-title" className="help" onClose={onClose}>
       <h2 id="help-title">{t('help.title')}</h2>
@@ -43,6 +57,23 @@ export default function HelpDialog({ onConnection, onClose }: HelpDialogProps) {
           </details>
         ))}
       </div>
+      <section className="help-report" aria-labelledby="help-report-title">
+        <h3 id="help-report-title">{t('help.report')}</h3>
+        <p className="hint">{t('help.reportHint')}</p>
+        <Button onClick={() => void copyReport()}>
+          <ClipboardCopy size={18} aria-hidden="true" />
+          {t('help.report')}
+        </Button>
+        {report !== null && (
+          <>
+            <p role="status">{t('help.reportCopied')}</p>
+            {/* Scrolls on its own, so it can be reached and read with the keyboard. */}
+            <pre className="help-report-text" tabIndex={0} aria-label={t('help.reportText')}>
+              {report}
+            </pre>
+          </>
+        )}
+      </section>
       <div className="dialog-actions">
         <Button variant="quiet" onClick={onConnection}>
           {t('connection.title')}

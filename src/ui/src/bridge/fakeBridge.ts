@@ -88,6 +88,8 @@ export interface FakeBridge extends Bridge {
   nextDownloadFile: PickedFile | 'invalid' | null
   /** Text of the last invite message "copied". */
   copiedInvite: string | null
+  /** The last support report put on the clipboard. */
+  copiedReport: string | null
   /** Ids of shares whose download file was "saved", in order. */
   savedDownloadFiles: string[]
   /** What the system clipboard holds, for the "found an invite you copied" path. */
@@ -320,6 +322,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   }
 
   let openedInvite: string | null = null
+  let problems: { at: Date; code: ErrorCode }[] = []
   let settings: SettingsDto = {
     language: options.language ?? null,
     systemLanguage: options.systemLanguage ?? 'en',
@@ -626,6 +629,35 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       return ok({ quitting: true, moving: [] })
     },
 
+    // As the app: the facts for whoever helps, the last problems with their times, and never a name, path or invite.
+    'support.report': () => {
+      const counts = (words: string[]) => {
+        const each = [...new Set(words)].sort().map((word) => `${word} ${words.filter((w) => w === word).length}`)
+        return words.length === 0 ? '0' : `${words.length} (${each.join(', ')})`
+      }
+      const time = (at: Date) => `${at.toISOString().slice(0, 16).replace('T', ' ')} UTC`
+      const report = [
+        'ComParta report',
+        `Made: ${time(new Date())}`,
+        `Version: ${settings.version || 'not known'}`,
+        'System: Microsoft Windows 10.0.22631',
+        `Language: ${settings.language ?? 'same as the system'} (system ${settings.systemLanguage})`,
+        '',
+        `Connection: ${connectionDto().health ?? 'not known yet'}`,
+        `Helper computer named: ${settings.helperAddress === null ? 'no' : 'yes'}`,
+        `Public servers named: ${settings.publicServers.length}`,
+        '',
+        `Shared: ${counts(shares.map((s) => (s.paused ? 'paused' : s.status === 'partlyUnavailable' ? 'partly unavailable' : s.status)))}`,
+        `Received: ${counts(transfers.map((t) => t.state))}`,
+        '',
+        'Last problems, newest last:',
+        ...(problems.length === 0 ? ['none'] : problems.map((p) => `${time(p.at)}  ${p.code}`)),
+        '',
+      ].join('\n')
+      fake.copiedReport = report
+      return ok(report)
+    },
+
     'media.open': (args) => {
       const { kind, id } = args as MediaArgs
       let name: string
@@ -737,6 +769,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     nextDownloadFile: { name: 'Free documentary.mkv', sizeBytes: 2_147_483_648 } as PickedFile | 'invalid' | null,
     failNextWith: null as ErrorCode | null,
     copiedInvite: null as string | null,
+    copiedReport: null as string | null,
     savedDownloadFiles: [] as string[],
     clipboardText: null as string | null,
     openedFolder: 0,
@@ -749,12 +782,14 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     },
 
     async invoke(command: string, args?: unknown) {
+      let result: CommandResult<unknown>
       if (fake.failNextWith) {
-        const code = fake.failNextWith
+        result = fail(fake.failNextWith)
         fake.failNextWith = null
-        return fail(code)
-      }
-      return handlers[command]?.(args) ?? fail('unexpected')
+      } else result = (await handlers[command]?.(args)) ?? fail('unexpected')
+      // As the app: every problem a command answers with is written down for the support report.
+      if (!result.ok) problems = [...problems, { at: new Date(), code: result.error.code }].slice(-20)
+      return result
     },
 
     handOverDrop(token: string, files: File[]) {
