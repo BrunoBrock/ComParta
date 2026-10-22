@@ -116,7 +116,10 @@ public static class ReceivedNames
     /// <summary>True when <paramref name="path"/> is inside <paramref name="root"/> after resolving it.</summary>
     public static bool IsInside(string root, string path)
     {
-        var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar;
+        // A drive's own root, such as D:\, already ends in a separator; any other folder gets one.
+        var fullRoot = Path.GetFullPath(root);
+        if (!Path.EndsInDirectorySeparator(fullRoot))
+            fullRoot += Path.DirectorySeparatorChar;
         var fullPath = Path.GetFullPath(path);
         return fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase);
     }

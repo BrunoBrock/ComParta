@@ -44,8 +44,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
     private readonly string _sharesFolder;
     private readonly string _transfersFolder;
     private readonly string _cacheFolder;
-    private readonly string _receivedRoot;
-    private readonly string _inProgressRoot;
+    private readonly string _usualReceivedRoot;
     private readonly ConcurrentDictionary<ShareId, Offer> _offers = new();
     private readonly ConcurrentDictionary<TransferId, Incoming> _incoming = new();
     private readonly INatDiscovery? _natDiscovery;
@@ -96,9 +95,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         _sharesFolder = Path.Combine(paths.EngineRoot, "shares");
         _transfersFolder = Path.Combine(paths.EngineRoot, "transfers");
         _cacheFolder = Path.Combine(paths.EngineRoot, "cache");
-        _receivedRoot = paths.ReceivedRoot;
-        // Unfinished data also lives under the Received root so nothing received is written elsewhere (AD-6).
-        _inProgressRoot = Path.Combine(paths.ReceivedRoot, ".in-progress");
+        _usualReceivedRoot = paths.ReceivedRoot;
     }
 
     public event Action<ShareId, OfferState>? OfferChanged;
@@ -384,8 +381,11 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         public static ReceiverCount None { get; } = new(0, 0);
     }
 
-    private sealed class Incoming(TransferId id, TorrentManager manager, string folder, IReadOnlyList<IPEndPoint> hints)
+    /// <param name="root">The Received root the transfer goes to (AD-6).</param>
+    /// <param name="folder">Its unfinished data, under <paramref name="root"/>.</param>
+    private sealed class Incoming(TransferId id, TorrentManager manager, string root, string folder, IReadOnlyList<IPEndPoint> hints)
     {
+        public string Root { get; } = root;
         public IReadOnlyList<IPEndPoint> Hints { get; } = hints;
         public long HintsTriedAt;
         public TransferId Id { get; } = id;

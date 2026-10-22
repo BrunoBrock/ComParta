@@ -4,8 +4,8 @@ namespace ComParta.Core.UseCases;
 
 /// <summary>
 /// What a person does with a file that has arrived: open it, show it in its folder, or delete it
-/// (epic 8 story 5). Every action works only on files inside the Received folder; the path comes
-/// from the transfer's own record, never from the UI.
+/// (epic 8 story 5). Every action works only on files inside the Received folder the transfer went
+/// to; the path comes from the transfer's own record, never from the UI.
 /// </summary>
 /// <summary>A file inside a received folder: its place in the folder, with / between folders, and its size.</summary>
 public sealed record ReceivedFile(string RelativePath, long SizeBytes);
@@ -80,7 +80,7 @@ public sealed class ReceivedUseCases(TransferUseCases transfers, IAppPaths paths
         return Result<IReadOnlyList<ReceivedFile>>.Success(listed);
     }
 
-    /// <summary>The finished file's place under the Received folder, or why there is none.</summary>
+    /// <summary>The finished file's place under its Received folder, or why there is none.</summary>
     internal (string? Path, ErrorKind? Error) Find(TransferId id, bool mustExist)
     {
         var view = transfers.List().FirstOrDefault(v => v.Transfer.Id == id);
@@ -89,10 +89,10 @@ public sealed class ReceivedUseCases(TransferUseCases transfers, IAppPaths paths
         if (view.State != TransferState.Done || string.IsNullOrEmpty(view.Transfer.Name))
             return (null, ErrorKind.ReceivedNotFound);
 
-        var root = Path.GetFullPath(paths.ReceivedRoot);
+        // Each transfer is where it started, even after the person chose another folder (epic 12 story 2).
+        var root = Path.GetFullPath(view.Transfer.Folder ?? paths.ReceivedRoot);
         var path = Path.GetFullPath(Path.Combine(root, view.Transfer.Name));
-        var inside = path.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
-        if (!inside)
+        if (!ReceivedNames.IsInside(root, path))
             return (null, ErrorKind.ReceivedNotFound);
         if (mustExist && !files.FileExists(path))
             return (null, ErrorKind.ReceivedNotFound);

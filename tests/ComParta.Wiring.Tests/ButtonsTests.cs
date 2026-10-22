@@ -74,8 +74,10 @@ public sealed class ButtonsTests : IAsyncLifetime
 
         // As in AppServices.StartAsync.
         var shares = new ShareUseCases(store, _engine, _picker, _files, paths: paths);
-        var transfers = new TransferUseCases(store, _engine, picker: _picker, files: _files, storage: new FakeStorage());
-        var settings = new SettingsUseCases(store, new FakeSystem("en"), _engine);
+        // The folder dialog is a stand-in; whether a folder can be written is checked on the real disk.
+        var receivedFolder = new ReceivedFolder(store, paths, _picker, new LocalFileSystem());
+        var transfers = new TransferUseCases(store, _engine, picker: _picker, files: _files, storage: new FakeStorage(), received: receivedFolder);
+        var settings = new SettingsUseCases(store, new FakeSystem("en"), _engine, receivedFolder);
         var connection = new ConnectionUseCases(_engine, new FakeFirewall());
         var activity = new ActivityUseCases(_engine, store);
         var opener = _opener;
@@ -377,6 +379,94 @@ public sealed class ButtonsTests : IAsyncLifetime
         var reply = _router.ServeMedia(opened.GetProperty("url").GetString()!, null);
         Assert.Equal((200, "image/jpeg"), (reply.Status, reply.ContentType));
         Assert.Equal(content, ReadAll(reply));
+    }
+
+    /// <summary>Another device on this computer shares a file of this name; this app receives it through the screen's Receive button.</summary>
+    private async Task<(string Id, byte[] Content)> ReceiveFromAnotherDeviceAsync(string name)
+    {
+        var originals = Path.Combine(_folder, "originals");
+        Directory.CreateDirectory(originals);
+        var original = Path.Combine(originals, name);
+        var content = RandomNumberGenerator.GetBytes(120_000);
+        File.WriteAllBytes(original, content);
+        await using var sender = new MonoTorrentTransferEngine(new FakePaths(Path.Combine(_folder, "sender-" + Guid.NewGuid().ToString("N"))));
+        await sender.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var offered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shareId = ShareId.New();
+        sender.OfferChanged += (changed, state) =>
+        {
+            if (changed == shareId && state == OfferState.Ready)
+                offered.TrySetResult();
+        };
+        await sender.OfferAsync(shareId, original);
+        await offered.Task.WaitAsync(Timeout);
+        var invite = (await sender.GetInviteAsync(shareId))!;
+
+        var id = (await ClickAsync(Commands.TransfersReceive, new ReceiveArgs(invite))).GetProperty("id").GetString()!;
+        Assert.True(TransferId.TryParse(id, out var transferId));
+        await _engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+        return (id, content);
+    }
+
+    [Fact]
+    public async Task A_received_folder_chosen_in_settings_takes_new_files_and_earlier_ones_stay_where_they_are()
+    {
+        var before = await ReceiveFromAnotherDeviceAsync("before.jpg");
+
+        // The person picks a folder on another drive in Windows' folder dialog.
+        var family = Path.Combine(_folder, "other drive", "Family");
+        Directory.CreateDirectory(family);
+        _files.EmptyFolders.Add(family);
+        _picker.NextFolder = family;
+        Assert.Equal("Family", (await ClickAsync(Commands.SettingsChooseReceivedFolder)).GetString());
+        await ScreenShowsAsync(Events.SettingsChanged, s =>
+            s.GetProperty("receivedFolder").GetString() == "Family" && s.GetProperty("receivedFolderChosen").GetBoolean());
+        // The screen is given the folder's name, never its path (AD-7).
+        Assert.DoesNotContain(_folder, (await ClickAsync(Commands.SettingsGet)).GetRawText(), StringComparison.OrdinalIgnoreCase);
+
+        var after = await ReceiveFromAnotherDeviceAsync("after.jpg");
+
+        // The new file is in the chosen folder, the earlier one where it was, and nothing unfinished is left.
+        Assert.Equal(after.Content, File.ReadAllBytes(Path.Combine(family, "after.jpg")));
+        Assert.Equal(before.Content, File.ReadAllBytes(Path.Combine(_paths.ReceivedRoot, "before.jpg")));
+        Assert.False(File.Exists(Path.Combine(_paths.ReceivedRoot, "after.jpg")));
+        Assert.Empty(Directory.EnumerateFiles(Path.Combine(family, ".in-progress"), "*", SearchOption.AllDirectories));
+
+        // Open, and Open my received files, each go to the right place.
+        await ClickAsync(Commands.ReceivedOpen, new OpenReceivedArgs(before.Id));
+        await ClickAsync(Commands.ReceivedOpen, new OpenReceivedArgs(after.Id));
+        Assert.Equal([Path.Combine(_paths.ReceivedRoot, "before.jpg"), Path.Combine(family, "after.jpg")], _opener.Opened);
+        await ClickAsync(Commands.ReceivedOpenFolder);
+        Assert.Equal(family, _opener.OpenedFolder);
+
+        // The app opens the same choice and the same places next time.
+        var store = await SqliteStore.OpenAsync(_paths.DatabasePath);
+        var next = new ReceivedFolder(store, _paths);
+        await next.LoadAsync();
+        Assert.Equal(family, next.Chosen);
+        var stored = await ((ITransferRepository)store).GetAllAsync();
+        Assert.Equal([null, family], stored.Select(t => t.Folder));
+
+        // Back to the usual folder.
+        await ClickAsync(Commands.SettingsUseUsualReceivedFolder);
+        await ScreenShowsAsync(Events.SettingsChanged, s => !s.GetProperty("receivedFolderChosen").GetBoolean());
+        await ClickAsync(Commands.ReceivedOpenFolder);
+        Assert.Null(_opener.OpenedFolder);
+    }
+
+    [Fact]
+    public async Task A_received_folder_that_cannot_be_written_is_refused_with_its_own_words()
+    {
+        _picker.NextFolder = Path.Combine(_folder, "not there");
+        var json = await _router.InvokeAsync(Commands.SettingsChooseReceivedFolder, "null").WaitAsync(Quick);
+        Assert.Equal(ErrorCodes.ReceivedFolderUnusable, JsonDocument.Parse(json).RootElement.GetProperty("error").GetProperty("code").GetString());
+
+        // Closing the dialog is not a problem and changes nothing.
+        _picker.NextFolder = null;
+        Assert.Equal(JsonValueKind.Undefined, (await ClickAsync(Commands.SettingsChooseReceivedFolder)).ValueKind);
+        Assert.False((await ClickAsync(Commands.SettingsGet)).GetProperty("receivedFolderChosen").GetBoolean());
     }
 
     [Fact]

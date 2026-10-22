@@ -230,7 +230,8 @@ public sealed class BridgeRouter
                     : CommandResult.Failure(ErrorCodes.TransferNotFound);
 
             case Commands.ReceivedOpenFolder:
-                await _opener.OpenReceivedFolderAsync();
+                // The folder new files go to; files received before a change stay in their own.
+                await _opener.OpenReceivedFolderAsync(_settings.ChosenReceivedFolder);
                 return CommandResult.Success(null);
 
             case Commands.ReceivedOpen:
@@ -281,6 +282,15 @@ public sealed class BridgeRouter
                     args?.PublicServers, args?.HelperAddress, args?.HelperKey, args?.YourName, args?.Theme, args?.WelcomeDone ?? false,
                     args?.ReceiveLimit, args?.SendLimit));
             }
+
+            case Commands.SettingsChooseReceivedFolder:
+            {
+                var chosen = await _settings.ChooseReceivedFolderAsync();
+                return chosen.Ok ? CommandResult.Success(chosen.Value) : Failure(chosen.Error);
+            }
+
+            case Commands.SettingsUseUsualReceivedFolder:
+                return ToResult(await _settings.UseUsualReceivedFolderAsync());
 
             case Commands.ConnectionGet:
                 return CommandResult.Success(ToDto(_connection.Refresh(), _connection.ThroughHelper()));
@@ -466,7 +476,7 @@ public sealed class BridgeRouter
     public static SettingsDto ToDto(Settings settings) =>
         new(settings.Language, settings.SystemLanguage, settings.View, settings.Sort, settings.SendStepsSeen, settings.StartWithWindows,
             [.. settings.PublicServers], settings.HelperAddress, settings.HelperKey, settings.YourName, settings.Theme, settings.Version, settings.WelcomeDone,
-            settings.ReceiveLimit, settings.SendLimit);
+            settings.ReceiveLimit, settings.SendLimit, settings.ReceivedFolderName ?? "", settings.ReceivedFolderChosen);
 
     public static QuitAnswerDto ToDto(QuitAnswer answer) => new(answer.Quitting, [.. answer.Moving]);
 
@@ -537,6 +547,8 @@ public sealed class BridgeRouter
         ErrorKind.FolderEmpty => ErrorCodes.ShareFolderEmpty,
         ErrorKind.FolderTooLarge => ErrorCodes.ShareFolderTooLarge,
         ErrorKind.ShareNameInvalid => ErrorCodes.ShareNameInvalid,
+        ErrorKind.ReceivedFolderUnusable => ErrorCodes.ReceivedFolderUnusable,
+        ErrorKind.ReceivedFolderMissing => ErrorCodes.ReceivedFolderMissing,
         _ => ErrorCodes.Unexpected,
     };
 }

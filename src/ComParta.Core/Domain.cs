@@ -80,9 +80,13 @@ public sealed record ShareView(Share Share, ShareStatus Status);
 /// A file on its way into the Received folder, from another person's device or from a public
 /// download link or download file (AD-21).
 /// </summary>
+/// <param name="Folder">
+/// The Received folder it goes to, as chosen in Settings when it started, or null for the usual one
+/// (<see cref="Ports.IAppPaths.ReceivedRoot"/>). Choosing another folder later never moves it (epic 12 story 2).
+/// </param>
 public sealed record Transfer(
     TransferId Id, string? Name, long? SizeBytes, bool Done, DateTimeOffset AddedAt, bool Paused = false,
-    TransferSource Source = TransferSource.Invite);
+    TransferSource Source = TransferSource.Invite, string? Folder = null);
 
 /// <summary>Where a transfer came from, for the details window (CAP-26).</summary>
 public enum TransferSource
@@ -296,6 +300,10 @@ public enum ErrorKind
     FolderTooLarge,
     /// <summary>The name given to several files shared together is empty, too long or has characters a folder cannot have.</summary>
     ShareNameInvalid,
+    /// <summary>The folder the person picked for received files cannot hold them: ComParta cannot write there, or it is ComParta's own.</summary>
+    ReceivedFolderUnusable,
+    /// <summary>The folder chosen for received files is not there now, for example on a drive that was unplugged.</summary>
+    ReceivedFolderMissing,
     Unexpected,
 }
 

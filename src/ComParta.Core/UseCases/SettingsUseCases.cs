@@ -21,17 +21,22 @@ namespace ComParta.Core.UseCases;
 /// <param name="WelcomeDone">The first-run welcome was finished or skipped; it shows once per install.</param>
 /// <param name="ReceiveLimit">At most this many bytes a second received, for ComParta as a whole; null for no limit.</param>
 /// <param name="SendLimit">At most this many bytes a second sent, for ComParta as a whole; null for no limit.</param>
+/// <param name="ReceivedFolderName">The name of the folder new received files go to, without its path (AD-7); null when not known.</param>
+/// <param name="ReceivedFolderChosen">The person chose that folder; false while it is the usual one.</param>
 public sealed record Settings(
     string? Language, string SystemLanguage, string? View = null, string? Sort = null, int SendStepsSeen = 0, bool StartWithWindows = false,
     IReadOnlyList<string>? PublicServers = null, string? HelperAddress = null, string? HelperKey = null, string? YourName = null,
-    string? Theme = null, string Version = "", bool WelcomeDone = false, long? ReceiveLimit = null, long? SendLimit = null)
+    string? Theme = null, string Version = "", bool WelcomeDone = false, long? ReceiveLimit = null, long? SendLimit = null,
+    string? ReceivedFolderName = null, bool ReceivedFolderChosen = false)
 {
     public IReadOnlyList<string> PublicServers { get; init; } = PublicServers ?? [];
 }
 
 /// <summary>The person's choices (epic 12, Settings).</summary>
 /// <param name="engine">Told which public servers to use, at start and whenever they change; none in tests that do not need it.</param>
-public sealed partial class SettingsUseCases(ISettingsRepository repository, ISystemInfo system, ITransferEngine? engine = null)
+/// <param name="received">Where received files go (epic 12 story 2); none in tests that do not need it.</param>
+public sealed partial class SettingsUseCases(
+    ISettingsRepository repository, ISystemInfo system, ITransferEngine? engine = null, ReceivedFolder? received = null)
 {
     private const string LanguageKey = "language";
     private const string ViewKey = "view";
@@ -91,11 +96,45 @@ public sealed partial class SettingsUseCases(ISettingsRepository repository, ISy
         system.AppVersion,
         await repository.GetAsync(WelcomeDoneKey, ct) == "true",
         ReadLimit(await repository.GetAsync(ReceiveLimitKey, ct)),
-        ReadLimit(await repository.GetAsync(SendLimitKey, ct)));
+        ReadLimit(await repository.GetAsync(SendLimitKey, ct)),
+        received is null ? null : ReceivedFolder.NameOf(received.Current),
+        received?.Chosen is not null);
 
-    /// <summary>Hands the stored public servers to the engine; call after it starts and before anything is shared.</summary>
+    /// <summary>The folder the person chose for received files, or null for the usual one.</summary>
+    public string? ChosenReceivedFolder => received?.Chosen;
+
+    /// <summary>
+    /// Opens the folder dialog; new transfers go to the folder picked, while running and finished ones
+    /// stay where they are (epic 12 story 2). The value is the folder's name, or null when the dialog was closed.
+    /// </summary>
+    public async Task<Result<string?>> ChooseReceivedFolderAsync(CancellationToken ct = default)
+    {
+        if (received is null)
+            return Result<string?>.Fail(ErrorKind.Unexpected);
+        var chosen = await received.ChooseAsync(ct);
+        if (chosen is { Ok: true, Value: not null })
+            Changed?.Invoke();
+        return chosen;
+    }
+
+    /// <summary>New transfers go to the usual Received folder again.</summary>
+    public async Task<Result> UseUsualReceivedFolderAsync(CancellationToken ct = default)
+    {
+        if (received is null)
+            return Result.Fail(ErrorKind.Unexpected);
+        await received.UseUsualAsync(ct);
+        Changed?.Invoke();
+        return Result.Success;
+    }
+
+    /// <summary>
+    /// Reads where received files go, and hands the stored public servers to the engine; call after it
+    /// starts and before anything is shared or received.
+    /// </summary>
     public async Task StartAsync(CancellationToken ct = default)
     {
+        if (received is not null)
+            await received.LoadAsync(ct);
         if (engine is null)
             return;
         await engine.SetPublicServersAsync(ToUris(ReadServers(await repository.GetAsync(PublicServersKey, ct))), ct);

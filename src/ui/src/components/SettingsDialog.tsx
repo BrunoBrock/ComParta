@@ -40,14 +40,22 @@ interface SettingsDialogProps {
   onGuidedSend: (on: boolean) => void
   speedLimits: SpeedLimits
   onSpeedLimits: (limits: SpeedLimits) => void
+  /** The name of the folder new received files go to, never its path (AD-7). */
+  receivedFolder: string
+  /** The person chose that folder; false while it is the usual one. */
+  receivedFolderChosen: boolean
+  /** Opens Windows' folder dialog; the problem to show, or null when it went well or was closed. */
+  onChooseReceivedFolder: () => Promise<string | null>
+  /** New files go to the usual folder again; the problem to show, or null. */
+  onUsualReceivedFolder: () => Promise<string | null>
   version: string
   onClose: () => void
 }
 
 /**
  * The Settings page (epic 12 story 1, UX design, Settings): your name, the language, the theme,
- * start with Windows, the guided send, the public servers that help others find shared files, the
- * helper computer that passes them on (AD-23) and About.
+ * start with Windows, the guided send, where received files go (story 2), the public servers that
+ * help others find shared files, the helper computer that passes them on (AD-23) and About.
  */
 export default function SettingsDialog({
   language,
@@ -67,9 +75,14 @@ export default function SettingsDialog({
   onGuidedSend,
   speedLimits,
   onSpeedLimits,
+  receivedFolder,
+  receivedFolderChosen,
+  onChooseReceivedFolder,
+  onUsualReceivedFolder,
   version,
   onClose,
 }: SettingsDialogProps) {
+  const [folderProblem, setFolderProblem] = useState<string | null>(null)
   const [name, setName] = useState(yourName)
   const [nameProblem, setNameProblem] = useState(false)
   const [address, setAddress] = useState(helperAddress ?? '')
@@ -189,6 +202,24 @@ export default function SettingsDialog({
       <p id="settings-guided-hint" className="hint">
         {t('settings.guidedSendHint')}
       </p>
+      <fieldset className="settings-received" aria-describedby="settings-received-hint">
+        <legend>{t('settings.receivedFolder')}</legend>
+        <p className="settings-received-name">{receivedFolder}</p>
+        <p id="settings-received-hint" className="hint">
+          {t('settings.receivedFolderHint')}
+        </p>
+        {folderProblem && (
+          <p role="alert" className="settings-problem">
+            {folderProblem}
+          </p>
+        )}
+        <div className="settings-row">
+          <Button onClick={() => void onChooseReceivedFolder().then(setFolderProblem)}>{t('settings.receivedFolderChange')}</Button>
+          {receivedFolderChosen && (
+            <Button onClick={() => void onUsualReceivedFolder().then(setFolderProblem)}>{t('settings.receivedFolderReset')}</Button>
+          )}
+        </div>
+      </fieldset>
       <fieldset className="settings-speed" aria-describedby="settings-speed-hint">
         <legend>{t('settings.speed')}</legend>
         <p id="settings-speed-hint" className="hint">

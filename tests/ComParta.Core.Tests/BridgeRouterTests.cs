@@ -56,7 +56,7 @@ public sealed class BridgeRouterTests
         public Task<string?> GetTextAsync(CancellationToken ct = default) => Task.FromResult(OnClipboard);
         public int Opened { get; private set; }
         public Task SetTextAsync(string text, CancellationToken ct = default) { Copied = text; return Task.CompletedTask; }
-        public Task OpenReceivedFolderAsync(CancellationToken ct = default) { Opened++; return Task.CompletedTask; }
+        public Task OpenReceivedFolderAsync(string? folder, CancellationToken ct = default) { Opened++; return Task.CompletedTask; }
         public Task<bool> OpenAsync(string path, CancellationToken ct = default) => Task.FromResult(true);
         public List<string> Revealed { get; } = [];
         public Task RevealAsync(string path, CancellationToken ct = default) { Revealed.Add(path); return Task.CompletedTask; }

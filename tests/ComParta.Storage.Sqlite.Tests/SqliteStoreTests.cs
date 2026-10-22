@@ -124,7 +124,7 @@ public sealed class SqliteStoreTests : IDisposable
         {
             await connection.OpenAsync();
             var command = connection.CreateCommand();
-            command.CommandText = "DROP TABLE share_items; ALTER TABLE shares DROP COLUMN kind; DROP TABLE settings; ALTER TABLE transfers DROP COLUMN source; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 2;";
+            command.CommandText = "ALTER TABLE transfers DROP COLUMN folder; DROP TABLE share_items; ALTER TABLE shares DROP COLUMN kind; DROP TABLE settings; ALTER TABLE transfers DROP COLUMN source; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 2;";
             await command.ExecuteNonQueryAsync();
         }
 
@@ -159,13 +159,46 @@ public sealed class SqliteStoreTests : IDisposable
         {
             await connection.OpenAsync();
             var command = connection.CreateCommand();
-            command.CommandText = "DROP TABLE share_items; ALTER TABLE shares DROP COLUMN kind; ALTER TABLE transfers DROP COLUMN source; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 3;";
+            command.CommandText = "ALTER TABLE transfers DROP COLUMN folder; DROP TABLE share_items; ALTER TABLE shares DROP COLUMN kind; ALTER TABLE transfers DROP COLUMN source; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 3;";
             await command.ExecuteNonQueryAsync();
         }
 
         ITransferRepository store = await SqliteStore.OpenAsync(DatabasePath);
 
         Assert.Equal(TransferSource.Invite, Assert.Single(await store.GetAllAsync()).Source);
+    }
+
+    [Fact]
+    public async Task A_transfer_keeps_the_Received_folder_it_started_in()
+    {
+        var chosen = new Transfer(TransferId.New(), "film.mkv", 10, false, DateTimeOffset.UtcNow, Folder: @"D:\Family");
+        var usual = new Transfer(TransferId.New(), "song.mp3", 5, true, DateTimeOffset.UtcNow.AddSeconds(1));
+        ITransferRepository store = await SqliteStore.OpenAsync(DatabasePath);
+        await store.AddAsync(chosen);
+        await store.AddAsync(usual);
+        await store.UpdateAsync(chosen with { Done = true });
+
+        ITransferRepository reopened = await SqliteStore.OpenAsync(DatabasePath);
+        Assert.Equal([@"D:\Family", null], (await reopened.GetAllAsync()).Select(t => t.Folder));
+    }
+
+    [Fact]
+    public async Task Transfers_from_the_sixth_version_stay_in_the_usual_Received_folder()
+    {
+        var transfer = new Transfer(TransferId.New(), "film.mkv", 10, true, DateTimeOffset.UtcNow);
+        ITransferRepository first = await SqliteStore.OpenAsync(DatabasePath);
+        await first.AddAsync(transfer);
+        await using (var connection = new SqliteConnection($"Data Source={DatabasePath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            var command = connection.CreateCommand();
+            command.CommandText = "ALTER TABLE transfers DROP COLUMN folder; PRAGMA user_version = 6;";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        ITransferRepository store = await SqliteStore.OpenAsync(DatabasePath);
+
+        Assert.Equal([transfer], await store.GetAllAsync());
     }
 
     [Fact]
@@ -193,7 +226,7 @@ public sealed class SqliteStoreTests : IDisposable
         {
             await connection.OpenAsync();
             var command = connection.CreateCommand();
-            command.CommandText = "DROP TABLE share_items; ALTER TABLE shares DROP COLUMN kind; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 4;";
+            command.CommandText = "ALTER TABLE transfers DROP COLUMN folder; DROP TABLE share_items; ALTER TABLE shares DROP COLUMN kind; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 4;";
             await command.ExecuteNonQueryAsync();
         }
 

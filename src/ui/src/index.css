@@ -1555,6 +1555,28 @@ dialog.sheet {
   font: inherit;
 }
 
+/* Where received files go (epic 12 story 2): a heading, the folder's name, its hint and the buttons. */
+.settings-received {
+  margin: calc(var(--space) * 3) 0 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.settings-received legend {
+  padding: 0;
+  font-weight: 600;
+}
+
+.settings-received-name {
+  margin: var(--space) 0 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-received .settings-row {
+  flex-wrap: wrap;
+}
+
 /* The viewer (epic 18 stories 2 and 3): the whole window, dark around the picture or video. */
 dialog.viewer {
   width: 100vw;
