@@ -15,7 +15,7 @@ const film: TransferDto = {
   bytesPerSecond: 0,
   secondsLeft: null,
   neededBytes: null,
-  risky: false,
+  risky: false, folder: false,
 }
 
 const itemOf = async (name: string) => (await within(transfersSection()).findByText(name)).closest('li')!

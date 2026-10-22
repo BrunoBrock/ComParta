@@ -302,6 +302,47 @@ public sealed class ButtonsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_received_folder_is_one_item_marked_as_a_folder_and_lists_its_files()
+    {
+        // Another device on this computer shares a folder with a file one level down.
+        var originals = Path.Combine(_folder, "originals-trip");
+        Directory.CreateDirectory(Path.Combine(originals, "day 1"));
+        var items = new List<ShareItem>();
+        foreach (var place in new[] { "day 1/photo.jpg", "notes.txt" })
+        {
+            var file = Path.Combine(originals, place.Replace('/', Path.DirectorySeparatorChar));
+            File.WriteAllBytes(file, RandomNumberGenerator.GetBytes(150_000));
+            items.Add(new ShareItem(place, new FileInfo(file).Length, file));
+        }
+        await using var sender = new MonoTorrentTransferEngine(new FakePaths(Path.Combine(_folder, "sender-trip")));
+        await sender.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var offered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shareId = ShareId.New();
+        sender.OfferChanged += (changed, state) =>
+        {
+            if (changed == shareId && state == OfferState.Ready)
+                offered.TrySetResult();
+        };
+        await sender.OfferItemsAsync(shareId, "Trip", items);
+        await offered.Task.WaitAsync(Timeout);
+        var invite = (await sender.GetInviteAsync(shareId))!;
+
+        var id = (await ClickAsync(Commands.TransfersReceive, new ReceiveArgs(invite))).GetProperty("id").GetString()!;
+        Assert.True(TransferId.TryParse(id, out var transferId));
+        await _engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+
+        var rows = await ClickAsync(Commands.TransfersList);
+        var row = rows.EnumerateArray().Single(t => t.GetProperty("id").GetString() == id);
+        Assert.Equal("Trip", row.GetProperty("name").GetString());
+        Assert.True(row.GetProperty("folder").GetBoolean());
+
+        var listed = await ClickAsync(Commands.ReceivedFiles, new IdArgs(id));
+        Assert.Equal(["day 1/photo.jpg", "notes.txt"], listed.EnumerateArray().Select(f => f.GetProperty("relativePath").GetString()));
+    }
+
+    [Fact]
     public async Task A_received_photo_opens_in_the_viewer_from_the_Received_folder()
     {
         // Another device on this computer shares a photo.

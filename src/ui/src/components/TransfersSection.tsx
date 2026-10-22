@@ -5,6 +5,7 @@ import { formatSize, formatTimeLeft, percentOf, t } from '../i18n/index.ts'
 import { inOrder, type SortOrder } from '../order.ts'
 import { matches } from '../search.ts'
 import DeleteReceivedDialog from './DeleteReceivedDialog.tsx'
+import ReceivedFolderDialog from './ReceivedFolderDialog.tsx'
 import RiskyOpenDialog from './RiskyOpenDialog.tsx'
 import { openReceived } from './openReceived.ts'
 import type { DetailsOf } from './DetailsWindow.tsx'
@@ -113,6 +114,7 @@ export default function TransfersSection(props: TransfersSectionProps) {
   // The received file waiting for the person to confirm its deletion.
   const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null)
   const [opening, setOpening] = useState<{ id: string; name: string } | null>(null)
+  const [folderOf, setFolderOf] = useState<TransferDto | null>(null)
 
   async function remove(transfer: TransferDto) {
     onStart()
@@ -121,6 +123,10 @@ export default function TransfersSection(props: TransfersSectionProps) {
   }
 
   async function runOnReceived(command: 'received.open' | 'received.reveal', transfer: TransferDto) {
+    if (command === 'received.open' && transfer.folder) {
+      setFolderOf(transfer)
+      return
+    }
     if (command === 'received.open') {
       const code = await openReceived(bridge, transfer.id)
       if (code === 'received.confirmRisky') setOpening({ id: transfer.id, name: transfer.name ?? '' })
@@ -246,7 +252,11 @@ export default function TransfersSection(props: TransfersSectionProps) {
                   })}
                   onDetails={() => onDetails({ kind: 'transfer', id: transfer.id, name })}
                   picture={<Thumbnail bridge={bridge} kind="transfer" id={transfer.id} name={name} ready={finished} />}
-                  onMain={finished ? () => onView({ kind: 'transfer', id: transfer.id, name }) : undefined}
+                  onMain={
+                    finished
+                      ? () => (transfer.folder ? setFolderOf(transfer) : onView({ kind: 'transfer', id: transfer.id, name }))
+                      : undefined
+                  }
                   // A running file is only cancelled with its own button; Delete never stops it by accident.
                   onRemove={() => {
                     if (finished) setDeleting({ id: transfer.id, name })
@@ -330,6 +340,9 @@ export default function TransfersSection(props: TransfersSectionProps) {
       )}
       {opening && (
         <RiskyOpenDialog name={opening.name} onConfirm={confirmOpen} onCancel={() => setOpening(null)} />
+      )}
+      {folderOf && (
+        <ReceivedFolderDialog bridge={bridge} transfer={folderOf} onError={onError} onClose={() => setFolderOf(null)} />
       )}
     </section>
   )
