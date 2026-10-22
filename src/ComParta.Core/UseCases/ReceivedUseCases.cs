@@ -43,6 +43,8 @@ public sealed class ReceivedUseCases(TransferUseCases transfers, IAppPaths paths
         var (path, error) = Find(id, mustExist: false);
         if (error is { } kind)
             return Result.Fail(kind);
+        // A file still shared with others is held open; sharing stops first (epic 14 story 4).
+        await transfers.StopSharingAsync(id, ct);
         try { files.DeleteFile(path!); }
         catch (IOException) { return Result.Fail(ErrorKind.FileUnreadable); }
         catch (UnauthorizedAccessException) { return Result.Fail(ErrorKind.FileUnreadable); }

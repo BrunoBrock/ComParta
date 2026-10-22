@@ -40,6 +40,8 @@ public sealed class ButtonsTests : IAsyncLifetime
     private readonly Clipboard _clipboard = new();
     private FakePaths _paths = null!;
     private readonly FakeOpener _opener = new();
+    // As in AppServices: what Windows opens the app with is read with the engine's own rules.
+    private readonly OpenedInvites _opened = new(MonoTorrentTransferEngine.FindLinkIn, MonoTorrentTransferEngine.DownloadFileExtensions);
     private readonly FakePresence _presence = new();
     private BackgroundUseCases _background = null!;
 
@@ -91,13 +93,14 @@ public sealed class ButtonsTests : IAsyncLifetime
         var notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, new FakeNotifier(), new FakeWindow());
         var background = _background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, _presence);
         _router = new BridgeRouter(
-            shares, transfers, settings, connection, new OpenedInvites(), activity, received, _clipboard, opener, thumbnails,
+            shares, transfers, settings, connection, _opened, activity, received, _clipboard, opener, thumbnails,
             new DroppedFiles(), sending, notifications, background, new MediaUseCases(shares, received, disk),
             new SupportUseCases(store, new FakeSystem("en"), settings, shares, transfers, connection));
         _router.EventRaised += json => _events.Enqueue(JsonDocument.Parse(json).RootElement.Clone());
         _router.CommandFailed += (_, e) => _failure = e;
 
-        await _engine.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort(), AllowPortForwarding = true });
+        // Download links and download files keep the servers they name, as with the app's default policy.
+        await _engine.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort(), AllowPortForwarding = true, AllowServersInDownloadLinks = true });
         await settings.StartAsync();
         await activity.StartAsync();
         await shares.StartAsync();
@@ -860,5 +863,195 @@ public sealed class ButtonsTests : IAsyncLifetime
         {
             return false;
         }
+    }
+
+    /// <summary>Another computer offers these files as one; returns it and the link to them.</summary>
+    private async Task<(MonoTorrentTransferEngine Sender, ShareId Id, string Link)> OfferElsewhereAsync(
+        string name, params (string Path, int Size)[] files)
+    {
+        var originals = Path.Combine(_folder, "elsewhere", name);
+        var items = files.Select(file =>
+        {
+            var path = Path.Combine(originals, file.Path.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(path, RandomNumberGenerator.GetBytes(file.Size));
+            return new ShareItem(file.Path, file.Size, path);
+        }).ToArray();
+        var sender = new MonoTorrentTransferEngine(new FakePaths(Path.Combine(_folder, "sender-" + name)));
+        await sender.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var id = ShareId.New();
+        var offered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        sender.OfferChanged += (changed, state) =>
+        {
+            if (changed == id && state == OfferState.Ready)
+                offered.TrySetResult();
+        };
+        if (items.Length == 1)
+            await sender.OfferAsync(id, items[0].ContentRef);
+        else
+            await sender.OfferItemsAsync(id, name, items);
+        await offered.Task.WaitAsync(Timeout);
+        return (sender, id, (await sender.GetInviteAsync(id))!);
+    }
+
+    private static string Checksum(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
+
+    private async Task<JsonElement> OptionsShowFilesAsync(string id)
+    {
+        var until = DateTime.UtcNow + Timeout;
+        while (true)
+        {
+            var options = await ClickAsync(Commands.TransfersOptions, new IdArgs(id));
+            if (options.GetProperty("files").ValueKind == JsonValueKind.Array)
+                return options;
+            Assert.True(DateTime.UtcNow < until, "More options never listed the files.");
+            await Task.Delay(100);
+        }
+    }
+
+    [Fact]
+    public async Task A_file_unticked_under_More_options_never_arrives_and_the_rest_does()
+    {
+        // Slow enough that the person unticks the file long before everything is there.
+        await ClickAsync(Commands.SettingsSet, new SetSettingsArgs(null, null, null, 0, false, null, WelcomeDone: true, ReceiveLimit: 300_000));
+        var (sender, _, link) = await OfferElsewhereAsync(
+            "Nature films", ("forest.mkv", 1_000_000), ("Extras/making-of.mkv", 900_000), ("subtitles.srt", 30_000));
+        try
+        {
+            var id = (await ClickAsync(Commands.TransfersReceive, new ReceiveArgs(link))).GetProperty("id").GetString()!;
+            TransferId.TryParse(id, out var transferId);
+            await _engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+
+            var files = (await OptionsShowFilesAsync(id)).GetProperty("files").EnumerateArray().ToList();
+            var extras = files.Single(f => f.GetProperty("path").GetString() == "Extras/making-of.mkv").GetProperty("index").GetInt32();
+            await ClickAsync(Commands.TransfersSetOptions, new SetTransferOptionsArgs(id, [extras], null));
+
+            var shown = await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+                t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+            var done = shown.EnumerateArray().Single(t => t.GetProperty("id").GetString() == id);
+            Assert.Equal(1_030_000, done.GetProperty("sizeBytes").GetInt64());
+            var received = Path.Combine(_paths.ReceivedRoot, "Nature films");
+            Assert.Equal(Checksum(Path.Combine(_folder, "elsewhere", "Nature films", "forest.mkv")), Checksum(Path.Combine(received, "forest.mkv")));
+            Assert.True(File.Exists(Path.Combine(received, "subtitles.srt")));
+            Assert.False(File.Exists(Path.Combine(received, "Extras", "making-of.mkv")));
+            // The choice is in the database too, so a restart would have kept it.
+            var store = await SqliteStore.OpenAsync(_paths.DatabasePath);
+            Assert.Equal([extras], Assert.Single(await ((ITransferRepository)store).GetAllAsync()).SkippedFiles!);
+        }
+        finally { await sender.StopAsync(); }
+    }
+
+    [Fact]
+    public async Task A_download_that_arrived_is_shared_on_until_turned_off_and_then_deletes_at_once()
+    {
+        var (sender, shareId, link) = await OfferElsewhereAsync("documentary.mkv", ("documentary.mkv", 600_000));
+        var third = new MonoTorrentTransferEngine(new FakePaths(Path.Combine(_folder, "third")));
+        try
+        {
+            var id = (await ClickAsync(Commands.TransfersReceive, new ReceiveArgs(link))).GetProperty("id").GetString()!;
+            TransferId.TryParse(id, out var transferId);
+            Assert.True((await ClickAsync(Commands.TransfersOptions, new IdArgs(id))).GetProperty("keepSharing").GetBoolean());
+            await _engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+            await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+                t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+            Assert.True((await ClickAsync(Commands.TransfersOptions, new IdArgs(id))).GetProperty("sharing").GetBoolean());
+
+            // The first computer goes away; a third one gets the whole file from this one.
+            await sender.StopOfferingAsync(shareId);
+            await third.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+            var thirdDone = new TaskCompletionSource<ReceiveProgress>(TaskCreationOptions.RunContinuationsAsynchronously);
+            third.ReceiveProgressed += p => { if (p.Done || p.Failed) thirdDone.TrySetResult(p); };
+            var thirdId = TransferId.New();
+            Assert.True(await third.ReceiveAsync(thirdId, link));
+            await third.ConnectAsync(thirdId, new IPEndPoint(IPAddress.Loopback, _engine.ListenEndPoint!.Port));
+            Assert.True((await thirdDone.Task.WaitAsync(Timeout)).Done);
+            var details = await ClickAsync(Commands.TransfersDetails, new IdArgs(id));
+            Assert.True(details.GetProperty("bytesSent").GetInt64() >= 600_000);
+
+            // Turning it off under More options stops sharing; the file stays.
+            await ClickAsync(Commands.TransfersSetOptions, new SetTransferOptionsArgs(id, null, false));
+            var options = await ClickAsync(Commands.TransfersOptions, new IdArgs(id));
+            Assert.False(options.GetProperty("sharing").GetBoolean());
+            Assert.False(options.GetProperty("keepSharing").GetBoolean());
+            var received = Path.Combine(_paths.ReceivedRoot, "documentary.mkv");
+            Assert.True(File.Exists(received));
+
+            await ClickAsync(Commands.ReceivedDelete, new IdArgs(id));
+
+            Assert.False(File.Exists(received));
+            await ScreenShowsAsync(Events.TransfersChanged, list => list.GetArrayLength() == 0);
+        }
+        finally
+        {
+            await third.StopAsync();
+            await sender.StopAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Deleting_a_download_still_shared_stops_sharing_it_first()
+    {
+        var (sender, _, link) = await OfferElsewhereAsync("concert.mkv", ("concert.mkv", 300_000));
+        try
+        {
+            var id = (await ClickAsync(Commands.TransfersReceive, new ReceiveArgs(link))).GetProperty("id").GetString()!;
+            TransferId.TryParse(id, out var transferId);
+            await _engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+            await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+                t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+            Assert.True(_engine.IsSharingReceived(transferId));
+
+            // On Windows a file still shared is held open; Delete has to let go of it first.
+            await ClickAsync(Commands.ReceivedDelete, new IdArgs(id));
+
+            Assert.False(File.Exists(Path.Combine(_paths.ReceivedRoot, "concert.mkv")));
+            Assert.False(_engine.IsSharingReceived(transferId));
+        }
+        finally { await sender.StopAsync(); }
+    }
+
+    [Fact]
+    public async Task A_download_file_opened_in_Windows_opens_Get_this_file_and_receives_it()
+    {
+        var (sender, shareId, _) = await OfferElsewhereAsync("open-me.mkv", ("open-me.mkv", 250_000));
+        try
+        {
+            var downloadFile = (await sender.GetDownloadFileAsync(shareId))!;
+            var path = Path.Combine(_folder, "Downloads", "open-me.mkv.torrent");
+            _files.Contents[path] = downloadFile.Content;
+
+            // Windows starts ComParta with the file; the running app hands it to the screen.
+            Assert.True(_opened.Open(["ComParta.exe", path]));
+            await ScreenShowsAsync(Events.InvitesChanged, waiting => waiting.GetBoolean());
+            Assert.Equal(JsonValueKind.Undefined, (await ClickAsync(Commands.InvitesTakeOpened)).ValueKind);
+            var preview = await ClickAsync(Commands.TransfersTakeOpenedFile);
+            Assert.Equal("open-me.mkv", preview.GetProperty("name").GetString());
+            Assert.Equal(250_000, preview.GetProperty("sizeBytes").GetInt64());
+
+            var id = (await ClickAsync(Commands.TransfersReceiveOpenedFile)).GetProperty("id").GetString()!;
+            TransferId.TryParse(id, out var transferId);
+            await _engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+
+            await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+                t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+            Assert.Equal("downloadFile", (await ClickAsync(Commands.TransfersDetails, new IdArgs(id))).GetProperty("source").GetString());
+            Assert.True(File.Exists(Path.Combine(_paths.ReceivedRoot, "open-me.mkv")));
+        }
+        finally { await sender.StopAsync(); }
+    }
+
+    [Fact]
+    public async Task A_download_link_clicked_in_the_browser_opens_Get_this_file()
+    {
+        const string link = "magnet:?xt=urn:btih:5123456789abcdef0123456789abcdef01234567&dn=Open%20film.mkv&xl=1000";
+
+        Assert.True(_opened.Open(["ComParta.exe", link]));
+
+        await ScreenShowsAsync(Events.InvitesChanged, waiting => waiting.GetBoolean());
+        var taken = (await ClickAsync(Commands.InvitesTakeOpened)).GetString()!;
+        var preview = await ClickAsync(Commands.TransfersPreview, new ReceiveArgs(taken));
+        Assert.Equal("Open film.mkv", preview.GetProperty("name").GetString());
+        Assert.False(preview.GetProperty("isInvite").GetBoolean());
+        Assert.Equal(JsonValueKind.Undefined, (await ClickAsync(Commands.TransfersTakeOpenedFile)).ValueKind);
     }
 }
