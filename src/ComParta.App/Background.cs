@@ -5,21 +5,23 @@ namespace ComParta.App;
 
 /// <summary>
 /// The Windows side of staying present (AD-14): the notification-area icon, the sleep guard and
-/// the start-up entry. Showing the window and quitting are the window's own business, so they are
-/// handed in.
+/// the start-up entry. Showing and hiding the window and quitting are the window's own business, so
+/// they are handed in.
 /// </summary>
 public sealed class WindowsPresence : IBackgroundPresence, IDisposable
 {
 	private readonly string _executable;
 	private readonly SleepGuard _sleep = new();
 	private readonly Action _quit;
+	private readonly Action _hide;
 	private readonly Action<Exception> _log;
 	private TrayIcon? _icon;
 
-	public WindowsPresence(string executable, Action quit, Action<Exception> log)
+	public WindowsPresence(string executable, Action quit, Action hide, Action<Exception> log)
 	{
 		_executable = executable;
 		_quit = quit;
+		_hide = hide;
 		_log = log;
 	}
 
@@ -57,6 +59,8 @@ public sealed class WindowsPresence : IBackgroundPresence, IDisposable
 	}
 
 	public void Quit() => _quit();
+
+	public void Hide() => _hide();
 
 	public void Dispose()
 	{

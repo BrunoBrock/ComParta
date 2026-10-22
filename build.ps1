@@ -74,6 +74,8 @@ function Install-UiPackages {
 function Test-Ui {
     Install-UiPackages
     Invoke-Step 'UI tests' 'src\ui' { npm test }
+    # The screen at a phone's size in Edge, the engine of the app's web view (epic 7 story 4).
+    Invoke-Step 'Phone layout checks' 'src\ui' { npm run test:phone }
 }
 
 # Writes into src\ComParta.App\Resources\Raw\wwwroot, which the app shows in its window.

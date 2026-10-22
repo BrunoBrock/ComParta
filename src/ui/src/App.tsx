@@ -12,7 +12,7 @@ import type {
   ShareDto,
   TransferDto,
 } from './bridge/index.ts'
-import ActionButton from './components/ActionButton.tsx'
+import { closeTopmost } from './back.ts'
 import ConnectionHelp from './components/ConnectionHelp.tsx'
 import DetailsWindow, { type DetailsOf } from './components/DetailsWindow.tsx'
 import HelpDialog from './components/HelpDialog.tsx'
@@ -229,6 +229,8 @@ export default function App({ bridge }: AppProps) {
       else if (event.event === 'quit.changed') setQuitting(event.payload.moving)
       // The person clicked a system notification about this item (CAP-20).
       else if (event.event === 'details.changed') setDetails(event.payload)
+      // The phone's back button closes what is open, and leaves the app when nothing is.
+      else if (event.event === 'back.changed' && !closeTopmost()) void bridge.invoke('app.leave')
     })
 
     void bridge.invoke('activity.get').then((result) => {
@@ -688,8 +690,6 @@ export default function App({ bridge }: AppProps) {
         onHelp={() => setOpened('help')}
         onSettings={() => setOpened('settings')}
       />
-
-      <ActionButton adding={adding} onAdd={add} onAddFolder={addFolder} onReceive={startReceiving} />
 
       <main className="content">
         {notice && <Notice text={notice} onDismiss={clearNotice} />}
