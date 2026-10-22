@@ -238,6 +238,11 @@ public interface IBackgroundPresence
     void StartWithSystem(bool on);
     /// <summary>Ends the app, window and icon included.</summary>
     void Quit();
+    /// <summary>
+    /// Puts the app out of sight and keeps it working: on Windows the window goes to the
+    /// notification area; on a phone the app goes behind the others.
+    /// </summary>
+    void Hide();
 }
 
 /// <summary>A small picture of a file, as the operating system draws it.</summary>

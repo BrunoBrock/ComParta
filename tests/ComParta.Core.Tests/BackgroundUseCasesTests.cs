@@ -76,6 +76,23 @@ public sealed class BackgroundUseCasesTests
     }
 
     [Fact]
+    public async Task Back_with_nothing_open_hides_while_a_file_is_shared_and_quits_otherwise()
+    {
+        await _background.StartAsync();
+        var asked = 0;
+        _background.BackAsked += () => asked++;
+
+        _background.BackPressed();
+        Assert.Equal(1, asked);
+        Assert.Equal(CloseChoice.Quit, _background.Leave());
+        Assert.Equal((1, 0), (_presence.Quits, _presence.Hides));
+
+        await ShareAsync();
+        Assert.Equal(CloseChoice.Hide, _background.Leave());
+        Assert.Equal((1, 1), (_presence.Quits, _presence.Hides));
+    }
+
+    [Fact]
     public async Task The_explanation_is_not_repeated_after_a_restart()
     {
         _store.Values["background.explained"] = "true";

@@ -83,6 +83,10 @@ export interface FakeBridge extends Bridge {
   openedConnectionSettings: number
   /** How many times the app quit. */
   quits: number
+  /** How many times back with nothing open left the app. */
+  leaves: number
+  /** The person pressed the phone's back button. */
+  pressBack(): void
   /** The person chose Quit on the notification-area icon while files were moving. */
   quitFromIcon(): void
   /** An invite link clicked outside the app, as the app reports it. */
@@ -536,6 +540,11 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       return ok({ quitting: true, moving: [] })
     },
 
+    'app.leave': () => {
+      fake.leaves++
+      return ok(null)
+    },
+
     'media.open': (args) => {
       const { kind, id } = args as MediaArgs
       let name: string
@@ -643,6 +652,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     openedFolder: 0,
     openedConnectionSettings: 0,
     quits: 0,
+    leaves: 0,
 
     openInvite(text: string) {
       openedInvite = text
@@ -673,6 +683,10 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
 
     quitFromIcon() {
       emit({ event: 'quit.changed', payload: { quitting: false, moving: moving() } })
+    },
+
+    pressBack() {
+      emit({ event: 'back.changed', payload: true })
     },
 
     clickNotification(target: DetailsTargetDto) {
