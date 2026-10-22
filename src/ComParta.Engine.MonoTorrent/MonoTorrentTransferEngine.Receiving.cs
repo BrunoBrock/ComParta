@@ -300,7 +300,10 @@ public sealed partial class MonoTorrentTransferEngine
             {
                 var target = ReceivedNames.UniquePathUnder(_receivedRoot, Path.GetFileName(entry), p => File.Exists(p) || Directory.Exists(p));
                 if (Directory.Exists(entry))
+                {
+                    SanitizeInside(entry);
                     Directory.Move(entry, target);
+                }
                 else
                     File.Move(entry, target);
                 finalName ??= Path.GetFileName(target);
@@ -315,6 +318,29 @@ public sealed partial class MonoTorrentTransferEngine
         catch (Exception)
         {
             ReceiveProgressed?.Invoke(new ReceiveProgress(incoming.Id, incoming.Name, incoming.Size, 0, false, Failed: true));
+        }
+    }
+
+    /// <summary>
+    /// Gives every folder and file inside an arrived folder its safe name (AD-6, AD-19), deepest first, so a
+    /// nested "CON" or a name that hides its real extension is never kept as it was sent.
+    /// </summary>
+    private static void SanitizeInside(string folder)
+    {
+        foreach (var child in Directory.GetFileSystemEntries(folder))
+        {
+            var isFolder = Directory.Exists(child);
+            if (isFolder)
+                SanitizeInside(child);
+            var name = Path.GetFileName(child);
+            var safe = ReceivedNames.Sanitize(name);
+            if (safe == name)
+                continue;
+            var target = ReceivedNames.UniquePathUnder(folder, safe, p => File.Exists(p) || Directory.Exists(p));
+            if (isFolder)
+                Directory.Move(child, target);
+            else
+                File.Move(child, target);
         }
     }
 

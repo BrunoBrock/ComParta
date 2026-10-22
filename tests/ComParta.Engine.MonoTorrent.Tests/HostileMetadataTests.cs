@@ -105,7 +105,11 @@ public sealed class HostileMetadataTests : IAsyncLifetime
     }
 
     /// <summary>A plain engine that serves <paramref name="content"/> for the crafted file, whatever its name.</summary>
-    private async Task<int> StartSenderAsync(byte[] downloadFile, byte[] content)
+    private async Task<int> StartSenderAsync(byte[] downloadFile, byte[] content) =>
+        await StartSenderAsync(downloadFile, _ => content);
+
+    /// <summary>Serves each file's own bytes, for a folder whose files differ.</summary>
+    private async Task<int> StartSenderAsync(byte[] downloadFile, Func<ITorrentManagerFile, byte[]> contentOf)
     {
         var port = FreePort();
         var settings = new EngineSettingsBuilder
@@ -116,7 +120,7 @@ public sealed class HostileMetadataTests : IAsyncLifetime
             ListenEndPoints = new Dictionary<string, IPEndPoint> { ["ipv4"] = new(IPAddress.Loopback, port) },
             CacheDirectory = Path.Combine(_folder, "sender-cache"),
         }.ToSettings();
-        var sender = new ClientEngine(settings, Factories.Default.WithPieceWriterCreator(_ => new MemoryWriter(content)));
+        var sender = new ClientEngine(settings, Factories.Default.WithPieceWriterCreator(_ => new MemoryWriter(contentOf)));
         _senders.Add(sender);
         var manager = await sender.AddAsync(Torrent.Load(downloadFile), Path.Combine(_folder, "sender"));
         await manager.HashCheckAsync(autoStart: true);
@@ -176,6 +180,99 @@ public sealed class HostileMetadataTests : IAsyncLifetime
         Assert.False(File.Exists(Path.Combine(_folder, "home", "escape.exe")));
     }
 
+    /// <summary>A download file for a folder: each file's path and bytes, in the order the sender lists them.</summary>
+    private static (byte[] DownloadFile, Dictionary<string, byte[]> Data) CraftTree(string name, IReadOnlyList<(string[] Path, byte[] Data)> files)
+    {
+        var list = new BEncodedList();
+        var all = new List<byte>();
+        var data = new Dictionary<string, byte[]>();
+        foreach (var (path, bytes) in files)
+        {
+            var segments = new BEncodedList();
+            foreach (var segment in path)
+                segments.Add(new BEncodedString(segment));
+            list.Add(new BEncodedDictionary { ["length"] = new BEncodedNumber(bytes.Length), ["path"] = segments });
+            all.AddRange(bytes);
+            data[string.Join(Path.DirectorySeparatorChar, path)] = bytes;
+        }
+        var stream = all.ToArray();
+        var pieces = new List<byte>();
+        for (var offset = 0; offset < stream.Length; offset += PieceLength)
+            pieces.AddRange(SHA1.HashData(stream.AsSpan(offset, Math.Min(PieceLength, stream.Length - offset))));
+        var info = new BEncodedDictionary
+        {
+            ["name"] = new BEncodedString(name),
+            ["files"] = list,
+            ["piece length"] = new BEncodedNumber(PieceLength),
+            ["pieces"] = new BEncodedString(pieces.ToArray()),
+        };
+        return (new BEncodedDictionary { ["info"] = info }.Encode(), data);
+    }
+
+    /// <summary>Receives a whole folder from a crafted sender and waits until it has arrived.</summary>
+    private async Task<(MonoTorrentTransferEngine Receiver, Paths Paths, bool Done)> ReceiveFolderAsync(byte[] downloadFile, Func<ITorrentManagerFile, byte[]> contentOf)
+    {
+        var (receiver, paths) = await StartReceiverAsync();
+        var port = await StartSenderAsync(downloadFile, contentOf);
+        var done = new TaskCompletionSource<ReceiveProgress>(TaskCreationOptions.RunContinuationsAsynchronously);
+        receiver.ReceiveProgressed += progress =>
+        {
+            if (progress.Done || progress.Failed)
+                done.TrySetResult(progress);
+        };
+        var id = TransferId.New();
+        Assert.True(await receiver.ReceiveFromFileAsync(id, downloadFile));
+        await receiver.ConnectAsync(id, new IPEndPoint(IPAddress.Loopback, port));
+        var result = await done.Task.WaitAsync(Timeout);
+        return (receiver, paths, result.Done);
+    }
+
+    [Fact]
+    public async Task A_folder_of_two_hundred_files_arrives_as_one_folder_with_its_tree()
+    {
+        var files = new List<(string[] Path, byte[] Data)>();
+        for (var day = 0; day < 4; day++)
+            for (var photo = 0; photo < 50; photo++)
+                files.Add(([$"day {day}", $"photo {photo}.jpg"], RandomNumberGenerator.GetBytes(100)));
+        var (downloadFile, data) = CraftTree("Trip", files);
+
+        var (_, paths, done) = await ReceiveFolderAsync(downloadFile, file => data[file.Path]);
+
+        Assert.True(done);
+        // The unfinished folder is hidden in Received; only the arrived folder counts.
+        var arrived = Assert.Single(Directory.GetDirectories(paths.ReceivedRoot), d => !Path.GetFileName(d).StartsWith('.'));
+        Assert.Equal("Trip", Path.GetFileName(arrived));
+        Assert.Equal(4, Directory.GetDirectories(arrived).Length);
+        foreach (var (path, bytes) in files)
+            Assert.Equal(bytes, await File.ReadAllBytesAsync(Path.Combine([paths.ReceivedRoot, "Trip", .. path])));
+        Assert.Equal(200, Directory.GetFiles(arrived, "*", SearchOption.AllDirectories).Length);
+        Assert.Empty(Escaped(paths, "sender"));
+    }
+
+    [Fact]
+    public async Task Hostile_names_inside_a_received_folder_get_their_safe_names_too()
+    {
+        var files = new List<(string[] Path, byte[] Data)>
+        {
+            (["days", "CON"], RandomNumberGenerator.GetBytes(120)),
+            (["days", "nul.txt"], RandomNumberGenerator.GetBytes(120)),
+            (["pics", "photo\u202Egpj.exe"], RandomNumberGenerator.GetBytes(120)),
+        };
+        var (downloadFile, data) = CraftTree("Trip", files);
+
+        var (_, paths, done) = await ReceiveFolderAsync(downloadFile, file => data[file.Path]);
+
+        Assert.True(done);
+        foreach (var (path, bytes) in files)
+        {
+            var safe = path.Select(ReceivedNames.Sanitize).ToArray();
+            Assert.Equal(bytes, await File.ReadAllBytesAsync(Path.Combine([paths.ReceivedRoot, "Trip", .. safe])));
+        }
+        var names = Directory.GetFileSystemEntries(paths.ReceivedRoot, "*", SearchOption.AllDirectories).Select(Path.GetFileName);
+        Assert.All(names, name => Assert.False(name!.Contains('\u202E')));
+        Assert.Empty(Escaped(paths, "sender"));
+    }
+
     [Fact]
     public async Task Content_announcing_thousands_of_files_is_refused()
     {
@@ -188,13 +285,16 @@ public sealed class HostileMetadataTests : IAsyncLifetime
     }
 
     /// <summary>Serves the same bytes for any file name, so a sender can offer what no disk could hold.</summary>
-    private sealed class MemoryWriter(byte[] content) : IPieceWriter
+    private sealed class MemoryWriter(Func<ITorrentManagerFile, byte[]> contentOf) : IPieceWriter
     {
+        public MemoryWriter(byte[] content) : this(_ => content) { }
+
         public int OpenFiles => 0;
         public int MaximumOpenFiles => 0;
 
         public ReusableTask<int> ReadAsync(ITorrentManagerFile file, long offset, Memory<byte> buffer)
         {
+            var content = contentOf(file);
             var count = (int)Math.Max(0, Math.Min(buffer.Length, content.Length - offset));
             content.AsMemory((int)offset, count).CopyTo(buffer);
             return ReusableTask.FromResult(count);
