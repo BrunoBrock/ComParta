@@ -67,3 +67,73 @@ jobs:
             publish/package/*.msix
             publish/package/*.cer
 
+
+  # The Android app (epic 7): built on Linux, kept as a download, then installed and started on an
+  # emulator, where the engine must start and the screen must be answered through the bridge.
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/ui/package-lock.json
+
+      - name: Install the MAUI Android workload
+        run: dotnet workload install maui-android
+
+      - name: Build the screen
+        working-directory: src/ui
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install the Android parts the build needs
+        run: >
+          dotnet build src/ComParta.App/ComParta.App.csproj -t:InstallAndroidDependencies -f net10.0-android
+          -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=True
+
+      - name: Build the APK
+        run: >
+          dotnet publish src/ComParta.App/ComParta.App.csproj -f net10.0-android -c Release
+          -p:AndroidSdkDirectory="$ANDROID_HOME" -o publish/android
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ComParta-apk
+          path: publish/android/*-Signed.apk
+
+      - name: Let the emulator use the processor directly
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Start it on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: bash .github/scripts/check-android.sh publish/android
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: android-check
+          path: |
+            publish/android/android-first-screen.png
+            publish/android/android-log.txt
+          if-no-files-found: ignore

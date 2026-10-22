@@ -4,16 +4,20 @@ using ComParta.Core.UseCases;
 using ComParta.Engine.MonoTorrent;
 using ComParta.Shell;
 using ComParta.Storage.Sqlite;
+using Ports = ComParta.Core.Ports;
 
 namespace ComParta.App;
 
-/// <summary>The only place adapters are wired to the core's ports.</summary>
-public sealed class AppServices
+/// <summary>
+/// The only place adapters are wired to the core's ports. What differs between Windows and Android
+/// (AD-1) is in Platforms/&lt;system&gt;/AppServices.*.cs: the folders, and the adapters made by
+/// <see cref="CreatePlatform"/>.
+/// </summary>
+public sealed partial class AppServices
 {
-	private readonly AppPaths _paths = new();
+	private readonly Ports.IAppPaths _paths = CreatePaths();
 	private MonoTorrentTransferEngine? _engine;
-	private WindowsNotifier? _notifier;
-	private WindowsPresence? _presence;
+	private NotificationUseCases? _notifications;
 	private int _stopped;
 
 	private AppServices()
@@ -53,12 +57,8 @@ public sealed class AppServices
 		try
 		{
 			Directory.CreateDirectory(_paths.ReceivedRoot);
-			// The first packaged run brings over what the pilot build kept (epic 5 story 5).
-			if (Packaged.IsPackaged && AppPaths.IsUsualRoot)
-			{
-				try { PilotData.Import(AppPaths.PilotRoot(), AppPaths.DataRoot(), SqliteStore.CopyDatabase, Log); }
-				catch (Exception e) { Log(e); }
-			}
+			BeforeStart();
+			var platform = CreatePlatform();
 			var store = await SqliteStore.OpenAsync(_paths.DatabasePath);
 			_engine = new MonoTorrentTransferEngine(_paths);
 			var shares = new ShareUseCases(store, _engine, new NativeFilePicker(), new LocalFileSystem(), paths: _paths);
@@ -68,34 +68,19 @@ public sealed class AppServices
 				store, _engine, picker: new NativeFilePicker(), files: new LocalFileSystem(), storage: new LocalStorageInfo(_paths),
 				received: receivedFolder);
 			var settings = new SettingsUseCases(store, new SystemInfo(), _engine, receivedFolder);
-			var executable = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "ComParta.exe");
-			var connection = new ConnectionUseCases(_engine, new WindowsFirewall(executable));
+			var connection = new ConnectionUseCases(_engine, platform.Firewall);
 			var activity = new ActivityUseCases(_engine, store);
-			var opener = new ReceivedFolderOpener(_paths);
+			var opener = platform.Opener;
 			var received = new ReceivedUseCases(transfers, _paths, opener, new LocalFileSystem());
-			var thumbnails = new ThumbnailUseCases(shares, received, new WindowsThumbnails());
+			var thumbnails = new ThumbnailUseCases(shares, received, platform.Thumbnails);
 			var sending = new SendingUseCases(_engine, shares);
-			NotificationUseCases? notifications = null;
-			_notifier = new WindowsNotifier(
-				(kind, id, name) =>
-				{
-					NotificationClicked?.Invoke();
-					notifications?.Open(kind, id, name);
-				},
-				Log);
-			notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, _notifier, Focus);
-			_presence = new WindowsPresence(executable, () => QuitRequested?.Invoke(), () => HideWindowRequested?.Invoke(), Log);
-			var background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, _presence);
+			var notifications = _notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, platform.Notifier, Focus);
+			var background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, platform.Presence);
 			var router = new BridgeRouter(
 				shares, transfers, settings, connection, Opened, activity, received, new NativeClipboard(), opener, thumbnails, Dropped,
 				sending, notifications, background, new MediaUseCases(shares, received, new LocalFileSystem()),
 				new SupportUseCases(store, new SystemInfo(), settings, shares, transfers, connection));
 			router.CommandFailed += (_, e) => Log(e);
-
-			// Written at every start so a clicked link finds the app even after its folder moved. The
-			// package declares the link itself.
-			if (!Packaged.IsPackaged)
-				LinkScheme.Register(executable);
 
 			await _engine.StartAsync(SharingPolicy.Default);
 			// The public servers the person named reach the engine before any file is shared again.
@@ -106,15 +91,7 @@ public sealed class AppServices
 			await transfers.StartAsync();
 			await notifications.StartAsync();
 			await background.StartAsync();
-			_presence.ShowIcon(
-				() => (notifications.Text("notify.menuOpen"), notifications.Text("notify.menuQuit")),
-				() => ShowWindowRequested?.Invoke(),
-				() =>
-				{
-					// Files moving: the window shows and asks the person first.
-					if (!background.QuitFromOutside())
-						ShowWindowRequested?.Invoke();
-				});
+			AfterStart(notifications, background);
 			Background = background;
 			return router;
 		}
@@ -125,6 +102,28 @@ public sealed class AppServices
 		}
 	}
 
+	/// <summary>A notification the person tapped: the window comes to the front with that item's details.</summary>
+	private void OnNotificationClicked(Ports.NotifiedItem kind, string id, string name)
+	{
+		NotificationClicked?.Invoke();
+		_notifications?.Open(kind, id, name);
+	}
+
+	/// <summary>The folders for this system (AD-10).</summary>
+	private static partial Ports.IAppPaths CreatePaths();
+
+	/// <summary>Runs before the database opens.</summary>
+	partial void BeforeStart();
+
+	/// <summary>The adapters that differ between systems.</summary>
+	private partial PlatformParts CreatePlatform();
+
+	/// <summary>Runs once everything has started.</summary>
+	partial void AfterStart(NotificationUseCases notifications, BackgroundUseCases background);
+
+	/// <summary>Lets go of what the system adapters hold.</summary>
+	partial void StopPlatform();
+
 	/// <summary>Saves where transfers got to and lets go of the icon. Safe to call more than once.</summary>
 	public void Stop()
 	{
@@ -132,10 +131,9 @@ public sealed class AppServices
 			return;
 		try
 		{
-			_presence?.Dispose();
+			StopPlatform();
 			// Lets the engine save where each transfer got to before the process ends.
 			_engine?.StopAsync().Wait(TimeSpan.FromSeconds(5));
-			_notifier?.Stop();
 		}
 		catch (Exception e)
 		{
@@ -157,3 +155,11 @@ public sealed class AppServices
 		}
 	}
 }
+
+/// <summary>The adapters that differ between Windows and Android (AD-1).</summary>
+internal sealed record PlatformParts(
+	Ports.IFirewall Firewall,
+	Ports.IContentOpener Opener,
+	Ports.IThumbnailProvider Thumbnails,
+	Ports.INotifier Notifier,
+	Ports.IBackgroundPresence Presence);
