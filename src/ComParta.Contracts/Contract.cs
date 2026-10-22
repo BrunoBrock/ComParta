@@ -32,6 +32,8 @@ public static class Commands
     public const string ReceivedDelete = "received.delete";
     public const string SettingsGet = "settings.get";
     public const string SettingsSet = "settings.set";
+    public const string SettingsChooseReceivedFolder = "settings.chooseReceivedFolder";
+    public const string SettingsUseUsualReceivedFolder = "settings.useUsualReceivedFolder";
     public const string ConnectionGet = "connection.get";
     public const string ConnectionOpenSettings = "connection.openSettings";
     public const string InvitesTakeOpened = "invites.takeOpened";
@@ -84,6 +86,8 @@ public static class ErrorCodes
     public const string ShareFolderEmpty = "share.folderEmpty";
     public const string ShareFolderTooLarge = "share.folderTooLarge";
     public const string ShareNameInvalid = "share.nameInvalid";
+    public const string ReceivedFolderUnusable = "received.folderUnusable";
+    public const string ReceivedFolderMissing = "received.folderMissing";
     public const string Unexpected = "unexpected";
 
     public static IReadOnlyList<string> All { get; } =
@@ -91,7 +95,7 @@ public static class ErrorCodes
         ShareDuplicate, ShareNotFound, ShareNotReady, FileUnreadable,
         InviteInvalid, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, DiskFull, SettingsInvalid,
         ReceivedNotFound, ReceivedOpenFailed, ReceivedConfirmRisky, ShareDropFailed, FileSaveFailed, MediaNotPlayable,
-        ShareFolderEmpty, ShareFolderTooLarge, ShareNameInvalid, Unexpected,
+        ShareFolderEmpty, ShareFolderTooLarge, ShareNameInvalid, ReceivedFolderUnusable, ReceivedFolderMissing, Unexpected,
     ];
 }
 
@@ -209,10 +213,12 @@ public sealed record InvitePreviewDto(
 /// <param name="Theme">"light" or "dark", or null to follow the system.</param>
 /// <param name="Version">The app's version, for About.</param>
 /// <param name="WelcomeDone">The first-run welcome was finished or skipped.</param>
+/// <param name="ReceivedFolder">The name of the folder new received files go to, without its path (AD-7).</param>
+/// <param name="ReceivedFolderChosen">The person chose that folder; false while it is the usual one.</param>
 public sealed record SettingsDto(
     string? Language, string SystemLanguage, string? View, string? Sort, int SendStepsSeen, bool StartWithWindows, string[] PublicServers,
     string? HelperAddress, string? HelperKey, string? YourName, string? Theme, string Version, bool WelcomeDone,
-    long? ReceiveLimit, long? SendLimit);
+    long? ReceiveLimit, long? SendLimit, string ReceivedFolder, bool ReceivedFolderChosen);
 
 /// <summary>Every choice at once; the UI sends what it has, with the one it changed.</summary>
 /// <param name="Language">A language tag, or null to follow the system again.</param>
@@ -313,6 +319,10 @@ public static class Contract
         new(Commands.ReceivedDelete, typeof(IdArgs), null),
         new(Commands.SettingsGet, null, typeof(SettingsDto)),
         new(Commands.SettingsSet, typeof(SetSettingsArgs), null),
+        // Opens Windows' folder dialog (AD-7); the name of the folder picked, or null when it was closed.
+        // New transfers go there; running and finished ones stay where they are (epic 12 story 2).
+        new(Commands.SettingsChooseReceivedFolder, null, typeof(string), ResultMayBeNull: true),
+        new(Commands.SettingsUseUsualReceivedFolder, null, null),
         new(Commands.ConnectionGet, null, typeof(ConnectionDto)),
         new(Commands.ConnectionOpenSettings, null, null),
         new(Commands.InvitesTakeOpened, null, typeof(string), ResultMayBeNull: true),

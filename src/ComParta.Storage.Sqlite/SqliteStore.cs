@@ -10,7 +10,7 @@ namespace ComParta.Storage.Sqlite;
 /// </summary>
 public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettingsRepository
 {
-    private const int SchemaVersion = 6;
+    private const int SchemaVersion = 7;
     private readonly string _connectionString;
 
     private SqliteStore(string databasePath)
@@ -103,6 +103,11 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
                     SELECT id, 0, name, size_bytes, file_path FROM shares;
                 """, transaction).ExecuteNonQueryAsync(ct);
         }
+        if (version < 7)
+        {
+            // The Received folder each transfer goes to (epic 12 story 2); older ones went to the usual one.
+            await Command(connection, "ALTER TABLE transfers ADD COLUMN folder TEXT NULL", transaction).ExecuteNonQueryAsync(ct);
+        }
         await Command(connection, $"PRAGMA user_version = {SchemaVersion}", transaction).ExecuteNonQueryAsync(ct);
         await transaction.CommitAsync(ct);
     }
@@ -186,7 +191,7 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
     async Task<IReadOnlyList<Transfer>> ITransferRepository.GetAllAsync(CancellationToken ct)
     {
         await using var connection = await ConnectAsync(ct);
-        await using var reader = await Command(connection, "SELECT id, name, size_bytes, done, added_at, paused, source FROM transfers ORDER BY added_at").ExecuteReaderAsync(ct);
+        await using var reader = await Command(connection, "SELECT id, name, size_bytes, done, added_at, paused, source, folder FROM transfers ORDER BY added_at").ExecuteReaderAsync(ct);
         var transfers = new List<Transfer>();
         while (await reader.ReadAsync(ct))
         {
@@ -197,7 +202,8 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
                 reader.GetInt64(3) != 0,
                 ParseTime(reader.GetString(4)),
                 reader.GetInt64(5) != 0,
-                Enum.IsDefined((TransferSource)reader.GetInt64(6)) ? (TransferSource)reader.GetInt64(6) : TransferSource.Invite));
+                Enum.IsDefined((TransferSource)reader.GetInt64(6)) ? (TransferSource)reader.GetInt64(6) : TransferSource.Invite,
+                reader.IsDBNull(7) ? null : reader.GetString(7)));
         }
         return transfers;
     }
@@ -205,7 +211,7 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
     public async Task AddAsync(Transfer transfer, CancellationToken ct = default)
     {
         await using var connection = await ConnectAsync(ct);
-        var command = Command(connection, "INSERT INTO transfers (id, name, size_bytes, done, added_at, paused, source) VALUES ($id, $name, $size, $done, $added, $paused, $source)");
+        var command = Command(connection, "INSERT INTO transfers (id, name, size_bytes, done, added_at, paused, source, folder) VALUES ($id, $name, $size, $done, $added, $paused, $source, $folder)");
         Bind(command, transfer);
         await command.ExecuteNonQueryAsync(ct);
     }
@@ -213,7 +219,7 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
     public async Task UpdateAsync(Transfer transfer, CancellationToken ct = default)
     {
         await using var connection = await ConnectAsync(ct);
-        var command = Command(connection, "UPDATE transfers SET name = $name, size_bytes = $size, done = $done, added_at = $added, paused = $paused, source = $source WHERE id = $id");
+        var command = Command(connection, "UPDATE transfers SET name = $name, size_bytes = $size, done = $done, added_at = $added, paused = $paused, source = $source, folder = $folder WHERE id = $id");
         Bind(command, transfer);
         await command.ExecuteNonQueryAsync(ct);
     }
@@ -255,6 +261,7 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
         command.Parameters.AddWithValue("$paused", transfer.Paused ? 1 : 0);
         command.Parameters.AddWithValue("$added", FormatTime(transfer.AddedAt));
         command.Parameters.AddWithValue("$source", (int)transfer.Source);
+        command.Parameters.AddWithValue("$folder", (object?)transfer.Folder ?? DBNull.Value);
     }
 
     private async Task<SqliteConnection> ConnectAsync(CancellationToken ct)

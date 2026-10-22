@@ -95,6 +95,8 @@ export default function App({ bridge }: AppProps) {
   const [startWithWindows, setStartWithWindows] = useState(false)
   const [publicServers, setPublicServers] = useState<readonly string[]>([])
   const [helper, setHelper] = useState<{ address: string | null; key: string | null }>({ address: null, key: null })
+  // The name of the folder new received files go to, and whether the person chose it (epic 12 story 2).
+  const [receivedFolder, setReceivedFolder] = useState<{ name: string; chosen: boolean }>({ name: '', chosen: false })
   // Files that would stop moving if the app quit now; the person confirms first (AD-14).
   const [quitting, setQuitting] = useState<readonly string[] | null>(null)
   const [query, setQuery] = useState('')
@@ -207,6 +209,7 @@ export default function App({ bridge }: AppProps) {
       setStartWithWindows(stored.startWithWindows)
       setPublicServers(stored.publicServers)
       setHelper({ address: stored.helperAddress, key: stored.helperKey })
+      setReceivedFolder({ name: stored.receivedFolder, chosen: stored.receivedFolderChosen })
       setView(stored.view === 'list' ? 'list' : 'grid')
       setSort(stored.sort === 'name' || stored.sort === 'size' ? stored.sort : 'added')
       const chosen = pickLanguage(stored.language, stored.systemLanguage)
@@ -443,6 +446,22 @@ export default function App({ bridge }: AppProps) {
     setHelper({ address: next?.address ?? null, key: next?.key ?? null })
     showInfo(t(next ? 'settings.helperSaved' : 'settings.helperOff'))
     return true
+  }
+
+  // Windows' folder dialog opens; new files go to the folder picked, earlier ones stay where they are.
+  // A problem is shown in Settings, next to the button, rather than behind it.
+  async function chooseReceivedFolder() {
+    const result = await bridge.invoke('settings.chooseReceivedFolder')
+    if (!result.ok) return errorMessage(result.error.code)
+    if (result.value !== null) showInfo(t('settings.receivedFolderSaved', { name: result.value }))
+    return null
+  }
+
+  async function useUsualReceivedFolder() {
+    const result = await bridge.invoke('settings.useUsualReceivedFolder')
+    if (!result.ok) return errorMessage(result.error.code)
+    showInfo(t('settings.receivedFolderUsual'))
+    return null
   }
 
   async function quitAnyway() {
@@ -736,6 +755,10 @@ export default function App({ bridge }: AppProps) {
           onGuidedSend={chooseGuidedSend}
           speedLimits={speedLimits}
           onSpeedLimits={chooseSpeedLimits}
+          receivedFolder={receivedFolder.name}
+          receivedFolderChosen={receivedFolder.chosen}
+          onChooseReceivedFolder={chooseReceivedFolder}
+          onUsualReceivedFolder={useUsualReceivedFolder}
           version={version}
           onClose={() => setOpened(null)}
         />

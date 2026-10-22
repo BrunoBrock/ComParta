@@ -97,6 +97,8 @@ export interface SettingsDto {
   welcomeDone: boolean;
   receiveLimit: number | null;
   sendLimit: number | null;
+  receivedFolder: string;
+  receivedFolderChosen: boolean;
 }
 
 export interface SetSettingsArgs {
@@ -231,6 +233,8 @@ export const errorCodes = [
   "share.folderEmpty",
   "share.folderTooLarge",
   "share.nameInvalid",
+  "received.folderUnusable",
+  "received.folderMissing",
   "unexpected",
 ] as const;
 
@@ -261,6 +265,8 @@ export interface Commands {
   "received.delete": { args: IdArgs; result: null };
   "settings.get": { args: undefined; result: SettingsDto };
   "settings.set": { args: SetSettingsArgs; result: null };
+  "settings.chooseReceivedFolder": { args: undefined; result: string | null };
+  "settings.useUsualReceivedFolder": { args: undefined; result: null };
   "connection.get": { args: undefined; result: ConnectionDto };
   "connection.openSettings": { args: undefined; result: null };
   "invites.takeOpened": { args: undefined; result: string | null };

@@ -140,6 +140,47 @@ describe('the Settings page', () => {
     await waitFor(() => expect(send).toHaveDisplayValue('293 KB/s'))
   })
 
+  it('chooses another folder for received files, says only new ones go there, and can go back', async () => {
+    const { bridge, user } = setup()
+    const dialog = await openSettings(user)
+    const received = within(dialog).getByRole('group', { name: en['settings.receivedFolder'] })
+    expect(received).toHaveTextContent('ComParta')
+    expect(received).toHaveTextContent(en['settings.receivedFolderHint'])
+    expect(within(received).queryByRole('button', { name: en['settings.receivedFolderReset'] })).toBeNull()
+
+    await user.click(within(received).getByRole('button', { name: en['settings.receivedFolderChange'] }))
+
+    expect(await screen.findByText(en['settings.receivedFolderSaved'].replace('{name}', 'Family photos'))).toBeInTheDocument()
+    await waitFor(() => expect(received).toHaveTextContent('Family photos'))
+    expect((await stored(bridge)).receivedFolderChosen).toBe(true)
+    // "Open my received files" shows the folder new files go to.
+    expect((await bridge.invoke('received.openFolder')).ok).toBe(true)
+    expect(bridge.openedFolderName).toBe('Family photos')
+
+    reopen(bridge)
+    const again = within(await openSettings(user)).getByRole('group', { name: en['settings.receivedFolder'] })
+    await waitFor(() => expect(again).toHaveTextContent('Family photos'))
+    await user.click(within(again).getByRole('button', { name: en['settings.receivedFolderReset'] }))
+    await waitFor(() => expect(again).toHaveTextContent('ComParta'))
+    expect(await screen.findByText(en['settings.receivedFolderUsual'])).toBeInTheDocument()
+    expect((await stored(bridge)).receivedFolderChosen).toBe(false)
+  })
+
+  it('says so in Settings when the folder picked cannot hold received files, and a closed dialog changes nothing', async () => {
+    const { bridge, user } = setup()
+    const dialog = await openSettings(user)
+    const change = within(dialog).getByRole('button', { name: en['settings.receivedFolderChange'] })
+
+    bridge.nextReceivedFolder = 'unusable'
+    await user.click(change)
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(en['error.received.folderUnusable'])
+
+    bridge.nextReceivedFolder = null
+    await user.click(change)
+    await waitFor(() => expect(within(dialog).queryByRole('alert')).toBeNull())
+    expect((await stored(bridge)).receivedFolderChosen).toBe(false)
+  })
+
   it('shows the version and that ComParta is open source, and passes the accessibility check', async () => {
     const { user } = setup()
     const dialog = await openSettings(user)

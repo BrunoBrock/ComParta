@@ -63,6 +63,12 @@ export const en = {
   'settings.receiveLimit': 'Receive at most',
   'settings.sendLimit': 'Send at most',
   'settings.noLimit': 'As fast as possible',
+  'settings.receivedFolder': 'Received files go to',
+  'settings.receivedFolderHint': 'New files go to this folder. Files you already received, or are receiving now, stay where they are.',
+  'settings.receivedFolderChange': 'Choose another folder',
+  'settings.receivedFolderReset': 'Use the usual folder',
+  'settings.receivedFolderSaved': 'New files will go to “{name}”.',
+  'settings.receivedFolderUsual': 'New files will go to the usual folder again.',
   'settings.about': 'About ComParta',
   'settings.version': 'Version {version}',
   'settings.openSource': 'ComParta is free and open source. Anyone may use, change and share it.',
@@ -92,7 +98,7 @@ export const en = {
     'It is easiest when they have it. They can also use another app that downloads files: open the file’s details and choose “Copy link for other apps”.',
   'help.q.where': 'Where do the files I receive go?',
   'help.a.where':
-    'To the ComParta folder inside your Downloads folder. Choose “Show in folder” on a received file to see it there.',
+    'To the ComParta folder inside your Downloads folder, unless you chose another folder in Settings. Choose “Show in folder” on a received file to see it there.',
   'help.q.copied': 'Is my file copied or moved when I share it?',
   'help.a.copied':
     'Neither. It stays where it is, and ComParta reads it from there while you share it. Do not move or rename it while it is shared.',
@@ -373,7 +379,7 @@ export const en = {
   'error.download.invalidFile':
     'ComParta cannot download from that file. Choose the download file you saved from the website, or paste its download link instead.',
   'error.transfer.notFound': 'That file is no longer in your list.',
-  'error.received.notFound': 'This file is no longer in your ComParta folder. It may have been moved or deleted.',
+  'error.received.notFound': 'This file is no longer where ComParta saved it. It may have been moved or deleted.',
   'error.received.openFailed': 'ComParta could not open this file. Choose Show in folder to see it.',
   'error.received.confirmRisky': 'This file can run a program or change your computer, so ComParta asks you to confirm before opening it.',
   'error.share.dropFailed': 'ComParta could not take those files. Choose “Share a file” to pick them instead.',
@@ -383,6 +389,9 @@ export const en = {
   'error.share.nameInvalid': 'Use a name without these characters: < > : " / \\ | ? *',
   'error.media.notPlayable': 'It is not possible to play this file. Open the folder it is in instead?',
   'error.settings.invalid': 'That choice could not be saved. Try again.',
+  'error.received.folderUnusable': 'ComParta cannot save files in that folder. Choose another one, for example in Documents or Downloads.',
+  'error.received.folderMissing':
+    'The folder you chose for received files cannot be found. Connect the drive it is on, or choose another folder in Settings.',
   'error.unexpected': 'Something went wrong. Close ComParta, open it again and try once more.',
 
   'size.bytes': '{value} bytes',
