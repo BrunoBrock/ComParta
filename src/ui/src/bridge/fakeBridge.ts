@@ -79,6 +79,8 @@ export interface FakeBridgeOptions {
   theme?: 'light' | 'dark'
   /** The name of a folder the person chose for received files; the usual one when left out. */
   receivedFolder?: string
+  /** Shared files were picked on a phone: like the app there, details have no folder to show (AD-20). */
+  onPhone?: boolean
 }
 
 export interface FakeBridge extends Bridge {
@@ -777,7 +779,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       const sending = share.status === 'ready' && !share.paused && !stopped.sendingStopped && stepMs > 0
       const details: ShareDetailsDto = {
         ...share,
-        folder: 'C:\\Users\\Ana\\Videos',
+        folder: options.onPhone ? '' : 'C:\\Users\\Ana\\Videos',
         addedAt: addedAt.get(share.id) ?? addedLongAgo,
         sendingBytesPerSecond: sending ? fakeSendingPerShare : 0,
         connections: sending ? 1 : 0,

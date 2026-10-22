@@ -109,6 +109,15 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
     /// <summary>For tests: false makes this device refuse every incoming connection.</summary>
     internal bool AcceptIncoming { get; init; } = true;
 
+    /// <summary>
+    /// Reads what is shared (AD-20); files on this computer's disks unless the shell gives another,
+    /// such as a phone's picked items.
+    /// </summary>
+    public IContentSource Content { get; init; } = new FileContent();
+
+    // Where the engine thinks each shared file is, and the content reference it is really read from.
+    private readonly ConcurrentDictionary<string, string> _sharedFiles = new(StringComparer.Ordinal);
+
     /// <summary>For tests: wraps the disk writer, for example to stand for a full disk.</summary>
     internal Func<IPieceWriter, IPieceWriter> WrapWriter { get; init; } = writer => writer;
 
@@ -138,7 +147,7 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
             factories = factories.WithPortForwarderCreator(() => mapper.ForEngine);
         }
         factories = factories
-            .WithPieceWriterCreator(maxOpenFiles => WrapWriter(_baseFactories.CreatePieceWriter(maxOpenFiles)))
+            .WithPieceWriterCreator(maxOpenFiles => ContentWriter(maxOpenFiles))
             // Every listener the engine creates is remembered so its status can be read (AD-15).
             .WithPeerConnectionListenerCreator(endPoint =>
             {
@@ -154,6 +163,10 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
         return Task.CompletedTask;
     }
+
+    /// <summary>The engine's disk, with shared files read through <see cref="Content"/> (AD-20).</summary>
+    private IPieceWriter ContentWriter(int maxOpenFiles) =>
+        new ContentPieceWriter(WrapWriter(_baseFactories.CreatePieceWriter(maxOpenFiles)), Content, _sharedFiles);
 
     /// <summary>The only place network options are set, and only from the policy (AD-8).</summary>
     /// <param name="acceptIncoming">False only in tests, to stand for a computer nobody can reach.</param>
@@ -374,6 +387,8 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         public volatile ReceiverCount Receivers = ReceiverCount.None;
         /// <summary>Devices that got all of the file from this one, by their session id.</summary>
         public readonly HashSet<string> Finished = [];
+        /// <summary>Where the engine thinks this share's files are, each read through the content source.</summary>
+        public readonly List<string> SharedPaths = [];
     }
 
     private sealed record ReceiverCount(int Count, int Percent)

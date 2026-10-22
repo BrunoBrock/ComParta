@@ -395,3 +395,66 @@ internal sealed class FakePresence : IBackgroundPresence
     void IBackgroundPresence.StartWithSystem(bool on) => StartWithSystem.Add(on);
     public void Quit() => Quits++;
 }
+
+/// <summary>
+/// A phone's storage as its picker hands items over (AD-20): references with no path, and folders as
+/// trees whose files are found by asking for them. Holds the bytes, so the real engine can read them.
+/// </summary>
+internal sealed class FakePhoneStorage : IFileSystem, IContentSource
+{
+    private int _next;
+
+    /// <summary>Every picked item, by its reference.</summary>
+    public Dictionary<string, (string Name, byte[] Bytes)> Items { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Picked folders, by reference: the path of each file inside, and that file's reference.</summary>
+    public Dictionary<string, (string Name, Dictionary<string, string> Files)> Trees { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Items whose permission the person took back.</summary>
+    public HashSet<string> Revoked { get; } = new(StringComparer.Ordinal);
+
+    public string AddItem(string name, int sizeBytes)
+    {
+        var reference = $"content://com.android.providers.media.documents/document/{++_next}";
+        Items[reference] = (name, System.Security.Cryptography.RandomNumberGenerator.GetBytes(sizeBytes));
+        return reference;
+    }
+
+    public string AddTree(string name, params (string Relative, int SizeBytes)[] files)
+    {
+        var tree = $"content://com.android.externalstorage.documents/tree/primary%3A{Uri.EscapeDataString(name)}";
+        var found = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (relative, size) in files)
+            found[relative] = AddItem(relative.Split('/')[^1], size);
+        Trees[tree] = (name, found);
+        return tree;
+    }
+
+    private bool Readable(string reference) => Items.ContainsKey(reference) && !Revoked.Contains(reference);
+
+    public bool FileExists(string path) => Readable(path);
+    public bool Exists(string contentRef) => Readable(contentRef);
+
+    public long GetReadableFileSize(string path) => Length(path);
+    public long Length(string contentRef) =>
+        Readable(contentRef) ? Items[contentRef].Bytes.Length : throw new UnauthorizedAccessException();
+
+    public Stream OpenRead(string path) =>
+        Readable(path) ? new MemoryStream(Items[path].Bytes, writable: false) : throw new UnauthorizedAccessException();
+
+    public bool FolderExists(string path) => Trees.ContainsKey(path);
+
+    public IReadOnlyList<string> ListFiles(string folder) =>
+        Trees.TryGetValue(folder, out var tree) ? [.. tree.Files.Keys.Order(StringComparer.OrdinalIgnoreCase)] : throw new DirectoryNotFoundException();
+
+    // A reference is kept as the picker gave it, and has no folder to be found from.
+    public string FullName(string item) => item;
+    public string NameOf(string item) => Trees.TryGetValue(item, out var tree) ? tree.Name : Items[item].Name;
+    string IContentSource.NameOf(string contentRef) => NameOf(contentRef);
+    public string? Inside(string folder, string relative) =>
+        Trees.TryGetValue(folder, out var tree) ? tree.Files.GetValueOrDefault(relative) : null;
+
+    public byte[] ReadSmallFile(string path, int maxBytes) => throw new UnauthorizedAccessException();
+    public void DeleteFile(string path) => throw new UnauthorizedAccessException();
+    public void WriteNewFile(string path, byte[] content) => throw new UnauthorizedAccessException();
+}

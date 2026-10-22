@@ -28,7 +28,9 @@ public sealed partial class AppServices
 	{
 		_notifier = new WindowsNotifier(OnNotificationClicked, Log);
 		_presence = new WindowsPresence(Executable, () => QuitRequested?.Invoke(), () => HideWindowRequested?.Invoke(), Log);
-		return new PlatformParts(new WindowsFirewall(Executable), new ReceivedFolderOpener(_paths), new WindowsThumbnails(), _notifier, _presence);
+		return new PlatformParts(
+			new WindowsFirewall(Executable), new ReceivedFolderOpener(_paths), new WindowsThumbnails(), _notifier, _presence,
+			new NativeFilePicker(), new LocalFileSystem(), SharedContent: null);
 	}
 
 	partial void AfterStart(NotificationUseCases notifications, BackgroundUseCases background)
