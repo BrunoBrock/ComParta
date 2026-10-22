@@ -18,7 +18,7 @@ public sealed class BridgeRouterTests
     private readonly FakeShell _shell = new();
     private readonly FakeSettingsRepository _settings = new();
     private readonly FakeFirewall _firewall = new();
-    private readonly OpenedInvites _opened = new();
+    private readonly OpenedInvites _opened = new(null, [".download"]);
     private readonly FakeThumbnails _thumbnails = new();
     private readonly DroppedFiles _dropped = new();
     private readonly ManualClock _clock = new(new DateTimeOffset(2026, 10, 12, 10, 0, 0, TimeSpan.Zero));
@@ -921,5 +921,44 @@ public sealed class BridgeRouterTests
     {
         Assert.Equal(ErrorCodes.ShareNotFound, ErrorCode(await InvokeAsync(Commands.SharesDetails, new { id = Guid.NewGuid().ToString() })));
         Assert.Equal(ErrorCodes.TransferNotFound, ErrorCode(await InvokeAsync(Commands.TransfersDetails, new { id = "nope" })));
+    }
+
+    [Fact]
+    public async Task More_options_list_the_files_and_take_back_the_ones_left_out()
+    {
+        var id = (await InvokeAsync(Commands.TransfersReceive, new { invite = "invite:films" })).GetProperty("value").GetProperty("id").GetString()!;
+        TransferId.TryParse(id, out var transferId);
+        _engine.Files[transferId] = [("Forest.mkv", 1000), ("Subtitles.srt", 10)];
+
+        var options = (await InvokeAsync(Commands.TransfersOptions, new { id })).GetProperty("value");
+        Assert.Equal("Subtitles.srt", options.GetProperty("files")[1].GetProperty("path").GetString());
+        Assert.True(options.GetProperty("keepSharing").GetBoolean());
+
+        Assert.True((await InvokeAsync(Commands.TransfersSetOptions, new { id, skipped = new[] { 1 }, keepSharing = (bool?)null })).GetProperty("ok").GetBoolean());
+        Assert.False((await InvokeAsync(Commands.TransfersOptions, new { id })).GetProperty("value").GetProperty("files")[1].GetProperty("wanted").GetBoolean());
+        Assert.Equal(ErrorCodes.TransferNoFiles, ErrorCode(await InvokeAsync(Commands.TransfersSetOptions, new { id, skipped = new[] { 0, 1 } })));
+        Assert.Equal(ErrorCodes.TransferNotFound, ErrorCode(await InvokeAsync(Commands.TransfersOptions, new { id = "nope" })));
+    }
+
+    [Fact]
+    public async Task A_download_file_opened_in_Windows_is_previewed_then_received_and_its_path_never_crosses()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "Downloads", "films.download");
+        _files.Contents[path] = "download-file:films"u8.ToArray();
+        _engine.Announced["films"] = new InviteSummary("Nature films", 1510);
+        // Nothing waits: ok, with no value.
+        var none = await InvokeAsync(Commands.TransfersTakeOpenedFile);
+        Assert.True(none.GetProperty("ok").GetBoolean());
+        Assert.False(none.TryGetProperty("value", out _));
+
+        _opened.Open([path]);
+
+        Assert.Contains(_events, e => e.GetProperty("event").GetString() == Events.InvitesChanged);
+        var preview = await _router.InvokeAsync(Commands.TransfersTakeOpenedFile, "null");
+        Assert.Contains("Nature films", preview, StringComparison.Ordinal);
+        Assert.DoesNotContain("Downloads", preview, StringComparison.Ordinal);
+        var started = await InvokeAsync(Commands.TransfersReceiveOpenedFile);
+        Assert.Equal("connecting", started.GetProperty("value").GetProperty("state").GetString());
+        Assert.Equal(ErrorCodes.DownloadInvalidFile, ErrorCode(await InvokeAsync(Commands.TransfersReceiveOpenedFile)));
     }
 }

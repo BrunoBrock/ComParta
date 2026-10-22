@@ -230,6 +230,36 @@ public sealed class BridgeRouter
                     ? ToResult(await _transfers.ContinueAsync(resumeId))
                     : CommandResult.Failure(ErrorCodes.TransferNotFound);
 
+            case Commands.TransfersOptions:
+            {
+                if (!TransferId.TryParse(Args<IdArgs>(argsJson)?.Id, out var optionsId))
+                    return CommandResult.Failure(ErrorCodes.TransferNotFound);
+                var options = _transfers.GetOptions(optionsId);
+                return options.Ok ? CommandResult.Success(ToDto(options.Value!)) : Failure(options.Error);
+            }
+
+            case Commands.TransfersSetOptions:
+            {
+                var args = Args<SetTransferOptionsArgs>(argsJson);
+                return TransferId.TryParse(args?.Id, out var setId)
+                    ? ToResult(await _transfers.SetOptionsAsync(setId, args!.Skipped, args.KeepSharing))
+                    : CommandResult.Failure(ErrorCodes.TransferNotFound);
+            }
+
+            case Commands.TransfersTakeOpenedFile:
+            {
+                if (_opened.TakeFile() is not { } openedPath)
+                    return CommandResult.Success(null);
+                var preview = _transfers.PreviewOpenedFile(openedPath);
+                return preview.Ok ? CommandResult.Success(ToDto(preview.Value!)) : Failure(preview.Error);
+            }
+
+            case Commands.TransfersReceiveOpenedFile:
+            {
+                var started = await _transfers.ReceiveOpenedFileAsync();
+                return started.Ok ? CommandResult.Success(ToDto(started.Value!)) : Failure(started.Error);
+            }
+
             case Commands.ReceivedOpenFolder:
                 // The folder new files go to; files received before a change stay in their own.
                 await _opener.OpenReceivedFolderAsync(_settings.ChosenReceivedFolder);
@@ -515,6 +545,11 @@ public sealed class BridgeRouter
             dto.BytesPerSecond, activity.SendingBytesPerSecond, dto.SecondsLeft, activity.Connections, activity.BytesSent);
     }
 
+    public static TransferOptionsDto ToDto(TransferOptions options) => new(
+        options.Files?.Select(f => new TransferFileDto(f.Index, f.Path, f.SizeBytes, f.Wanted)).ToArray(),
+        options.KeepSharing,
+        options.Sharing);
+
     public static InvitePreviewDto ToDto(InvitePreview preview) => new(
         preview.Hints.SenderName,
         preview.Hints.Name,
@@ -553,6 +588,7 @@ public sealed class BridgeRouter
         ErrorKind.FolderEmpty => ErrorCodes.ShareFolderEmpty,
         ErrorKind.FolderTooLarge => ErrorCodes.ShareFolderTooLarge,
         ErrorKind.ShareNameInvalid => ErrorCodes.ShareNameInvalid,
+        ErrorKind.NoFilesChosen => ErrorCodes.TransferNoFiles,
         ErrorKind.ReceivedFolderUnusable => ErrorCodes.ReceivedFolderUnusable,
         ErrorKind.ReceivedFolderMissing => ErrorCodes.ReceivedFolderMissing,
         _ => ErrorCodes.Unexpected,

@@ -307,7 +307,7 @@ interface SpeedChoiceProps {
   onChange: (limit: number | null) => void
 }
 
-function SpeedChoice({ id, label, limit, onChange }: SpeedChoiceProps) {
+export function SpeedChoice({ id, label, limit, onChange }: SpeedChoiceProps) {
   // A limit stored by an earlier version that is not offered any more still shows as it is.
   const offered = limit === null || speedChoices.includes(limit) ? speedChoices : [...speedChoices, limit].sort((a, b) => a - b)
   return (

@@ -28,8 +28,8 @@ public sealed partial class AppServices
 	/// <summary>Completes when the app is ready to answer commands.</summary>
 	public Task<BridgeRouter> Router { get; }
 
-	/// <summary>Invites handed to the app from outside, such as a clicked link (AD-16).</summary>
-	public OpenedInvites Opened { get; } = new();
+	/// <summary>Invites handed to the app from outside, such as a clicked link or an opened download file (AD-16).</summary>
+	public OpenedInvites Opened { get; } = new(MonoTorrentTransferEngine.FindLinkIn, MonoTorrentTransferEngine.DownloadFileExtensions);
 	public DroppedFiles Dropped { get; } = new();
 
 	/// <summary>Whether the person is looking at the window; notifications wait for when they are not (CAP-20).</summary>

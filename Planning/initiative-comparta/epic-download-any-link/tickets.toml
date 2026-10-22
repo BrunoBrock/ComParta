@@ -37,13 +37,12 @@ risk = "medium"
 id = 4
 type = "story"
 title = "More options: choose files, limit speed, stop sharing when finished"
-description = "A More options panel on each download: tick which files of a multi-file download to get, a download and upload speed limit for ComParta as a whole, and whether to keep sharing a finished download (default: keep while ComParta is open)."
-verify = "Set when refined."
+description = "A More options panel on each download: tick which files of a multi-file download to get, a download and upload speed limit for ComParta as a whole, and whether to keep sharing a finished download (default: keep while ComParta is open). Adds `transfers.options` and `transfers.setOptions`, the files left out and the sharing choice in the database (schema 7), and sharing a finished download from the Received folder."
+verify = "Engine tests: a file left out never arrives and the others arrive whole; a download kept shared is sent on to a third computer from the Received folder until sharing stops. Core, storage and UI tests for the choices; wiring tests through the router, engine and database for leaving a file out, sharing on, turning it off and deleting a file still shared."
 covers = ["CAP-25"]
 after = [3]
 hitl = false
 risk = "medium"
-refine = true
 
 [[entry]]
 id = 5

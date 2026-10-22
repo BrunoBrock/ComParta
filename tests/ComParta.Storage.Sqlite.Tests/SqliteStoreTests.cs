@@ -124,7 +124,7 @@ public sealed class SqliteStoreTests : IDisposable
         {
             await connection.OpenAsync();
             var command = connection.CreateCommand();
-            command.CommandText = "ALTER TABLE transfers DROP COLUMN folder; DROP TABLE share_items; ALTER TABLE shares DROP COLUMN kind; DROP TABLE settings; ALTER TABLE transfers DROP COLUMN source; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 2;";
+            command.CommandText = "ALTER TABLE transfers DROP COLUMN skipped_files; ALTER TABLE transfers DROP COLUMN keep_sharing; ALTER TABLE transfers DROP COLUMN folder; DROP TABLE share_items; ALTER TABLE shares DROP COLUMN kind; DROP TABLE settings; ALTER TABLE transfers DROP COLUMN source; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 2;";
             await command.ExecuteNonQueryAsync();
         }
 
@@ -159,7 +159,7 @@ public sealed class SqliteStoreTests : IDisposable
         {
             await connection.OpenAsync();
             var command = connection.CreateCommand();
-            command.CommandText = "ALTER TABLE transfers DROP COLUMN folder; DROP TABLE share_items; ALTER TABLE shares DROP COLUMN kind; ALTER TABLE transfers DROP COLUMN source; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 3;";
+            command.CommandText = "ALTER TABLE transfers DROP COLUMN skipped_files; ALTER TABLE transfers DROP COLUMN keep_sharing; ALTER TABLE transfers DROP COLUMN folder; DROP TABLE share_items; ALTER TABLE shares DROP COLUMN kind; ALTER TABLE transfers DROP COLUMN source; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 3;";
             await command.ExecuteNonQueryAsync();
         }
 
@@ -192,7 +192,7 @@ public sealed class SqliteStoreTests : IDisposable
         {
             await connection.OpenAsync();
             var command = connection.CreateCommand();
-            command.CommandText = "ALTER TABLE transfers DROP COLUMN folder; PRAGMA user_version = 6;";
+            command.CommandText = "ALTER TABLE transfers DROP COLUMN skipped_files; ALTER TABLE transfers DROP COLUMN keep_sharing; ALTER TABLE transfers DROP COLUMN folder; PRAGMA user_version = 6;";
             await command.ExecuteNonQueryAsync();
         }
 
@@ -226,7 +226,7 @@ public sealed class SqliteStoreTests : IDisposable
         {
             await connection.OpenAsync();
             var command = connection.CreateCommand();
-            command.CommandText = "ALTER TABLE transfers DROP COLUMN folder; DROP TABLE share_items; ALTER TABLE shares DROP COLUMN kind; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 4;";
+            command.CommandText = "ALTER TABLE transfers DROP COLUMN skipped_files; ALTER TABLE transfers DROP COLUMN keep_sharing; ALTER TABLE transfers DROP COLUMN folder; DROP TABLE share_items; ALTER TABLE shares DROP COLUMN kind; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 4;";
             await command.ExecuteNonQueryAsync();
         }
 
@@ -288,5 +288,45 @@ public sealed class SqliteStoreTests : IDisposable
         Assert.Equal(new ShareItem("party.mp4", 1000, @"C:\Videos\party.mp4"), Assert.Single(shares[0].Items));
         Assert.Equal(new ShareItem("song.mp3", 200, @"C:\Music\song.mp3"), Assert.Single(shares[1].Items));
         Assert.True(shares[1].Paused);
+    }
+
+    [Fact]
+    public async Task The_files_left_out_and_the_sharing_choice_of_a_download_are_kept()
+    {
+        var transfer = new Transfer(TransferId.New(), "films", 10, false, DateTimeOffset.UtcNow, Source: TransferSource.DownloadLink);
+        ITransferRepository store = await SqliteStore.OpenAsync(DatabasePath);
+        await store.AddAsync(transfer);
+
+        await store.UpdateAsync(transfer with { SkippedFiles = [1, 3], KeepSharing = false });
+
+        ITransferRepository reopened = await SqliteStore.OpenAsync(DatabasePath);
+        var read = Assert.Single(await reopened.GetAllAsync());
+        Assert.Equal([1, 3], read.SkippedFiles!);
+        Assert.False(read.KeepSharing);
+        await reopened.UpdateAsync(read with { SkippedFiles = null, KeepSharing = true });
+        read = Assert.Single(await reopened.GetAllAsync());
+        Assert.Null(read.SkippedFiles);
+        Assert.True(read.KeepSharing);
+    }
+
+    [Fact]
+    public async Task Transfers_from_the_seventh_version_get_every_file_and_keep_sharing()
+    {
+        var transfer = new Transfer(TransferId.New(), "film.mkv", 10, false, DateTimeOffset.UtcNow, Source: TransferSource.DownloadLink);
+        ITransferRepository first = await SqliteStore.OpenAsync(DatabasePath);
+        await first.AddAsync(transfer);
+        await using (var connection = new SqliteConnection($"Data Source={DatabasePath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            var command = connection.CreateCommand();
+            command.CommandText = "ALTER TABLE transfers DROP COLUMN skipped_files; ALTER TABLE transfers DROP COLUMN keep_sharing; PRAGMA user_version = 7;";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        ITransferRepository store = await SqliteStore.OpenAsync(DatabasePath);
+
+        var read = Assert.Single(await store.GetAllAsync());
+        Assert.Null(read.SkippedFiles);
+        Assert.True(read.KeepSharing);
     }
 }
