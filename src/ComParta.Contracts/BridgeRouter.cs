@@ -524,7 +524,8 @@ public sealed class BridgeRouter
         var dto = ToDto(view, Sending.Idle);
         return new ShareDetailsDto(
             dto.Id, dto.Name, dto.SizeBytes, dto.Status,
-            Path.GetDirectoryName(view.Share.FilePath) ?? "",
+            // A phone's picked item has no folder a person would recognise (AD-20); nothing is shown.
+            Path.IsPathFullyQualified(view.Share.FilePath) ? Path.GetDirectoryName(view.Share.FilePath) ?? "" : "",
             view.Share.AddedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
             activity.SendingBytesPerSecond, activity.Connections, activity.BytesSent, dto.ItemCount, dto.Kind);
     }

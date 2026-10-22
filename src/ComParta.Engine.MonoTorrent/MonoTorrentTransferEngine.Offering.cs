@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Net.NetworkInformation;
@@ -34,19 +35,21 @@ public sealed partial class MonoTorrentTransferEngine
             return;
         try
         {
+            // One file is content of one file, named by the file alone.
+            var items = offer.Items ?? [new ShareItem(Content.NameOf(offer.FilePath), Content.Length(offer.FilePath), offer.FilePath)];
+            var name = offer.Name ?? items[0].RelativePath;
             var metadataPath = DescriptionPath(offer.Id);
             for (var attempt = 0; attempt < 2; attempt++)
             {
                 var fromCache = File.Exists(metadataPath);
                 var torrent = fromCache
                     ? await Torrent.LoadAsync(metadataPath)
-                    : await CreateMetadataAsync(offer, metadataPath);
+                    : await CreateMetadataAsync(offer, name, items, metadataPath);
 
-                // The save directory is the folder the file already sits in, so it is read where it is (AD-6).
-                // Several files are each pointed at where they are, wherever that is.
-                var manager = await engine.AddAsync(
-                    torrent, offer.Items is null ? Path.GetDirectoryName(offer.FilePath)! : ItemsFolder(offer.Id), ToTorrentSettings());
-                if (offer.Items is not null && !await PointAtItemsAsync(manager, offer.Items))
+                // The engine is told each file sits in a folder of its own that is never made; every
+                // file is read through the content source from where it really is (AD-6, AD-20).
+                var manager = await engine.AddAsync(torrent, ItemsFolder(offer.Id), ToTorrentSettings());
+                if (!ReadFromItems(offer, manager, items))
                 {
                     await engine.RemoveAsync(manager);
                     break;
@@ -77,7 +80,7 @@ public sealed partial class MonoTorrentTransferEngine
                     return;
                 }
 
-                // Never start an incomplete offer: it could write to the original file.
+                // Never start an incomplete offer: it would ask others for the parts that changed.
                 offer.Manager = null;
                 await engine.RemoveAsync(manager);
                 if (!fromCache)
@@ -101,24 +104,24 @@ public sealed partial class MonoTorrentTransferEngine
     private string ItemsFolder(ShareId id) => Path.Combine(_sharesFolder, id.ToString());
 
     /// <summary>
-    /// Points each file of the content at the file it is read from. False when one cannot be matched,
-    /// or something already sits where the engine would have put it: then nothing is offered, so
-    /// the engine never moves or writes over a file of the person's.
+    /// Has each file of the content read from the item it is. False when one cannot be matched: then
+    /// nothing is offered.
     /// </summary>
-    private static async Task<bool> PointAtItemsAsync(TorrentManager manager, IReadOnlyList<ShareItem> items)
+    private bool ReadFromItems(Offer offer, TorrentManager manager, IReadOnlyList<ShareItem> items)
     {
         var byPath = items.ToDictionary(item => Normalised(item.RelativePath), StringComparer.Ordinal);
+        var found = new List<(string FullPath, string ContentRef)>();
         foreach (var file in manager.Files)
         {
-            // One file is content of one file, named by the file alone.
             var item = items.Count == 1 ? items[0] : byPath.GetValueOrDefault(Normalised(file.Path));
             if (item is null)
                 return false;
-            if (string.Equals(file.FullPath, item.ContentRef, StringComparison.Ordinal))
-                continue;
-            if (File.Exists(file.FullPath))
-                return false;
-            await manager.MoveFileAsync(file, item.ContentRef);
+            found.Add((file.FullPath, item.ContentRef));
+        }
+        foreach (var (fullPath, contentRef) in found)
+        {
+            _sharedFiles[fullPath] = contentRef;
+            offer.SharedPaths.Add(fullPath);
         }
         return true;
     }
@@ -133,11 +136,14 @@ public sealed partial class MonoTorrentTransferEngine
         public string TorrentName { get; } = name;
     }
 
-    private static async Task<Torrent> CreateMetadataAsync(Offer offer, string metadataPath)
+    private async Task<Torrent> CreateMetadataAsync(Offer offer, string name, IReadOnlyList<ShareItem> items, string metadataPath)
     {
-        var creator = new TorrentCreator(TorrentType.V1Only) { CreatedBy = "ComParta", Private = false };
-        ITorrentFileSource source = offer.Items is null ? new TorrentFileSource(offer.FilePath) : new ItemsSource(offer.Name!, offer.Items);
-        var metadata = await creator.CreateAsync(source, offer.Cancel.Token);
+        // The description is made by reading each item through the content source, as the engine
+        // reads it afterwards.
+        var each = new ConcurrentDictionary<string, string>(items.ToDictionary(item => item.ContentRef, item => item.ContentRef), StringComparer.Ordinal);
+        var factories = _baseFactories.WithPieceWriterCreator(maxOpenFiles => new ContentPieceWriter(_baseFactories.CreatePieceWriter(maxOpenFiles), Content, each));
+        var creator = new TorrentCreator(TorrentType.V1Only, factories) { CreatedBy = "ComParta", Private = false };
+        var metadata = await creator.CreateAsync(new ItemsSource(name, items), offer.Cancel.Token);
         await File.WriteAllBytesAsync(metadataPath, metadata.Encode());
         return Torrent.Load(metadata);
     }
@@ -153,6 +159,8 @@ public sealed partial class MonoTorrentTransferEngine
             catch (Exception) { /* already reported */ }
             if (forget)
                 ForgetAtHelper(offer);
+            foreach (var path in offer.SharedPaths)
+                _sharedFiles.TryRemove(path, out _);
             if (offer.Manager is { } manager && _engine is { } engine)
             {
                 try

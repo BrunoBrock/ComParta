@@ -19,4 +19,11 @@ public class MainActivity : MauiAppCompatActivity
 		Android.Util.Log.Info("ComParta", $"Screen opened{(savedInstanceState is null ? "" : " again")}");
 		base.OnCreate(savedInstanceState);
 	}
+
+	/// <summary>The phone's picker answered: what the person picked, or nothing when they went back.</summary>
+	protected override void OnActivityResult(int requestCode, Result resultCode, Android.Content.Intent? data)
+	{
+		base.OnActivityResult(requestCode, resultCode, data);
+		AndroidPicker.Answered(requestCode, resultCode, data);
+	}
 }
