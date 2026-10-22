@@ -81,7 +81,7 @@ public sealed partial class GuardTests
     // asks, and the one that opens Windows' firewall page, which is not a received file (AD-6).
     private static readonly string[] FilesStartingPrograms =
     [
-        Path.Combine("src", "ComParta.App", "PlatformPorts.cs"),
+        Path.Combine("src", "ComParta.App", "Platforms", "Windows", "WindowsPorts.cs"),
         Path.Combine("src", "ComParta.Shell", "WindowsFirewall.cs"),
     ];
 
@@ -91,7 +91,9 @@ public sealed partial class GuardTests
         Path.Combine("src", "ComParta.Core", "Ports.cs"),
         Path.Combine("src", "ComParta.Core", "UseCases", "ReceivedUseCases.cs"),
         Path.Combine("src", "ComParta.Contracts", "BridgeRouter.cs"),
-        Path.Combine("src", "ComParta.App", "PlatformPorts.cs"),
+        Path.Combine("src", "ComParta.App", "Platforms", "Windows", "WindowsPorts.cs"),
+        Path.Combine("src", "ComParta.App", "Platforms", "Windows", "AppServices.Windows.cs"),
+        Path.Combine("src", "ComParta.App", "Platforms", "Android", "AndroidPorts.cs"),
         Path.Combine("src", "ComParta.App", "AppServices.cs"),
     ];
 

@@ -26,6 +26,10 @@ public static class Commands
     public const string TransfersOpenFile = "transfers.openFile";
     public const string TransfersPause = "transfers.pause";
     public const string TransfersResume = "transfers.resume";
+    public const string TransfersOptions = "transfers.options";
+    public const string TransfersSetOptions = "transfers.setOptions";
+    public const string TransfersTakeOpenedFile = "transfers.takeOpenedFile";
+    public const string TransfersReceiveOpenedFile = "transfers.receiveOpenedFile";
     public const string ReceivedOpenFolder = "received.openFolder";
     public const string ReceivedOpen = "received.open";
     public const string ReceivedReveal = "received.reveal";
@@ -91,6 +95,7 @@ public static class ErrorCodes
     public const string ShareFolderEmpty = "share.folderEmpty";
     public const string ShareFolderTooLarge = "share.folderTooLarge";
     public const string ShareNameInvalid = "share.nameInvalid";
+    public const string TransferNoFiles = "transfer.noFiles";
     public const string ReceivedFolderUnusable = "received.folderUnusable";
     public const string ReceivedFolderMissing = "received.folderMissing";
     public const string Unexpected = "unexpected";
@@ -100,7 +105,8 @@ public static class ErrorCodes
         ShareDuplicate, ShareNotFound, ShareNotReady, FileUnreadable,
         InviteInvalid, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, DiskFull, SettingsInvalid,
         ReceivedNotFound, ReceivedOpenFailed, ReceivedConfirmRisky, ShareDropFailed, FileSaveFailed, MediaNotPlayable,
-        ShareFolderEmpty, ShareFolderTooLarge, ShareNameInvalid, ReceivedFolderUnusable, ReceivedFolderMissing, Unexpected,
+        ShareFolderEmpty, ShareFolderTooLarge, ShareNameInvalid, TransferNoFiles, ReceivedFolderUnusable, ReceivedFolderMissing,
+        Unexpected,
     ];
 }
 
@@ -176,6 +182,22 @@ public sealed record TransferDto(
 public sealed record ReceivedFileDto(string RelativePath, long SizeBytes);
 
 public sealed record IdArgs(string Id);
+
+/// <summary>One file of a download, under More options (epic 14 story 4).</summary>
+/// <param name="Index">Its position in the download; the choice is sent back by it.</param>
+/// <param name="Path">Its place inside the download, such as "Extras/making-of.mkv"; never a path on this computer.</param>
+/// <param name="Wanted">It is being received; false when the person left it out.</param>
+public sealed record TransferFileDto(int Index, string Path, long SizeBytes, bool Wanted);
+
+/// <summary>More options on a download (epic 14 story 4).</summary>
+/// <param name="Files">The files it holds, or null while not known yet and once it has arrived.</param>
+/// <param name="KeepSharing">Others can get it from this computer once it has arrived, while ComParta is open.</param>
+/// <param name="Sharing">It has arrived and is shared now.</param>
+public sealed record TransferOptionsDto(TransferFileDto[]? Files, bool KeepSharing, bool Sharing);
+
+/// <param name="Skipped">The positions of the files not to get, or null to leave the choice as it is. At least one file stays.</param>
+/// <param name="KeepSharing">Whether to share it once it has arrived, or null to leave it as it is.</param>
+public sealed record SetTransferOptionsArgs(string Id, int[]? Skipped, bool? KeepSharing);
 
 /// <param name="Confirmed">True once the person confirmed opening a file that can run something (AD-13).</param>
 public sealed record OpenReceivedArgs(string Id, bool? Confirmed = null);
@@ -321,6 +343,11 @@ public static class Contract
         new(Commands.TransfersOpenFile, null, typeof(TransferDto), ResultMayBeNull: true),
         new(Commands.TransfersPause, typeof(IdArgs), null),
         new(Commands.TransfersResume, typeof(IdArgs), null),
+        new(Commands.TransfersOptions, typeof(IdArgs), typeof(TransferOptionsDto)),
+        new(Commands.TransfersSetOptions, typeof(SetTransferOptionsArgs), null),
+        // What a download file Windows opened ComParta with holds, or null when none waits (epic 14 story 5).
+        new(Commands.TransfersTakeOpenedFile, null, typeof(InvitePreviewDto), ResultMayBeNull: true),
+        new(Commands.TransfersReceiveOpenedFile, null, typeof(TransferDto)),
         new(Commands.ReceivedOpenFolder, null, null),
         new(Commands.ReceivedOpen, typeof(OpenReceivedArgs), null),
         new(Commands.ReceivedReveal, typeof(IdArgs), null),

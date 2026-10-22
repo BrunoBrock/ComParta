@@ -77,6 +77,25 @@ export interface InvitePreviewDto {
   freeBytes: number | null;
 }
 
+export interface TransferOptionsDto {
+  files: TransferFileDto[] | null;
+  keepSharing: boolean;
+  sharing: boolean;
+}
+
+export interface TransferFileDto {
+  index: number;
+  path: string;
+  sizeBytes: number;
+  wanted: boolean;
+}
+
+export interface SetTransferOptionsArgs {
+  id: string;
+  skipped: number[] | null;
+  keepSharing: boolean | null;
+}
+
 export interface OpenReceivedArgs {
   id: string;
   confirmed: boolean | null;
@@ -239,6 +258,7 @@ export const errorCodes = [
   "share.folderEmpty",
   "share.folderTooLarge",
   "share.nameInvalid",
+  "transfer.noFiles",
   "received.folderUnusable",
   "received.folderMissing",
   "unexpected",
@@ -265,6 +285,10 @@ export interface Commands {
   "transfers.openFile": { args: undefined; result: TransferDto | null };
   "transfers.pause": { args: IdArgs; result: null };
   "transfers.resume": { args: IdArgs; result: null };
+  "transfers.options": { args: IdArgs; result: TransferOptionsDto };
+  "transfers.setOptions": { args: SetTransferOptionsArgs; result: null };
+  "transfers.takeOpenedFile": { args: undefined; result: InvitePreviewDto | null };
+  "transfers.receiveOpenedFile": { args: undefined; result: TransferDto };
   "received.openFolder": { args: undefined; result: null };
   "received.open": { args: OpenReceivedArgs; result: null };
   "received.reveal": { args: IdArgs; result: null };

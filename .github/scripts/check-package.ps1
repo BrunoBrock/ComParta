@@ -46,6 +46,8 @@ try {
     $text = $manifest.OuterXml
     $wanted = [ordered]@{
         'the comparta: links'     = 'Protocol Name="comparta"'
+        'the download links'      = 'Protocol Name="magnet"'
+        'the download files'      = 'FileType>.torrent</'
         'the firewall rule'       = 'windows.firewallRules'
         'the start-up task'       = 'TaskId="ComPartaStartup"'
         'the publisher'           = 'Publisher="CN=ComParta"'

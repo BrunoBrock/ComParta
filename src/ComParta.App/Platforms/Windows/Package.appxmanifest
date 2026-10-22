@@ -47,6 +47,22 @@
             <uap:DisplayName>ComParta invite</uap:DisplayName>
           </uap:Protocol>
         </uap:Extension>
+        <!-- A download link clicked in the browser, and a download file opened in Windows, open the
+             receive step with the item filled in (epic 14 story 5). Windows asks the person which
+             app to use the first time, so another download app they use is never replaced silently. -->
+        <uap:Extension Category="windows.protocol">
+          <uap:Protocol Name="magnet">
+            <uap:DisplayName>Download link</uap:DisplayName>
+          </uap:Protocol>
+        </uap:Extension>
+        <uap:Extension Category="windows.fileTypeAssociation">
+          <uap:FileTypeAssociation Name="downloadfile">
+            <uap:DisplayName>Download file</uap:DisplayName>
+            <uap:SupportedFileTypes>
+              <uap:FileType>.torrent</uap:FileType>
+            </uap:SupportedFileTypes>
+          </uap:FileTypeAssociation>
+        </uap:Extension>
         <!-- Starts ComParta hidden at sign-in, only once the person turns it on (AD-14). -->
         <desktop:Extension Category="windows.startupTask" Executable="ComParta.exe" EntryPoint="Windows.FullTrustApplication">
           <desktop:StartupTask TaskId="ComPartaStartup" Enabled="false" DisplayName="ComParta" />

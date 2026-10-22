@@ -1,9 +1,11 @@
-import { FileDown, Link, Pause, Play } from 'lucide-react'
+import { FileDown, Link, Pause, Play, SlidersHorizontal } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Bridge, ErrorCode, ShareDetailsDto, TransferDetailsDto } from '../bridge/index.ts'
 import { formatDateTime, formatRate, formatSize, formatTimeLeft, type MessageKey, percentOf, t } from '../i18n/index.ts'
 import { inviteMessage } from '../invite.ts'
 import type { ItemToggle } from './ItemView.tsx'
+import MoreOptionsDialog from './MoreOptionsDialog.tsx'
+import type { SpeedLimits } from './SettingsDialog.tsx'
 import { openReceived } from './openReceived.ts'
 import RiskyOpenDialog from './RiskyOpenDialog.tsx'
 import Dialog from './ui/Dialog.tsx'
@@ -22,6 +24,9 @@ interface DetailsWindowProps {
   onInfo: (text: string) => void
   /** Shows the file inside ComParta, or says it cannot be played there (epic 18). */
   onView?: () => void
+  /** The limits for all of ComParta, also offered under More options (epic 14 story 4). */
+  speedLimits: SpeedLimits
+  onSpeedLimits: (limits: SpeedLimits) => void
 }
 
 /** How often the open window asks again (UX design, "Details window"). */
@@ -76,10 +81,12 @@ function transferRows(transfer: TransferDetailsDto, stopped: boolean): [MessageK
  * Everything ComParta knows about one file, refreshed every second while open (CAP-26). Escape or
  * Close shuts it, and focus goes back to the button that opened it.
  */
-export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, onError, onInfo, onView }: DetailsWindowProps) {
+export default function DetailsWindow(props: DetailsWindowProps) {
+  const { bridge, item, stopped, toggle, onClose, onError, onInfo, onView, speedLimits, onSpeedLimits } = props
   const [details, setDetails] = useState<Details | null>(null)
   const [gone, setGone] = useState(false)
   const [opening, setOpening] = useState(false)
+  const [options, setOptions] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -167,6 +174,12 @@ export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, 
         <button type="button" onClick={onClose} autoFocus>
           {t('details.close')}
         </button>
+        {!gone && details?.kind === 'transfer' && details.value.source !== 'invite' && (
+          <button type="button" onClick={() => setOptions(true)}>
+            <SlidersHorizontal size={18} aria-hidden="true" />
+            {t('options.open')}
+          </button>
+        )}
         {!gone && toggle && (
           <button type="button" onClick={toggle.onToggle} aria-label={toggle.label}>
             {toggle.paused ? <Play size={18} aria-hidden="true" /> : <Pause size={18} aria-hidden="true" />}
@@ -209,6 +222,18 @@ export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, 
       </div>
       {opening && (
         <RiskyOpenDialog name={item.name} onConfirm={confirmOpen} onCancel={() => setOpening(false)} />
+      )}
+      {options && details?.kind === 'transfer' && (
+        <MoreOptionsDialog
+          bridge={bridge}
+          id={item.id}
+          name={item.name}
+          arrived={details.value.state === 'done'}
+          speedLimits={speedLimits}
+          onSpeedLimits={onSpeedLimits}
+          onClose={() => setOptions(false)}
+          onError={onError}
+        />
       )}
     </Dialog>
   )

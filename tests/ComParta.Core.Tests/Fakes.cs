@@ -217,6 +217,37 @@ internal sealed class FakeEngine : ITransferEngine
     public void Report(ReceiveProgress progress) => ReceiveProgressed?.Invoke(progress);
 
     public void Report(ReachabilityFacts facts) => ReachabilityChanged?.Invoke(facts);
+
+    public InviteSummary? DescribeDownloadFile(byte[] content) =>
+        ReadDownloadFileKey(content) is { } key ? Announced.GetValueOrDefault(key) ?? new InviteSummary(null, null) : null;
+
+    /// <summary>The files each transfer holds, once its details "arrived"; their wanted flag follows <see cref="Skipped"/>.</summary>
+    public Dictionary<TransferId, (string Path, long Size)[]> Files { get; } = [];
+    public Dictionary<TransferId, IReadOnlyCollection<int>> Skipped { get; } = [];
+    public Dictionary<TransferId, bool> SharingWhenDone { get; } = [];
+    /// <summary>Files that arrived and are shared from where they are.</summary>
+    public HashSet<TransferId> SharingReceived { get; } = [];
+
+    public IReadOnlyList<ReceiveFile>? GetReceiveFiles(TransferId id) =>
+        Files.TryGetValue(id, out var files)
+            ? [.. files.Select((f, i) => new ReceiveFile(i, f.Path, f.Size, !(Skipped.GetValueOrDefault(id)?.Contains(i) ?? false)))]
+            : null;
+
+    public Task SetSkippedFilesAsync(TransferId id, IReadOnlyCollection<int> skipped, CancellationToken ct = default)
+    {
+        Skipped[id] = skipped;
+        return Task.CompletedTask;
+    }
+
+    public Task SetSharingWhenDoneAsync(TransferId id, bool keep, CancellationToken ct = default)
+    {
+        SharingWhenDone[id] = keep;
+        if (!keep)
+            SharingReceived.Remove(id);
+        return Task.CompletedTask;
+    }
+
+    public bool IsSharingReceived(TransferId id) => SharingReceived.Contains(id);
 }
 
 internal sealed class FakeFilePicker : IFilePicker
