@@ -3,14 +3,14 @@ type: roadmap
 title: "ComParta roadmap: from the first build to Windows and Android"
 parent: initiative-comparta
 created: '2026-10-10'
-updated: '2026-10-20'
+updated: '2026-10-22'
 based_on: 'main at 18ce1c1 (PR #30)'
 ---
 
 # ComParta roadmap
 
 This is the plan for the rest of the product, written from the state of the code on `main`
-(updated 2026-10-20; the drawings are in [roadmap.html](roadmap.html)). It is the product owner's view: what ships in
+(updated 2026-10-22; the drawings are in [roadmap.html](roadmap.html)). It is the product owner's view: what ships in
 which release, in which order, and which decisions are still open. The spec owns *what*, the
 architecture owns *how*, the UX design owns *how it looks and reads*, and each epic's
 `tickets.toml` owns its stories.
@@ -26,7 +26,11 @@ architecture owns *how*, the UX design owns *how it looks and reads*, and each e
 
 ## Where we are (2026-10-20)
 
-On `main`, 55 of 129 stories done.
+On `main`, 60 of 129 stories done.
+
+On 2026-10-22 epic 12 (help, settings and first run) was finished: received files can go to a
+folder chosen in Settings, and each transfer keeps the folder it started in (story 2). Its other
+four stories were already built.
 
 Since 2026-10-13: the helper program (PR #25, epic 16 story 2) and ComParta handing shared files
 to a helper computer set in Settings (PR #30, story 3) are merged; the buttons for other torrent
@@ -83,7 +87,7 @@ crosses two homes on ordinary home internet.
 | 6 | 4 Follow a transfer | The sender sees that someone is getting the file; stuck states explain themselves; notifications. |
 | 7 | 10 Keep sharing in the background | Closing the window must not silently stop a transfer. |
 | 8 | 3 Safe received content | Nothing from another person reaches a relative's PC without Windows' own protection. |
-| 9 | 12 Help, settings and first run | Welcome, your name in invites, support report. |
+| 9 | 12 Help, settings and first run | **Done 2026-10-22.** Welcome, your name in invites, where received files go, support report. |
 | 6b | 14 Download from any link | The maintainer's "Both" decision: paste a download link or open a download file, with pause, speed and time left; More options later. |
 | 10 | 5 Install and update | One download, signed, updates without uninstalling. Stories 1 and 2 can start as soon as epic 1 is done. |
 
@@ -160,7 +164,7 @@ can be built and checked on their own, and every story's blocker is named.
 
 | Check | Result |
 | --- | --- |
-| Ticket tree is consistent | `python3 _bmad/method/scripts/tickets.py status Planning/initiative-comparta` reports 18 epics and 129 tickets (55 done, 2 built and waiting on a person, 2 in progress, 1 dropped), and no undeclared dependency. Known: epic 15 is listed before epic 6, which it waits on; both are built. |
+| Ticket tree is consistent | `python3 _bmad/method/scripts/tickets.py status Planning/initiative-comparta` reports 18 epics and 129 tickets (60 done, 2 built and waiting on a person, 2 in progress, 1 dropped), and no undeclared dependency. Known: epic 15 is listed before epic 6, which it waits on; both are built. |
 | Every CAP is covered by an epic | Yes; see the `covers` field in [tickets.toml](../tickets.toml). CAP-24 and CAP-31 (friends) are covered by epic 13 and CAP-32 (folders) by epic 17; their stories after the spikes carry `refine = true`. CAP-33 is epic 18. |
 | Every AD is cited by at least one epic | Yes. |
 | Every epic in R1 and R2 has stories with a `verify` | Yes. |

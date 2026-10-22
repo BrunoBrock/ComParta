@@ -164,17 +164,23 @@ public interface ITransferEngine
     InviteSummary? DescribeInvite(string inviteText);
     /// <summary>The content key of a transfer the engine knows, or null.</summary>
     string? GetReceiveKey(TransferId id);
-    /// <summary>Starts receiving into the Received root. Returns false when the text is not an invite.</summary>
-    Task<bool> ReceiveAsync(TransferId id, string inviteText, CancellationToken ct = default);
-    /// <summary>Continues a transfer started in an earlier run. Returns false when the engine no longer knows it.</summary>
-    Task<bool> ResumeReceivingAsync(TransferId id, CancellationToken ct = default);
+    /// <summary>
+    /// Starts receiving into <paramref name="folder"/>, the Received root the person chose, or the usual
+    /// one when null (AD-6). Returns false when the text is not an invite.
+    /// </summary>
+    Task<bool> ReceiveAsync(TransferId id, string inviteText, string? folder = null, CancellationToken ct = default);
+    /// <summary>
+    /// Continues a transfer started in an earlier run, in the folder it started in. Returns false when
+    /// the engine no longer knows it.
+    /// </summary>
+    Task<bool> ResumeReceivingAsync(TransferId id, string? folder = null, CancellationToken ct = default);
     /// <summary>Stops a transfer and deletes its unfinished data. A finished file is kept.</summary>
     Task StopReceivingAsync(TransferId id, CancellationToken ct = default);
 
     /// <summary>A stable content key for the bytes of a download file, or null when they are not one.</summary>
     string? ReadDownloadFileKey(byte[] content);
-    /// <summary>Starts receiving what a download file describes into the Received root. False when it is not one.</summary>
-    Task<bool> ReceiveFromFileAsync(TransferId id, byte[] content, CancellationToken ct = default);
+    /// <summary>Starts receiving what a download file describes into <paramref name="folder"/>, as <see cref="ReceiveAsync"/>. False when it is not one.</summary>
+    Task<bool> ReceiveFromFileAsync(TransferId id, byte[] content, string? folder = null, CancellationToken ct = default);
     /// <summary>Stops moving bytes for a transfer but keeps everything needed to continue it.</summary>
     Task PauseReceivingAsync(TransferId id, CancellationToken ct = default);
     /// <summary>Continues a paused transfer, or one that stopped because the disk was full.</summary>
@@ -226,8 +232,11 @@ public interface IClipboard
 /// <summary>How much room there is where received files are written.</summary>
 public interface IStorageInfo
 {
-    /// <summary>Free bytes on the drive that holds the Received root, or null when it cannot be told.</summary>
-    long? GetReceivedFreeBytes();
+    /// <summary>
+    /// Free bytes on the drive that holds <paramref name="folder"/>, a Received root the person chose,
+    /// or the usual one when null; null when it cannot be told.
+    /// </summary>
+    long? GetReceivedFreeBytes(string? folder);
 }
 
 /// <summary>The operating system's firewall, as far as it concerns this app (AD-15).</summary>
@@ -242,7 +251,8 @@ public interface IFirewall
 /// <summary>Shows received content to the person with the platform's own file browser.</summary>
 public interface IContentOpener
 {
-    Task OpenReceivedFolderAsync(CancellationToken ct = default);
+    /// <summary>Shows a Received root in the file browser: the one the person chose, or the usual one when null.</summary>
+    Task OpenReceivedFolderAsync(string? folder, CancellationToken ct = default);
     /// <summary>Opens one received file with the program Windows uses for it; false when that failed.</summary>
     Task<bool> OpenAsync(string path, CancellationToken ct = default);
     /// <summary>Shows the folder with this one file selected.</summary>
@@ -282,6 +292,11 @@ public interface IBackgroundPresence
     void StartWithSystem(bool on);
     /// <summary>Ends the app, window and icon included.</summary>
     void Quit();
+    /// <summary>
+    /// Puts the app out of sight and keeps it working: on Windows the window goes to the
+    /// notification area; on a phone the app goes behind the others.
+    /// </summary>
+    void Hide();
 }
 
 /// <summary>A small picture of a file, as the operating system draws it.</summary>
@@ -321,7 +336,10 @@ public interface IAppPaths
     string DatabasePath { get; }
     /// <summary>Written only by the engine adapter (AD-10).</summary>
     string EngineRoot { get; }
-    /// <summary>The single place received content is written (AD-6).</summary>
+    /// <summary>
+    /// The usual place received content is written (AD-6), until the person chooses another folder in
+    /// Settings (<see cref="UseCases.ReceivedFolder"/>).
+    /// </summary>
     string ReceivedRoot { get; }
     string LogsRoot { get; }
     /// <summary>Where files the person asks to save go, such as a download file: their Downloads folder.</summary>

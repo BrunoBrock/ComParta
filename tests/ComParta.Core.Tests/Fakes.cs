@@ -161,16 +161,24 @@ internal sealed class FakeEngine : ITransferEngine
 
     public string? GetReceiveKey(TransferId id) => Receiving.GetValueOrDefault(id);
 
-    public Task<bool> ReceiveAsync(TransferId id, string inviteText, CancellationToken ct = default)
+    /// <summary>The Received root each transfer was started or continued in; null for the usual one.</summary>
+    public Dictionary<TransferId, string?> Folders { get; } = [];
+
+    public Task<bool> ReceiveAsync(TransferId id, string inviteText, string? folder = null, CancellationToken ct = default)
     {
         var key = ReadInviteKey(inviteText);
         if (key is null)
             return Task.FromResult(false);
         Receiving[id] = key;
+        Folders[id] = folder;
         return Task.FromResult(true);
     }
 
-    public Task<bool> ResumeReceivingAsync(TransferId id, CancellationToken ct = default) => Task.FromResult(Receiving.ContainsKey(id));
+    public Task<bool> ResumeReceivingAsync(TransferId id, string? folder = null, CancellationToken ct = default)
+    {
+        Folders[id] = folder;
+        return Task.FromResult(Receiving.ContainsKey(id));
+    }
 
     public Task StopReceivingAsync(TransferId id, CancellationToken ct = default)
     {
@@ -185,12 +193,13 @@ internal sealed class FakeEngine : ITransferEngine
         return text.StartsWith(DownloadFilePrefix, StringComparison.Ordinal) ? text[DownloadFilePrefix.Length..] : null;
     }
 
-    public Task<bool> ReceiveFromFileAsync(TransferId id, byte[] content, CancellationToken ct = default)
+    public Task<bool> ReceiveFromFileAsync(TransferId id, byte[] content, string? folder = null, CancellationToken ct = default)
     {
         var key = ReadDownloadFileKey(content);
         if (key is null)
             return Task.FromResult(false);
         Receiving[id] = key;
+        Folders[id] = folder;
         return Task.FromResult(true);
     }
 
@@ -292,8 +301,13 @@ internal sealed class FakeFileSystem : IFileSystem
         Deleted.Add(path);
     }
 
+    /// <summary>Folders that can be read but not written, such as a CD or a folder Windows protects.</summary>
+    public HashSet<string> ReadOnlyFolders { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public void WriteNewFile(string path, byte[] content)
     {
+        if (ReadOnlyFolders.Contains(Path.GetDirectoryName(path) ?? ""))
+            throw new UnauthorizedAccessException("read only");
         if (Locked.Contains(path) || Files.ContainsKey(path))
             throw new IOException("cannot write");
         Files[path] = content.Length;
@@ -322,11 +336,13 @@ internal sealed class FakePaths(string root) : IAppPaths
 internal sealed class FakeOpener : IContentOpener
 {
     public int FolderOpened { get; private set; }
+    /// <summary>The Received root last shown; null for the usual one.</summary>
+    public string? OpenedFolder { get; private set; }
     public List<string> Opened { get; } = [];
     public List<string> Revealed { get; } = [];
     public bool OpenWorks { get; set; } = true;
 
-    public Task OpenReceivedFolderAsync(CancellationToken ct = default) { FolderOpened++; return Task.CompletedTask; }
+    public Task OpenReceivedFolderAsync(string? folder, CancellationToken ct = default) { FolderOpened++; OpenedFolder = folder; return Task.CompletedTask; }
     public Task<bool> OpenAsync(string path, CancellationToken ct = default) { Opened.Add(path); return Task.FromResult(OpenWorks); }
     public Task RevealAsync(string path, CancellationToken ct = default) { Revealed.Add(path); return Task.CompletedTask; }
 }
@@ -349,7 +365,9 @@ internal sealed class FakeThumbnails : IThumbnailProvider
 internal sealed class FakeStorage : IStorageInfo
 {
     public long? FreeBytes { get; set; }
-    public long? GetReceivedFreeBytes() => FreeBytes;
+    /// <summary>Free bytes on the drive of a chosen folder, when it differs from the usual one's.</summary>
+    public Dictionary<string, long?> FreeIn { get; } = [];
+    public long? GetReceivedFreeBytes(string? folder) => folder is not null && FreeIn.TryGetValue(folder, out var free) ? free : FreeBytes;
 }
 
 internal sealed class FakeSettingsRepository : ISettingsRepository
@@ -402,7 +420,9 @@ internal sealed class FakePresence : IBackgroundPresence
     public List<bool> Awake { get; } = [];
     public List<bool> StartWithSystem { get; } = [];
     public int Quits { get; private set; }
+    public int Hides { get; private set; }
     public void KeepAwake(bool awake) => Awake.Add(awake);
+    public void Hide() => Hides++;
     void IBackgroundPresence.StartWithSystem(bool on) => StartWithSystem.Add(on);
     public void Quit() => Quits++;
 }

@@ -40,6 +40,9 @@ public sealed class AppServices
 	/// <summary>Raised when the app should end now. Any thread.</summary>
 	public event Action? QuitRequested;
 
+	/// <summary>Raised when the window should go to the notification area, as when it is closed with work. Any thread.</summary>
+	public event Action? HideWindowRequested;
+
 	/// <summary>Whether there is work, and quitting, once the app has started (AD-14).</summary>
 	public BackgroundUseCases? Background { get; private set; }
 
@@ -59,9 +62,12 @@ public sealed class AppServices
 			var store = await SqliteStore.OpenAsync(_paths.DatabasePath);
 			_engine = new MonoTorrentTransferEngine(_paths);
 			var shares = new ShareUseCases(store, _engine, new NativeFilePicker(), new LocalFileSystem(), paths: _paths);
+			// Where received files go: the usual folder, or the one chosen in Settings (epic 12 story 2).
+			var receivedFolder = new ReceivedFolder(store, _paths, new NativeFilePicker(), new LocalFileSystem());
 			var transfers = new TransferUseCases(
-				store, _engine, picker: new NativeFilePicker(), files: new LocalFileSystem(), storage: new LocalStorageInfo(_paths));
-			var settings = new SettingsUseCases(store, new SystemInfo(), _engine);
+				store, _engine, picker: new NativeFilePicker(), files: new LocalFileSystem(), storage: new LocalStorageInfo(_paths),
+				received: receivedFolder);
+			var settings = new SettingsUseCases(store, new SystemInfo(), _engine, receivedFolder);
 			var executable = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "ComParta.exe");
 			var connection = new ConnectionUseCases(_engine, new WindowsFirewall(executable));
 			var activity = new ActivityUseCases(_engine, store);
@@ -78,7 +84,7 @@ public sealed class AppServices
 				},
 				Log);
 			notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, _notifier, Focus);
-			_presence = new WindowsPresence(executable, () => QuitRequested?.Invoke(), Log);
+			_presence = new WindowsPresence(executable, () => QuitRequested?.Invoke(), () => HideWindowRequested?.Invoke(), Log);
 			var background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, _presence);
 			var router = new BridgeRouter(
 				shares, transfers, settings, connection, Opened, activity, received, new NativeClipboard(), opener, thumbnails, Dropped,

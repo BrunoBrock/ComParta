@@ -12,7 +12,7 @@ import type {
   ShareDto,
   TransferDto,
 } from './bridge/index.ts'
-import ActionButton from './components/ActionButton.tsx'
+import { closeTopmost } from './back.ts'
 import ConnectionHelp from './components/ConnectionHelp.tsx'
 import DetailsWindow, { type DetailsOf } from './components/DetailsWindow.tsx'
 import HelpDialog from './components/HelpDialog.tsx'
@@ -95,6 +95,8 @@ export default function App({ bridge }: AppProps) {
   const [startWithWindows, setStartWithWindows] = useState(false)
   const [publicServers, setPublicServers] = useState<readonly string[]>([])
   const [helper, setHelper] = useState<{ address: string | null; key: string | null }>({ address: null, key: null })
+  // The name of the folder new received files go to, and whether the person chose it (epic 12 story 2).
+  const [receivedFolder, setReceivedFolder] = useState<{ name: string; chosen: boolean }>({ name: '', chosen: false })
   // Files that would stop moving if the app quit now; the person confirms first (AD-14).
   const [quitting, setQuitting] = useState<readonly string[] | null>(null)
   const [query, setQuery] = useState('')
@@ -207,6 +209,7 @@ export default function App({ bridge }: AppProps) {
       setStartWithWindows(stored.startWithWindows)
       setPublicServers(stored.publicServers)
       setHelper({ address: stored.helperAddress, key: stored.helperKey })
+      setReceivedFolder({ name: stored.receivedFolder, chosen: stored.receivedFolderChosen })
       setView(stored.view === 'list' ? 'list' : 'grid')
       setSort(stored.sort === 'name' || stored.sort === 'size' ? stored.sort : 'added')
       const chosen = pickLanguage(stored.language, stored.systemLanguage)
@@ -226,6 +229,8 @@ export default function App({ bridge }: AppProps) {
       else if (event.event === 'quit.changed') setQuitting(event.payload.moving)
       // The person clicked a system notification about this item (CAP-20).
       else if (event.event === 'details.changed') setDetails(event.payload)
+      // The phone's back button closes what is open, and leaves the app when nothing is.
+      else if (event.event === 'back.changed' && !closeTopmost()) void bridge.invoke('app.leave')
     })
 
     void bridge.invoke('activity.get').then((result) => {
@@ -454,6 +459,22 @@ export default function App({ bridge }: AppProps) {
     return true
   }
 
+  // Windows' folder dialog opens; new files go to the folder picked, earlier ones stay where they are.
+  // A problem is shown in Settings, next to the button, rather than behind it.
+  async function chooseReceivedFolder() {
+    const result = await bridge.invoke('settings.chooseReceivedFolder')
+    if (!result.ok) return errorMessage(result.error.code)
+    if (result.value !== null) showInfo(t('settings.receivedFolderSaved', { name: result.value }))
+    return null
+  }
+
+  async function useUsualReceivedFolder() {
+    const result = await bridge.invoke('settings.useUsualReceivedFolder')
+    if (!result.ok) return errorMessage(result.error.code)
+    showInfo(t('settings.receivedFolderUsual'))
+    return null
+  }
+
   async function quitAnyway() {
     setQuitting(null)
     const result = await bridge.invoke('app.quit', { force: true })
@@ -679,8 +700,6 @@ export default function App({ bridge }: AppProps) {
         onSettings={() => setOpened('settings')}
       />
 
-      <ActionButton adding={adding} onAdd={add} onAddFolder={addFolder} onReceive={startReceiving} />
-
       <main className="content">
         {notice && <Notice text={notice} onDismiss={clearNotice} />}
         {section === 'shared' ? shared : received}
@@ -747,6 +766,10 @@ export default function App({ bridge }: AppProps) {
           onGuidedSend={chooseGuidedSend}
           speedLimits={speedLimits}
           onSpeedLimits={chooseSpeedLimits}
+          receivedFolder={receivedFolder.name}
+          receivedFolderChosen={receivedFolder.chosen}
+          onChooseReceivedFolder={chooseReceivedFolder}
+          onUsualReceivedFolder={useUsualReceivedFolder}
           version={version}
           onClose={() => setOpened(null)}
         />

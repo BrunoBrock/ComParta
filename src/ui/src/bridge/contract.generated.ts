@@ -61,6 +61,7 @@ export interface TransferDto {
   secondsLeft: number | null;
   neededBytes: number | null;
   risky: boolean;
+  folder: boolean;
 }
 
 export interface ReceiveArgs {
@@ -100,6 +101,11 @@ export interface OpenReceivedArgs {
   confirmed: boolean | null;
 }
 
+export interface ReceivedFileDto {
+  relativePath: string;
+  sizeBytes: number;
+}
+
 export interface SettingsDto {
   language: string | null;
   systemLanguage: string;
@@ -116,6 +122,8 @@ export interface SettingsDto {
   welcomeDone: boolean;
   receiveLimit: number | null;
   sendLimit: number | null;
+  receivedFolder: string;
+  receivedFolderChosen: boolean;
 }
 
 export interface SetSettingsArgs {
@@ -251,6 +259,8 @@ export const errorCodes = [
   "share.folderTooLarge",
   "share.nameInvalid",
   "transfer.noFiles",
+  "received.folderUnusable",
+  "received.folderMissing",
   "unexpected",
 ] as const;
 
@@ -283,8 +293,11 @@ export interface Commands {
   "received.open": { args: OpenReceivedArgs; result: null };
   "received.reveal": { args: IdArgs; result: null };
   "received.delete": { args: IdArgs; result: null };
+  "received.files": { args: IdArgs; result: ReceivedFileDto[] };
   "settings.get": { args: undefined; result: SettingsDto };
   "settings.set": { args: SetSettingsArgs; result: null };
+  "settings.chooseReceivedFolder": { args: undefined; result: string | null };
+  "settings.useUsualReceivedFolder": { args: undefined; result: null };
   "connection.get": { args: undefined; result: ConnectionDto };
   "connection.openSettings": { args: undefined; result: null };
   "invites.takeOpened": { args: undefined; result: string | null };
@@ -295,6 +308,7 @@ export interface Commands {
   "shares.addDropped": { args: DropArgs; result: DropResultDto };
   "thumbnails.get": { args: ThumbnailArgs; result: string | null };
   "app.quit": { args: QuitArgs; result: QuitAnswerDto };
+  "app.leave": { args: undefined; result: null };
   "media.open": { args: MediaArgs; result: MediaDto };
   "support.report": { args: undefined; result: string };
 }
@@ -308,6 +322,7 @@ export interface Events {
   "activity.changed": ActivityDto;
   "details.changed": DetailsTargetDto;
   "quit.changed": QuitAnswerDto;
+  "back.changed": boolean;
 }
 
 export type CommandResult<T> = { ok: true; value: T } | { ok: false; error: { code: ErrorCode } };

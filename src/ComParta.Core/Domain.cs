@@ -82,9 +82,14 @@ public sealed record ShareView(Share Share, ShareStatus Status);
 /// </summary>
 /// <param name="SkippedFiles">For a download of several files: the positions of the ones the person chose not to get; null for none.</param>
 /// <param name="KeepSharing">For a public download: whether it is shared with others once it has arrived, while ComParta is open.</param>
+/// <param name="Folder">
+/// The Received folder it goes to, as chosen in Settings when it started, or null for the usual one
+/// (<see cref="Ports.IAppPaths.ReceivedRoot"/>). Choosing another folder later never moves it (epic 12 story 2).
+/// </param>
 public sealed record Transfer(
     TransferId Id, string? Name, long? SizeBytes, bool Done, DateTimeOffset AddedAt, bool Paused = false,
-    TransferSource Source = TransferSource.Invite, IReadOnlyList<int>? SkippedFiles = null, bool KeepSharing = true)
+    TransferSource Source = TransferSource.Invite, IReadOnlyList<int>? SkippedFiles = null, bool KeepSharing = true,
+    string? Folder = null)
 {
     /// <summary>Public downloads share back what they received, unless the person said not to (epic 14 story 4).</summary>
     public bool SharesWhenDone => Source != TransferSource.Invite && KeepSharing;
@@ -314,6 +319,10 @@ public enum ErrorKind
     ShareNameInvalid,
     /// <summary>Every file of a download was left out; at least one must stay.</summary>
     NoFilesChosen,
+    /// <summary>The folder the person picked for received files cannot hold them: ComParta cannot write there, or it is ComParta's own.</summary>
+    ReceivedFolderUnusable,
+    /// <summary>The folder chosen for received files is not there now, for example on a drive that was unplugged.</summary>
+    ReceivedFolderMissing,
     Unexpected,
 }
 

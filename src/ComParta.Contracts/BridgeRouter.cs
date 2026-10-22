@@ -50,6 +50,7 @@ public sealed class BridgeRouter
         _support = support;
         _background = background;
         _background.QuitAsked += answer => Raise(Events.QuitChanged, ToDto(answer));
+        _background.BackAsked += () => Raise(Events.BackChanged, true);
         notifications.OpenRequested += (kind, id, name) => Raise(
             Events.DetailsChanged,
             new DetailsTargetDto(kind == NotifiedItem.Share ? ItemKindDto.Share : ItemKindDto.Transfer, id, name));
@@ -67,7 +68,7 @@ public sealed class BridgeRouter
         _opener = opener;
         _shares.Changed += RaiseShares;
         _sending.Changed += RaiseShares;
-        _transfers.Changed += () => Raise(Events.TransfersChanged, _transfers.List().Select(ToDto).ToArray());
+        _transfers.Changed += () => Raise(Events.TransfersChanged, _transfers.List().Select(TransferRow).ToArray());
         _settings.Changed += () => _ = RaiseSettingsAsync();
         _connection.Changed += () => Raise(Events.ConnectionChanged, ToDto(_connection.Current(), _connection.ThroughHelper()));
         _opened.Opened += () => Raise(Events.InvitesChanged, true);
@@ -200,7 +201,7 @@ public sealed class BridgeRouter
                 return CommandResult.Success(_transfers.FindInvite(await _clipboard.GetTextAsync()));
 
             case Commands.TransfersList:
-                return CommandResult.Success(_transfers.List().Select(ToDto).ToArray());
+                return CommandResult.Success(_transfers.List().Select(TransferRow).ToArray());
 
             case Commands.TransfersReceive:
             {
@@ -260,7 +261,8 @@ public sealed class BridgeRouter
             }
 
             case Commands.ReceivedOpenFolder:
-                await _opener.OpenReceivedFolderAsync();
+                // The folder new files go to; files received before a change stay in their own.
+                await _opener.OpenReceivedFolderAsync(_settings.ChosenReceivedFolder);
                 return CommandResult.Success(null);
 
             case Commands.ReceivedOpen:
@@ -269,6 +271,16 @@ public sealed class BridgeRouter
                 return TransferId.TryParse(open?.Id, out var openId)
                     ? ToResult(await _received.OpenAsync(openId, open?.Confirmed ?? false))
                     : CommandResult.Failure(ErrorCodes.TransferNotFound);
+            }
+
+            case Commands.ReceivedFiles:
+            {
+                var listed = TransferId.TryParse(Args<IdArgs>(argsJson)?.Id, out var folderId)
+                    ? _received.ListFiles(folderId)
+                    : Result<IReadOnlyList<ReceivedFile>>.Fail(ErrorKind.TransferNotFound);
+                return listed.Ok
+                    ? CommandResult.Success(listed.Value!.Select(f => new ReceivedFileDto(f.RelativePath, f.SizeBytes)).ToArray())
+                    : Failure(listed.Error);
             }
 
             case Commands.ReceivedReveal:
@@ -291,6 +303,10 @@ public sealed class BridgeRouter
                 return CommandResult.Success(report);
             }
 
+            case Commands.AppLeave:
+                _background.Leave();
+                return CommandResult.Success(null);
+
             case Commands.SettingsGet:
                 return CommandResult.Success(ToDto(await _settings.GetAsync()));
 
@@ -301,6 +317,15 @@ public sealed class BridgeRouter
                     args?.PublicServers, args?.HelperAddress, args?.HelperKey, args?.YourName, args?.Theme, args?.WelcomeDone ?? false,
                     args?.ReceiveLimit, args?.SendLimit));
             }
+
+            case Commands.SettingsChooseReceivedFolder:
+            {
+                var chosen = await _settings.ChooseReceivedFolderAsync();
+                return chosen.Ok ? CommandResult.Success(chosen.Value) : Failure(chosen.Error);
+            }
+
+            case Commands.SettingsUseUsualReceivedFolder:
+                return ToResult(await _settings.UseUsualReceivedFolderAsync());
 
             case Commands.ConnectionGet:
                 return CommandResult.Success(ToDto(_connection.Refresh(), _connection.ThroughHelper()));
@@ -420,6 +445,9 @@ public sealed class BridgeRouter
     private static T? Args<T>(string? json) where T : class =>
         string.IsNullOrWhiteSpace(json) ? null : JsonSerializer.Deserialize<T>(json, Contract.Json);
 
+    /// <summary>A transfer as the screens show it, saying whether it is a folder that arrived.</summary>
+    private TransferDto TransferRow(TransferView view) => ToDto(view) with { Folder = _received.IsFolder(view) };
+
     private static CommandResult ToResult(Result result) =>
         result.Ok ? CommandResult.Success(null) : Failure(result.Error);
 
@@ -483,7 +511,7 @@ public sealed class BridgeRouter
     public static SettingsDto ToDto(Settings settings) =>
         new(settings.Language, settings.SystemLanguage, settings.View, settings.Sort, settings.SendStepsSeen, settings.StartWithWindows,
             [.. settings.PublicServers], settings.HelperAddress, settings.HelperKey, settings.YourName, settings.Theme, settings.Version, settings.WelcomeDone,
-            settings.ReceiveLimit, settings.SendLimit);
+            settings.ReceiveLimit, settings.SendLimit, settings.ReceivedFolderName ?? "", settings.ReceivedFolderChosen);
 
     public static QuitAnswerDto ToDto(QuitAnswer answer) => new(answer.Quitting, [.. answer.Moving]);
 
@@ -560,6 +588,8 @@ public sealed class BridgeRouter
         ErrorKind.FolderTooLarge => ErrorCodes.ShareFolderTooLarge,
         ErrorKind.ShareNameInvalid => ErrorCodes.ShareNameInvalid,
         ErrorKind.NoFilesChosen => ErrorCodes.TransferNoFiles,
+        ErrorKind.ReceivedFolderUnusable => ErrorCodes.ReceivedFolderUnusable,
+        ErrorKind.ReceivedFolderMissing => ErrorCodes.ReceivedFolderMissing,
         _ => ErrorCodes.Unexpected,
     };
 }

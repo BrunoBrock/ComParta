@@ -82,6 +82,8 @@ export interface FakeBridgeOptions {
   /** The name and colors the person chose in Settings. */
   yourName?: string
   theme?: 'light' | 'dark'
+  /** The name of a folder the person chose for received files; the usual one when left out. */
+  receivedFolder?: string
 }
 
 export interface FakeBridge extends Bridge {
@@ -89,6 +91,11 @@ export interface FakeBridge extends Bridge {
   nextPick: PickedFile | PickedFile[] | null
   /** What the next folder dialog returns; null means the person cancelled. */
   nextFolder: PickedFolder | null
+  /**
+   * The name of the folder the next folder dialog for received files returns; null means the person
+   * cancelled, 'unusable' a folder ComParta cannot write to.
+   */
+  nextReceivedFolder: string | 'unusable' | null
   /** Dropped items with these names are folders, as the window would find. */
   folders: Record<string, PickedFolder>
   /** Make the next command fail with this code. */
@@ -104,6 +111,8 @@ export interface FakeBridge extends Bridge {
   /** What the system clipboard holds, for the "found an invite you copied" path. */
   clipboardText: string | null
   openedFolder: number
+  /** The name of the folder "Open my received files" last showed. */
+  openedFolderName: string | null
   /** Ids of received files "opened" and "shown in their folder", in order. */
   openedReceived: string[]
   revealedReceived: string[]
@@ -113,6 +122,10 @@ export interface FakeBridge extends Bridge {
   openedConnectionSettings: number
   /** How many times the app quit. */
   quits: number
+  /** How many times back with nothing open left the app. */
+  leaves: number
+  /** The person pressed the phone's back button. */
+  pressBack(): void
   /** The person chose Quit on the notification-area icon while files were moving. */
   quitFromIcon(): void
   /** An invite link clicked outside the app, as the app reports it. */
@@ -174,6 +187,8 @@ export function fakePicture(name: string): string {
 }
 
 // As core's MinSpeedLimit and MaxSpeedLimit.
+/** The usual Received folder's name, as the app shows it: ComParta, inside Downloads. */
+const usualReceivedFolder = 'ComParta'
 const minSpeedLimit = 10_000
 const maxSpeedLimit = 1_000_000_000
 
@@ -342,7 +357,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       bytesPerSecond: 0,
       secondsLeft: null,
       neededBytes: null,
-      risky: false,
+      risky: false, folder: false,
       ...known,
     }
     transfers = [...transfers.filter((t) => t.id !== id), withRisk(transfer)]
@@ -406,6 +421,8 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     welcomeDone: options.welcomeDone ?? true,
     receiveLimit: options.receiveLimit ?? null,
     sendLimit: options.sendLimit ?? null,
+    receivedFolder: options.receivedFolder ?? usualReceivedFolder,
+    receivedFolderChosen: options.receivedFolder !== undefined,
   }
   // What quitting would stop: shares someone is getting and files arriving, as the app counts them.
   const moving = () => [
@@ -755,6 +772,23 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       return ok(null)
     },
 
+    // As the app: only the folder's name reaches the screen; new files go there, earlier ones stay.
+    'settings.chooseReceivedFolder': () => {
+      const picked = fake.nextReceivedFolder
+      if (picked === null) return ok(null)
+      if (picked === 'unusable') return fail('received.folderUnusable')
+      const chosen = picked !== usualReceivedFolder
+      settings = { ...settings, receivedFolder: picked, receivedFolderChosen: chosen }
+      emit({ event: 'settings.changed', payload: { ...settings } })
+      return ok(picked)
+    },
+
+    'settings.useUsualReceivedFolder': () => {
+      settings = { ...settings, receivedFolder: usualReceivedFolder, receivedFolderChosen: false }
+      emit({ event: 'settings.changed', payload: { ...settings } })
+      return ok(null)
+    },
+
     'connection.get': () => ok(connectionDto()),
 
     'activity.get': () => ok(activity()),
@@ -800,6 +834,11 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       ].join('\n')
       fake.copiedReport = report
       return ok(report)
+    },
+
+    'app.leave': () => {
+      fake.leaves++
+      return ok(null)
     },
 
     'media.open': (args) => {
@@ -889,7 +928,18 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
 
     'received.openFolder': () => {
       fake.openedFolder++
+      fake.openedFolderName = settings.receivedFolder
       return ok(null)
+    },
+
+    'received.files': (args) => {
+      const transfer = transfers.find((t) => t.id === (args as IdArgs).id)
+      if (!transfer) return fail('transfer.notFound')
+      if (transfer.state !== 'done' || !transfer.folder) return fail('received.notFound')
+      return ok([
+        { relativePath: 'day 1/photo.jpg', sizeBytes: 250_000 },
+        { relativePath: 'notes.txt', sizeBytes: 1_200 },
+      ])
     },
 
     'received.open': (args) => {
@@ -923,8 +973,11 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     savedDownloadFiles: [] as string[],
     clipboardText: null as string | null,
     openedFolder: 0,
+    openedFolderName: null as string | null,
+    nextReceivedFolder: 'Family photos' as string | 'unusable' | null,
     openedConnectionSettings: 0,
     quits: 0,
+    leaves: 0,
 
     openInvite(text: string) {
       openedInvite = text
@@ -966,6 +1019,10 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
 
     quitFromIcon() {
       emit({ event: 'quit.changed', payload: { quitting: false, moving: moving() } })
+    },
+
+    pressBack() {
+      emit({ event: 'back.changed', payload: true })
     },
 
     clickNotification(target: DetailsTargetDto) {

@@ -119,12 +119,16 @@ public sealed class NativeClipboard : Ports.IClipboard
 
 public sealed class LocalStorageInfo(Ports.IAppPaths paths) : Ports.IStorageInfo
 {
-	public long? GetReceivedFreeBytes()
+	public long? GetReceivedFreeBytes(string? folder)
 	{
 		try
 		{
-			Directory.CreateDirectory(paths.ReceivedRoot);
-			var root = Path.GetPathRoot(Path.GetFullPath(paths.ReceivedRoot));
+			// A chosen folder on a drive that was unplugged is not made again on another one.
+			if (folder is null)
+				Directory.CreateDirectory(paths.ReceivedRoot);
+			else if (!Directory.Exists(folder))
+				return null;
+			var root = Path.GetPathRoot(Path.GetFullPath(folder ?? paths.ReceivedRoot));
 			return root is null ? null : new DriveInfo(root).AvailableFreeSpace;
 		}
 		catch (Exception)
@@ -136,11 +140,12 @@ public sealed class LocalStorageInfo(Ports.IAppPaths paths) : Ports.IStorageInfo
 
 public sealed class ReceivedFolderOpener(Ports.IAppPaths paths) : Ports.IContentOpener
 {
-	public Task OpenReceivedFolderAsync(CancellationToken ct = default)
+	public Task OpenReceivedFolderAsync(string? folder, CancellationToken ct = default)
 	{
-		Directory.CreateDirectory(paths.ReceivedRoot);
+		folder ??= paths.ReceivedRoot;
+		Directory.CreateDirectory(folder);
 		// Shows the folder; nothing received is ever run by the app.
-		Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { paths.ReceivedRoot } })?.Dispose();
+		Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { folder } })?.Dispose();
 		return Task.CompletedTask;
 	}
 

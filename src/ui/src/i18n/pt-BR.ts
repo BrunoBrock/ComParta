@@ -64,6 +64,12 @@ export const ptBR: Catalog = {
   'settings.receiveLimit': 'Receber no máximo',
   'settings.sendLimit': 'Enviar no máximo',
   'settings.noLimit': 'O mais rápido possível',
+  'settings.receivedFolder': 'Os arquivos recebidos vão para',
+  'settings.receivedFolderHint': 'Os arquivos novos vão para esta pasta. Os que você já recebeu, ou está recebendo agora, ficam onde estão.',
+  'settings.receivedFolderChange': 'Escolher outra pasta',
+  'settings.receivedFolderReset': 'Usar a pasta de sempre',
+  'settings.receivedFolderSaved': 'Os arquivos novos vão para “{name}”.',
+  'settings.receivedFolderUsual': 'Os arquivos novos voltam a ir para a pasta de sempre.',
   'settings.about': 'Sobre o ComParta',
   'settings.version': 'Versão {version}',
   'settings.openSource': 'O ComParta é gratuito e de código aberto. Qualquer pessoa pode usar, mudar e compartilhar.',
@@ -93,7 +99,7 @@ export const ptBR: Catalog = {
     'É mais fácil quando ela tem. Ela também pode usar outro app que baixa arquivos: abra os detalhes do arquivo e escolha “Copiar link para outros apps”.',
   'help.q.where': 'Para onde vão os arquivos que eu recebo?',
   'help.a.where':
-    'Para a pasta ComParta dentro da sua pasta Downloads. Escolha “Mostrar na pasta” em um arquivo recebido para vê-lo lá.',
+    'Para a pasta ComParta dentro da sua pasta Downloads, a não ser que você tenha escolhido outra pasta nas Configurações. Escolha “Mostrar na pasta” em um arquivo recebido para vê-lo lá.',
   'help.q.copied': 'Meu arquivo é copiado ou movido quando eu compartilho?',
   'help.a.copied':
     'Nenhum dos dois. Ele continua onde está, e o ComParta lê dali enquanto você compartilha. Não mova nem renomeie o arquivo enquanto ele estiver compartilhado.',
@@ -298,6 +304,9 @@ export const ptBR: Catalog = {
   'riskyOpen.title': 'Abrir “{name}”?',
   'riskyOpen.body': 'Este arquivo pode executar um programa ou mudar o seu computador. Abra-o somente se confia no lugar de onde ele veio.',
   'riskyOpen.confirm': 'Abrir mesmo assim',
+  'folderView.title': '“{name}”',
+  'folderView.empty': 'Esta pasta não tem arquivos.',
+  'folderView.close': 'Fechar',
   'riskyOpen.cancel': 'Cancelar',
 
   'connection.good': 'Outros conseguem chegar a este computador',
@@ -391,7 +400,7 @@ export const ptBR: Catalog = {
   'error.download.invalidFile':
     'O ComParta não consegue baixar a partir desse arquivo. Escolha o arquivo de download que você salvou do site, ou cole o link de download.',
   'error.transfer.notFound': 'Esse arquivo não está mais na sua lista.',
-  'error.received.notFound': 'Este arquivo não está mais na sua pasta do ComParta. Ele pode ter sido movido ou apagado.',
+  'error.received.notFound': 'Este arquivo não está mais onde o ComParta o guardou. Ele pode ter sido movido ou apagado.',
   'error.received.openFailed': 'O ComParta não conseguiu abrir este arquivo. Escolha Mostrar na pasta para vê-lo.',
   'error.received.confirmRisky': 'Este arquivo pode executar um programa ou mudar o seu computador, então o ComParta pede que você confirme antes de abri-lo.',
   'error.share.dropFailed': 'O ComParta não conseguiu pegar esses arquivos. Escolha “Compartilhar um arquivo” para escolhê-los.',
@@ -402,6 +411,9 @@ export const ptBR: Catalog = {
   'error.media.notPlayable': 'Não é possível reproduzir este arquivo. Abrir a pasta onde ele está?',
   'error.settings.invalid': 'Não foi possível guardar essa escolha. Tente de novo.',
   'error.transfer.noFiles': 'Deixe pelo menos um arquivo marcado. Para não receber nenhum, cancele o download.',
+  'error.received.folderUnusable': 'O ComParta não consegue guardar arquivos nessa pasta. Escolha outra, por exemplo em Documentos ou Downloads.',
+  'error.received.folderMissing':
+    'A pasta que você escolheu para os arquivos recebidos não foi encontrada. Conecte o disco onde ela está, ou escolha outra pasta nas Configurações.',
   'error.unexpected': 'Algo deu errado. Feche o ComParta, abra de novo e tente mais uma vez.',
 
   'size.bytes': '{value} bytes',

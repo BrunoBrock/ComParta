@@ -14,7 +14,7 @@ describe('using what was received', () => {
     bytesPerSecond: 0,
     secondsLeft: null,
     neededBytes: null,
-    risky: false,
+    risky: false, folder: false,
   }
   const onTheWay: TransferDto = {
     id: 't2',
@@ -25,7 +25,7 @@ describe('using what was received', () => {
     bytesPerSecond: 0,
     secondsLeft: null,
     neededBytes: null,
-    risky: false,
+    risky: false, folder: false,
   }
 
   const button = (label: string) => within(transfersSection()).findByRole('button', { name: label })
@@ -137,6 +137,19 @@ describe('using what was received', () => {
     expect(bridge.openedReceived).toEqual([])
   })
 
+  it('shows a received folder as its files instead of opening it', async () => {
+    const folder: TransferDto = { ...arrived, id: 't4', name: 'Trip', folder: true }
+    const { user, bridge } = setup({ transfers: [folder] })
+    await goToReceived(user)
+
+    await user.click(await button('Open Trip with another app'))
+
+    const dialog = await screen.findByRole('dialog', { name: '“Trip”' })
+    expect(within(dialog).getByText('day 1/photo.jpg')).toBeInTheDocument()
+    expect(within(dialog).getByText('notes.txt')).toBeInTheDocument()
+    expect(bridge.openedReceived).toEqual([])
+  })
+
   it('opens an ordinary received file without asking again', async () => {
     const { user, bridge } = setup({ transfers: [arrived] })
     await goToReceived(user)
@@ -159,7 +172,7 @@ describe('pictures of received files', () => {
       bytesPerSecond: 0,
       secondsLeft: null,
       neededBytes: null,
-      risky: false,
+      risky: false, folder: false,
     }
     const zip: TransferDto = { ...video, id: 't4', name: 'Photos.zip' }
     const { user } = setup({ transfers: [video, zip] })

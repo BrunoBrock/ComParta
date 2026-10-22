@@ -34,8 +34,11 @@ public static class Commands
     public const string ReceivedOpen = "received.open";
     public const string ReceivedReveal = "received.reveal";
     public const string ReceivedDelete = "received.delete";
+    public const string ReceivedFiles = "received.files";
     public const string SettingsGet = "settings.get";
     public const string SettingsSet = "settings.set";
+    public const string SettingsChooseReceivedFolder = "settings.chooseReceivedFolder";
+    public const string SettingsUseUsualReceivedFolder = "settings.useUsualReceivedFolder";
     public const string ConnectionGet = "connection.get";
     public const string ConnectionOpenSettings = "connection.openSettings";
     public const string InvitesTakeOpened = "invites.takeOpened";
@@ -46,6 +49,8 @@ public static class Commands
     public const string ThumbnailsGet = "thumbnails.get";
     public const string SharesAddDropped = "shares.addDropped";
     public const string AppQuit = "app.quit";
+    /// <summary>Back with nothing open on the screen: the app goes out of sight, or ends when it has no work.</summary>
+    public const string AppLeave = "app.leave";
     public const string MediaOpen = "media.open";
     public const string SupportReport = "support.report";
 }
@@ -63,6 +68,8 @@ public static class Events
     public const string DetailsChanged = "details.changed";
     /// <summary>Quitting from the notification-area icon found files moving; the screen asks first (AD-14).</summary>
     public const string QuitChanged = "quit.changed";
+    /// <summary>The person pressed the system's back button; the screen closes what is on top, or sends <c>app.leave</c>.</summary>
+    public const string BackChanged = "back.changed";
 }
 
 /// <summary>Stable codes; the words for them live in the UI's translation catalog (AD-11).</summary>
@@ -89,6 +96,8 @@ public static class ErrorCodes
     public const string ShareFolderTooLarge = "share.folderTooLarge";
     public const string ShareNameInvalid = "share.nameInvalid";
     public const string TransferNoFiles = "transfer.noFiles";
+    public const string ReceivedFolderUnusable = "received.folderUnusable";
+    public const string ReceivedFolderMissing = "received.folderMissing";
     public const string Unexpected = "unexpected";
 
     public static IReadOnlyList<string> All { get; } =
@@ -96,7 +105,8 @@ public static class ErrorCodes
         ShareDuplicate, ShareNotFound, ShareNotReady, FileUnreadable,
         InviteInvalid, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, DiskFull, SettingsInvalid,
         ReceivedNotFound, ReceivedOpenFailed, ReceivedConfirmRisky, ShareDropFailed, FileSaveFailed, MediaNotPlayable,
-        ShareFolderEmpty, ShareFolderTooLarge, ShareNameInvalid, TransferNoFiles, Unexpected,
+        ShareFolderEmpty, ShareFolderTooLarge, ShareNameInvalid, TransferNoFiles, ReceivedFolderUnusable, ReceivedFolderMissing,
+        Unexpected,
     ];
 }
 
@@ -166,7 +176,10 @@ public enum ShareActivityDto { Idle, Sending, Sent }
 /// <param name="SecondsLeft">Roughly how long is left, or null when it cannot be told.</param>
 public sealed record TransferDto(
     string Id, string? Name, long? SizeBytes, long ReceivedBytes, TransferStateDto State, long BytesPerSecond, long? SecondsLeft,
-    long? NeededBytes, bool Risky = false);
+    long? NeededBytes, bool Risky = false, bool Folder = false);
+
+/// <summary>A file inside a received folder, as the folder view lists it.</summary>
+public sealed record ReceivedFileDto(string RelativePath, long SizeBytes);
 
 public sealed record IdArgs(string Id);
 
@@ -230,10 +243,12 @@ public sealed record InvitePreviewDto(
 /// <param name="Theme">"light" or "dark", or null to follow the system.</param>
 /// <param name="Version">The app's version, for About.</param>
 /// <param name="WelcomeDone">The first-run welcome was finished or skipped.</param>
+/// <param name="ReceivedFolder">The name of the folder new received files go to, without its path (AD-7).</param>
+/// <param name="ReceivedFolderChosen">The person chose that folder; false while it is the usual one.</param>
 public sealed record SettingsDto(
     string? Language, string SystemLanguage, string? View, string? Sort, int SendStepsSeen, bool StartWithWindows, string[] PublicServers,
     string? HelperAddress, string? HelperKey, string? YourName, string? Theme, string Version, bool WelcomeDone,
-    long? ReceiveLimit, long? SendLimit);
+    long? ReceiveLimit, long? SendLimit, string ReceivedFolder, bool ReceivedFolderChosen);
 
 /// <summary>Every choice at once; the UI sends what it has, with the one it changed.</summary>
 /// <param name="Language">A language tag, or null to follow the system again.</param>
@@ -337,8 +352,13 @@ public static class Contract
         new(Commands.ReceivedOpen, typeof(OpenReceivedArgs), null),
         new(Commands.ReceivedReveal, typeof(IdArgs), null),
         new(Commands.ReceivedDelete, typeof(IdArgs), null),
+        new(Commands.ReceivedFiles, typeof(IdArgs), typeof(ReceivedFileDto[])),
         new(Commands.SettingsGet, null, typeof(SettingsDto)),
         new(Commands.SettingsSet, typeof(SetSettingsArgs), null),
+        // Opens Windows' folder dialog (AD-7); the name of the folder picked, or null when it was closed.
+        // New transfers go there; running and finished ones stay where they are (epic 12 story 2).
+        new(Commands.SettingsChooseReceivedFolder, null, typeof(string), ResultMayBeNull: true),
+        new(Commands.SettingsUseUsualReceivedFolder, null, null),
         new(Commands.ConnectionGet, null, typeof(ConnectionDto)),
         new(Commands.ConnectionOpenSettings, null, null),
         new(Commands.InvitesTakeOpened, null, typeof(string), ResultMayBeNull: true),
@@ -350,6 +370,7 @@ public static class Contract
         new(Commands.SharesAddDropped, typeof(DropArgs), typeof(DropResultDto)),
         new(Commands.ThumbnailsGet, typeof(ThumbnailArgs), typeof(string), ResultMayBeNull: true),
         new(Commands.AppQuit, typeof(QuitArgs), typeof(QuitAnswerDto)),
+        new(Commands.AppLeave, null, null),
         // Fails with media.notPlayable when the file cannot be shown or played here.
         new(Commands.MediaOpen, typeof(MediaArgs), typeof(MediaDto)),
         // Puts the report for whoever helps the person on the clipboard and returns it, so the Help page shows what was copied.
@@ -366,6 +387,7 @@ public static class Contract
         new(Events.ActivityChanged, typeof(ActivityDto)),
         new(Events.DetailsChanged, typeof(DetailsTargetDto)),
         new(Events.QuitChanged, typeof(QuitAnswerDto)),
+        new(Events.BackChanged, typeof(bool)),
     ];
 
     /// <summary>camelCase JSON with enums as camelCase strings, as the conventions require.</summary>

@@ -24,7 +24,7 @@ describe('receiving from another person', () => {
     bytesPerSecond: 0,
     secondsLeft: null,
     neededBytes: null,
-    risky: false,
+    risky: false, folder: false,
   }
 
   it('shows the empty-state message when nothing is being received', async () => {
