@@ -13,4 +13,10 @@ namespace ComParta.App;
 		| ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
 public class MainActivity : MauiAppCompatActivity
 {
+	protected override void OnCreate(Android.OS.Bundle? savedInstanceState)
+	{
+		// Read by the Android check in CI, with the start line, to see the app starts only once.
+		Android.Util.Log.Info("ComParta", $"Screen opened{(savedInstanceState is null ? "" : " again")}");
+		base.OnCreate(savedInstanceState);
+	}
 }

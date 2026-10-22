@@ -30,6 +30,12 @@ status=0
 wait_for "ComParta started" 180 || status=1
 wait_for "Screen answered" 120 || status=1
 sleep 5
+# The engine and storage start once, however often Android makes the screen.
+starts=$(adb logcat -d -s ComParta:I | grep -c "ComParta started" || true)
+if [ "$starts" -ne 1 ]; then
+  echo "ComParta started $starts times."
+  status=1
+fi
 if ! adb shell pidof "$package" > /dev/null; then
   echo "ComParta is no longer running."
   status=1
@@ -37,5 +43,5 @@ fi
 
 adb exec-out screencap -p > "$folder/android-first-screen.png" || true
 adb logcat -d > "$folder/android-log.txt" || true
-grep -E "ComParta|FATAL|AndroidRuntime" "$folder/android-log.txt" | tail -n 60 || true
+grep -E "ComParta|comparta|FATAL|AndroidRuntime" "$folder/android-log.txt" | tail -n 60 || true
 exit $status

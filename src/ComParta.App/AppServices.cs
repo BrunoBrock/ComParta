@@ -124,6 +124,9 @@ public sealed partial class AppServices
 	/// <summary>Lets go of what the system adapters hold.</summary>
 	partial void StopPlatform();
 
+	/// <summary>True once <see cref="Stop"/> ran.</summary>
+	public bool Stopped => Volatile.Read(ref _stopped) == 1;
+
 	/// <summary>Saves where transfers got to and lets go of the icon. Safe to call more than once.</summary>
 	public void Stop()
 	{

@@ -7,6 +7,11 @@ public partial class App : Application
 {
 	// Set once the app is really ending, so closing the window no longer hides it.
 	private bool _quitting;
+#if ANDROID
+	// Android makes the screen again while the app still runs (the system closed it to save memory,
+	// or it was opened anew), so the engine and storage already running are kept, never started twice.
+	private static AppServices? s_running;
+#endif
 
 	public App()
 	{
@@ -15,7 +20,11 @@ public partial class App : Application
 
 	protected override Window CreateWindow(IActivationState? activationState)
 	{
+#if ANDROID
+		var services = s_running is { Stopped: false } ? s_running : s_running = AppServices.Start();
+#else
 		var services = AppServices.Start();
+#endif
 		var window = new Window(new MainPage(services))
 		{
 			Title = "ComParta",
@@ -24,7 +33,9 @@ public partial class App : Application
 			MinimumWidth = 420,
 			MinimumHeight = 520,
 		};
+#if WINDOWS
 		window.Destroying += (_, _) => services.Stop();
+#endif
 		services.Focus.Watch(window);
 		services.NotificationClicked += () => MainThread.BeginInvokeOnMainThread(() => BringToFront(window));
 		services.ShowWindowRequested += () => MainThread.BeginInvokeOnMainThread(() => BringToFront(window));
