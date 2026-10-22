@@ -4,6 +4,8 @@ import type { Bridge, ErrorCode, ShareDetailsDto, TransferDetailsDto } from '../
 import { formatDateTime, formatRate, formatSize, formatTimeLeft, type MessageKey, percentOf, t } from '../i18n/index.ts'
 import { inviteMessage } from '../invite.ts'
 import type { ItemToggle } from './ItemView.tsx'
+import { openReceived } from './openReceived.ts'
+import RiskyOpenDialog from './RiskyOpenDialog.tsx'
 import Dialog from './ui/Dialog.tsx'
 
 export type DetailsOf = { kind: 'share' | 'transfer'; id: string; name: string }
@@ -18,6 +20,8 @@ interface DetailsWindowProps {
   onClose: () => void
   onError: (code: ErrorCode) => void
   onInfo: (text: string) => void
+  /** Shows the file inside ComParta, or says it cannot be played there (epic 18). */
+  onView?: () => void
 }
 
 /** How often the open window asks again (UX design, "Details window"). */
@@ -28,6 +32,7 @@ type Details = { kind: 'share'; value: ShareDetailsDto } | { kind: 'transfer'; v
 function shareRows(share: ShareDetailsDto, stopped: boolean): [MessageKey, string][] {
   return [
     ['details.size', formatSize(share.sizeBytes)],
+    ...(share.kind === 'file' ? [] : [['details.files', String(share.itemCount)] as [MessageKey, string]]),
     ['details.state', stopped && share.status === 'ready' ? t('stopped.chip') : t(`shares.chip.${share.status}`)],
     ['details.where', share.folder],
     ['details.added', formatDateTime(share.addedAt)],
@@ -71,9 +76,10 @@ function transferRows(transfer: TransferDetailsDto, stopped: boolean): [MessageK
  * Everything ComParta knows about one file, refreshed every second while open (CAP-26). Escape or
  * Close shuts it, and focus goes back to the button that opened it.
  */
-export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, onError, onInfo }: DetailsWindowProps) {
+export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, onError, onInfo, onView }: DetailsWindowProps) {
   const [details, setDetails] = useState<Details | null>(null)
   const [gone, setGone] = useState(false)
+  const [opening, setOpening] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -116,8 +122,20 @@ export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, 
   }
 
   async function runOnReceived(command: 'received.open' | 'received.reveal') {
+    if (command === 'received.open') {
+      const code = await openReceived(bridge, item.id)
+      if (code === 'received.confirmRisky') setOpening(true)
+      else if (code) onError(code)
+      return
+    }
     const result = await bridge.invoke(command, { id: item.id })
     if (!result.ok) onError(result.error.code)
+  }
+
+  async function confirmOpen() {
+    setOpening(false)
+    const code = await openReceived(bridge, item.id, true)
+    if (code) onError(code)
   }
 
   const rows =
@@ -142,6 +160,9 @@ export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, 
           ))}
         </dl>
       )}
+      {!gone && details?.kind === 'share' && details.value.kind === 'folder' && (
+        <p className="hint">{t('details.folderSnapshot')}</p>
+      )}
       <div className="dialog-actions">
         <button type="button" onClick={onClose} autoFocus>
           {t('details.close')}
@@ -157,7 +178,10 @@ export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, 
             <button type="button" onClick={() => runOnReceived('received.reveal')}>
               {t('received.reveal')}
             </button>
-            <button type="button" className="primary" onClick={() => runOnReceived('received.open')}>
+            <button type="button" onClick={() => runOnReceived('received.open')}>
+              {t('received.openWith')}
+            </button>
+            <button type="button" className="primary" onClick={() => (onView ? onView() : runOnReceived('received.open'))}>
               {t('received.open')}
             </button>
           </>
@@ -172,12 +196,20 @@ export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, 
               <FileDown size={18} aria-hidden="true" />
               {t('shares.saveDownloadFile')}
             </button>
+            {onView && (
+              <button type="button" onClick={onView}>
+                {t('received.open')}
+              </button>
+            )}
             <button type="button" className="primary" onClick={() => copyInvite(details.value)}>
               {t('shares.copyInvite')}
             </button>
           </>
         )}
       </div>
+      {opening && (
+        <RiskyOpenDialog name={item.name} onConfirm={confirmOpen} onCancel={() => setOpening(false)} />
+      )}
     </Dialog>
   )
 }

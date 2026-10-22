@@ -1,10 +1,13 @@
-import { CircleHelp, Download, ExternalLink, FolderOpen, FolderSearch, Inbox, Trash2, X } from 'lucide-react'
+import { CircleHelp, Download, ExternalLink, Eye, FolderOpen, FolderSearch, Inbox, Trash2, X } from 'lucide-react'
 import { useState } from 'react'
 import type { Bridge, ErrorCode, TransferDto } from '../bridge/index.ts'
 import { formatSize, formatTimeLeft, percentOf, t } from '../i18n/index.ts'
 import { inOrder, type SortOrder } from '../order.ts'
 import { matches } from '../search.ts'
 import DeleteReceivedDialog from './DeleteReceivedDialog.tsx'
+import ReceivedFolderDialog from './ReceivedFolderDialog.tsx'
+import RiskyOpenDialog from './RiskyOpenDialog.tsx'
+import { openReceived } from './openReceived.ts'
 import type { DetailsOf } from './DetailsWindow.tsx'
 import Thumbnail from './ui/Thumbnail.tsx'
 import { moveBetweenItems } from './itemKeys.ts'
@@ -43,6 +46,8 @@ interface TransfersSectionProps {
   onDetails: (item: DetailsOf) => void
   /** The section's primary action, offered when it is empty. */
   onReceive: () => void
+  /** Shows a file that arrived inside ComParta, or says it cannot be played there (epic 18). */
+  onView: (item: DetailsOf) => void
 }
 
 const tones: Record<TransferDto['state'], ChipTone> = {
@@ -103,10 +108,13 @@ export default function TransfersSection(props: TransfersSectionProps) {
     onContinueAll,
     onDetails,
     onReceive,
+    onView,
   } = props
 
   // The received file waiting for the person to confirm its deletion.
   const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null)
+  const [opening, setOpening] = useState<{ id: string; name: string } | null>(null)
+  const [folderOf, setFolderOf] = useState<TransferDto | null>(null)
 
   async function remove(transfer: TransferDto) {
     onStart()
@@ -115,8 +123,25 @@ export default function TransfersSection(props: TransfersSectionProps) {
   }
 
   async function runOnReceived(command: 'received.open' | 'received.reveal', transfer: TransferDto) {
+    if (command === 'received.open' && transfer.folder) {
+      setFolderOf(transfer)
+      return
+    }
+    if (command === 'received.open') {
+      const code = await openReceived(bridge, transfer.id)
+      if (code === 'received.confirmRisky') setOpening({ id: transfer.id, name: transfer.name ?? '' })
+      else if (code) onError(code)
+      return
+    }
     const result = await bridge.invoke(command, { id: transfer.id })
     if (!result.ok) onError(result.error.code)
+  }
+
+  async function confirmOpen() {
+    const target = opening!
+    setOpening(null)
+    const code = await openReceived(bridge, target.id, true)
+    if (code) onError(code)
   }
 
   async function confirmDelete() {
@@ -227,7 +252,11 @@ export default function TransfersSection(props: TransfersSectionProps) {
                   })}
                   onDetails={() => onDetails({ kind: 'transfer', id: transfer.id, name })}
                   picture={<Thumbnail bridge={bridge} kind="transfer" id={transfer.id} name={name} ready={finished} />}
-                  onMain={finished ? () => runOnReceived('received.open', transfer) : undefined}
+                  onMain={
+                    finished
+                      ? () => (transfer.folder ? setFolderOf(transfer) : onView({ kind: 'transfer', id: transfer.id, name }))
+                      : undefined
+                  }
                   // A running file is only cancelled with its own button; Delete never stops it by accident.
                   onRemove={() => {
                     if (finished) setDeleting({ id: transfer.id, name })
@@ -240,11 +269,20 @@ export default function TransfersSection(props: TransfersSectionProps) {
                           <button
                             type="button"
                             className="primary"
-                            onClick={() => runOnReceived('received.open', transfer)}
+                            onClick={() => onView({ kind: 'transfer', id: transfer.id, name })}
                             aria-label={t('received.openFor', { name })}
                           >
-                            <ExternalLink size={18} aria-hidden="true" />
+                            <Eye size={18} aria-hidden="true" />
                             {t('received.open')}
+                          </button>
+                          <button
+                            type="button"
+                            className="quiet"
+                            onClick={() => runOnReceived('received.open', transfer)}
+                            aria-label={t('received.openWithFor', { name })}
+                          >
+                            <ExternalLink size={18} aria-hidden="true" />
+                            {t('received.openWith')}
                           </button>
                           <button
                             type="button"
@@ -299,6 +337,12 @@ export default function TransfersSection(props: TransfersSectionProps) {
 
       {deleting && (
         <DeleteReceivedDialog name={deleting.name} onConfirm={confirmDelete} onCancel={() => setDeleting(null)} />
+      )}
+      {opening && (
+        <RiskyOpenDialog name={opening.name} onConfirm={confirmOpen} onCancel={() => setOpening(null)} />
+      )}
+      {folderOf && (
+        <ReceivedFolderDialog bridge={bridge} transfer={folderOf} onError={onError} onClose={() => setFolderOf(null)} />
       )}
     </section>
   )

@@ -79,8 +79,8 @@ public sealed class TwoDevicesTests : IAsyncLifetime
     private string CreateFile(string name, int sizeBytes)
     {
         var folder = Path.Combine(_folder, "originals");
-        Directory.CreateDirectory(folder);
         var path = Path.Combine(folder, name);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllBytes(path, RandomNumberGenerator.GetBytes(sizeBytes));
         return path;
     }
@@ -139,6 +139,119 @@ public sealed class TwoDevicesTests : IAsyncLifetime
         // Nothing unfinished is left behind, and the engine has let go of the transfer.
         Assert.Empty(Directory.GetDirectories(Path.Combine(receiverPaths.ReceivedRoot, ".in-progress")));
         Assert.Null(receiver.GetReceiveKey(transferId));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_speed_limit_on_either_side_slows_the_file_down_and_it_still_arrives_whole(bool limitTheSender)
+    {
+        // 600 KB at 100 KB a second takes about six seconds; without a limit it takes well under one.
+        var original = CreateFile("limited.bin", 600_000);
+        var (sender, _) = await StartDeviceAsync("sender");
+        var (receiver, receiverPaths) = await StartDeviceAsync("receiver");
+        await (limitTheSender ? sender.SetSpeedLimitsAsync(null, 100_000) : receiver.SetSpeedLimitsAsync(100_000, null));
+        var shareId = ShareId.New();
+        Assert.Equal(OfferState.Ready, await OfferAndWaitAsync(sender, shareId, original));
+        var invite = (await sender.GetInviteAsync(shareId))!;
+        var done = WhenFinished(receiver);
+        var transferId = TransferId.New();
+        Assert.True(await receiver.ReceiveAsync(transferId, invite));
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await receiver.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        Assert.True((await done.Task.WaitAsync(Timeout)).Done);
+
+        Assert.True(watch.Elapsed > TimeSpan.FromSeconds(3), $"It arrived in {watch.Elapsed}.");
+        Assert.Equal(Checksum(original), Checksum(Path.Combine(receiverPaths.ReceivedRoot, "limited.bin")));
+    }
+
+    private static async Task<OfferState> OfferItemsAndWaitAsync(MonoTorrentTransferEngine engine, ShareId id, string name, IReadOnlyList<ShareItem> items)
+    {
+        var outcome = new TaskCompletionSource<OfferState>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnChanged(ShareId changed, OfferState state)
+        {
+            if (changed == id && state != OfferState.Preparing)
+                outcome.TrySetResult(state);
+        }
+        engine.OfferChanged += OnChanged;
+        try
+        {
+            await engine.OfferItemsAsync(id, name, items);
+            return await outcome.Task.WaitAsync(Timeout);
+        }
+        finally { engine.OfferChanged -= OnChanged; }
+    }
+
+    [Fact]
+    public async Task Three_files_from_two_folders_offered_as_one_arrive_together_byte_identical()
+    {
+        var beach = CreateFile(Path.Combine("Phone", "beach.jpg"), 700_000);
+        var hill = CreateFile(Path.Combine("Phone", "trip", "hill.jpg"), 300_123);
+        var notes = CreateFile(Path.Combine("Documents", "notes.txt"), 5_000);
+        var before = new[] { beach, hill, notes }.Select(Checksum).ToArray();
+        ShareItem[] items =
+        [
+            new("beach.jpg", 700_000, beach),
+            new("trip/hill.jpg", 300_123, hill),
+            new("notes.txt", 5_000, notes),
+        ];
+        var (sender, senderPaths) = await StartDeviceAsync("sender");
+        var (receiver, receiverPaths) = await StartDeviceAsync("receiver");
+
+        var shareId = ShareId.New();
+        Assert.Equal(OfferState.Ready, await OfferItemsAndWaitAsync(sender, shareId, "Holiday", items));
+        var invite = (await sender.GetInviteAsync(shareId))!;
+        Assert.Equal("Holiday", receiver.DescribeInvite(invite)!.Name);
+        var done = WhenFinished(receiver);
+        var transferId = TransferId.New();
+        Assert.True(await receiver.ReceiveAsync(transferId, invite));
+        await receiver.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+
+        var result = await done.Task.WaitAsync(Timeout);
+
+        Assert.True(result.Done);
+        var received = Path.Combine(receiverPaths.ReceivedRoot, "Holiday");
+        Assert.Equal(before[0], Checksum(Path.Combine(received, "beach.jpg")));
+        Assert.Equal(before[1], Checksum(Path.Combine(received, "trip", "hill.jpg")));
+        Assert.Equal(before[2], Checksum(Path.Combine(received, "notes.txt")));
+        // The originals are read where they are, never moved or changed, and nothing is written beside them.
+        Assert.Equal(before, new[] { beach, hill, notes }.Select(Checksum).ToArray());
+        Assert.False(Directory.Exists(Path.Combine(senderPaths.EngineRoot, "shares", shareId.ToString())));
+    }
+
+    [Fact]
+    public async Task Several_files_offered_again_after_a_restart_are_ready_from_the_description_kept()
+    {
+        var one = CreateFile(Path.Combine("A", "one.bin"), 100_000);
+        var two = CreateFile(Path.Combine("B", "two.bin"), 50_000);
+        ShareItem[] items = [new("one.bin", 100_000, one), new("two.bin", 50_000, two)];
+        var (sender, _) = await StartDeviceAsync("sender");
+        var shareId = ShareId.New();
+        Assert.Equal(OfferState.Ready, await OfferItemsAndWaitAsync(sender, shareId, "Both", items));
+        var invite = await sender.GetInviteAsync(shareId);
+
+        await sender.StopOfferingAsync(shareId);
+        Assert.Equal(OfferState.Ready, await OfferItemsAndWaitAsync(sender, shareId, "Both", items));
+
+        Assert.Equal(invite, await sender.GetInviteAsync(shareId));
+    }
+
+    [Fact]
+    public async Task Several_files_whose_place_the_engine_would_use_is_taken_are_not_offered()
+    {
+        var one = CreateFile(Path.Combine("A", "one.bin"), 100_000);
+        var two = CreateFile(Path.Combine("B", "two.bin"), 50_000);
+        ShareItem[] items = [new("one.bin", 100_000, one), new("two.bin", 50_000, two)];
+        var (sender, senderPaths) = await StartDeviceAsync("sender");
+        var shareId = ShareId.New();
+        var taken = Path.Combine(senderPaths.EngineRoot, "shares", shareId.ToString(), "Both", "one.bin");
+        Directory.CreateDirectory(Path.GetDirectoryName(taken)!);
+        File.WriteAllText(taken, "something else");
+
+        Assert.Equal(OfferState.Failed, await OfferItemsAndWaitAsync(sender, shareId, "Both", items));
+        Assert.Equal("something else", File.ReadAllText(taken));
+        Assert.Equal(100_000, new FileInfo(one).Length);
     }
 
     [Fact]

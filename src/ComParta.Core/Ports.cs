@@ -28,6 +28,12 @@ public interface ISystemInfo
 {
     /// <summary>The language the operating system shows, as a tag like "pt-BR".</summary>
     string UiLanguage { get; }
+
+    /// <summary>The app's version, as the About section shows it; empty when not known.</summary>
+    string AppVersion => "";
+
+    /// <summary>The operating system's name and version, for a support report; empty when not known.</summary>
+    string SystemVersion => "";
 }
 
 public enum OfferState { Preparing, Ready, Failed }
@@ -112,6 +118,12 @@ public interface ITransferEngine
 
     /// <summary>Starts offering the file in place. Returns at once; <see cref="OfferChanged"/> reports the outcome.</summary>
     Task OfferAsync(ShareId id, string filePath, CancellationToken ct = default);
+    /// <summary>
+    /// Offers several files as one, under <paramref name="name"/>, each read where it is and placed
+    /// at its relative path on the other computer (AD-19). Like <see cref="OfferAsync"/> otherwise.
+    /// </summary>
+    Task OfferItemsAsync(ShareId id, string name, IReadOnlyList<ShareItem> items, CancellationToken ct = default) =>
+        OfferAsync(id, items[0].ContentRef, ct);
     /// <summary>Stops offering and forgets the share. Never touches the file.</summary>
     Task StopOfferingAsync(ShareId id, CancellationToken ct = default);
     /// <summary>Stops sending one shared file; a global continue leaves it paused. Never touches the file.</summary>
@@ -128,6 +140,11 @@ public interface ITransferEngine
     /// to it, now and from then on, and every invite names it first. Stopping a share removes it there.
     /// </summary>
     Task SetHelperAsync(HelperComputer? helper, CancellationToken ct = default);
+    /// <summary>
+    /// The most ComParta as a whole receives and sends each second, in bytes; null for no limit.
+    /// Holds from now on, for every file, until changed.
+    /// </summary>
+    Task SetSpeedLimitsAsync(long? receiveBytesPerSecond, long? sendBytesPerSecond, CancellationToken ct = default) => Task.CompletedTask;
     /// <summary>
     /// The invite text for a share that is ready, or null when it is not. It is a link the person
     /// can send as it is, and that other apps of the engine's kind open too (AD-16, amended).
@@ -147,17 +164,23 @@ public interface ITransferEngine
     InviteSummary? DescribeInvite(string inviteText);
     /// <summary>The content key of a transfer the engine knows, or null.</summary>
     string? GetReceiveKey(TransferId id);
-    /// <summary>Starts receiving into the Received root. Returns false when the text is not an invite.</summary>
-    Task<bool> ReceiveAsync(TransferId id, string inviteText, CancellationToken ct = default);
-    /// <summary>Continues a transfer started in an earlier run. Returns false when the engine no longer knows it.</summary>
-    Task<bool> ResumeReceivingAsync(TransferId id, CancellationToken ct = default);
+    /// <summary>
+    /// Starts receiving into <paramref name="folder"/>, the Received root the person chose, or the usual
+    /// one when null (AD-6). Returns false when the text is not an invite.
+    /// </summary>
+    Task<bool> ReceiveAsync(TransferId id, string inviteText, string? folder = null, CancellationToken ct = default);
+    /// <summary>
+    /// Continues a transfer started in an earlier run, in the folder it started in. Returns false when
+    /// the engine no longer knows it.
+    /// </summary>
+    Task<bool> ResumeReceivingAsync(TransferId id, string? folder = null, CancellationToken ct = default);
     /// <summary>Stops a transfer and deletes its unfinished data. A finished file is kept.</summary>
     Task StopReceivingAsync(TransferId id, CancellationToken ct = default);
 
     /// <summary>A stable content key for the bytes of a download file, or null when they are not one.</summary>
     string? ReadDownloadFileKey(byte[] content);
-    /// <summary>Starts receiving what a download file describes into the Received root. False when it is not one.</summary>
-    Task<bool> ReceiveFromFileAsync(TransferId id, byte[] content, CancellationToken ct = default);
+    /// <summary>Starts receiving what a download file describes into <paramref name="folder"/>, as <see cref="ReceiveAsync"/>. False when it is not one.</summary>
+    Task<bool> ReceiveFromFileAsync(TransferId id, byte[] content, string? folder = null, CancellationToken ct = default);
     /// <summary>Stops moving bytes for a transfer but keeps everything needed to continue it.</summary>
     Task PauseReceivingAsync(TransferId id, CancellationToken ct = default);
     /// <summary>Continues a paused transfer, or one that stopped because the disk was full.</summary>
@@ -170,6 +193,13 @@ public interface IFilePicker
     Task<string?> PickFileAsync(CancellationToken ct = default);
     /// <summary>Opens the native file dialog showing only download files (AD-21).</summary>
     Task<string?> PickDownloadFileAsync(CancellationToken ct = default);
+
+    /// <summary>The file dialog where several files can be chosen at once (AD-19); empty when cancelled.</summary>
+    async Task<IReadOnlyList<string>> PickFilesAsync(CancellationToken ct = default) =>
+        await PickFileAsync(ct) is { } path ? [path] : [];
+
+    /// <summary>The native folder dialog (AD-7, amended); null when cancelled.</summary>
+    Task<string?> PickFolderAsync(CancellationToken ct = default) => Task.FromResult<string?>(null);
 }
 
 public interface IClipboard
@@ -182,8 +212,11 @@ public interface IClipboard
 /// <summary>How much room there is where received files are written.</summary>
 public interface IStorageInfo
 {
-    /// <summary>Free bytes on the drive that holds the Received root, or null when it cannot be told.</summary>
-    long? GetReceivedFreeBytes();
+    /// <summary>
+    /// Free bytes on the drive that holds <paramref name="folder"/>, a Received root the person chose,
+    /// or the usual one when null; null when it cannot be told.
+    /// </summary>
+    long? GetReceivedFreeBytes(string? folder);
 }
 
 /// <summary>The operating system's firewall, as far as it concerns this app (AD-15).</summary>
@@ -198,7 +231,8 @@ public interface IFirewall
 /// <summary>Shows received content to the person with the platform's own file browser.</summary>
 public interface IContentOpener
 {
-    Task OpenReceivedFolderAsync(CancellationToken ct = default);
+    /// <summary>Shows a Received root in the file browser: the one the person chose, or the usual one when null.</summary>
+    Task OpenReceivedFolderAsync(string? folder, CancellationToken ct = default);
     /// <summary>Opens one received file with the program Windows uses for it; false when that failed.</summary>
     Task<bool> OpenAsync(string path, CancellationToken ct = default);
     /// <summary>Shows the folder with this one file selected.</summary>
@@ -267,6 +301,14 @@ public interface IFileSystem
     void WriteNewFile(string path, byte[] content);
     /// <summary>Opens a file for reading only, while others may still read, write or delete it; throws when that fails.</summary>
     Stream OpenRead(string path);
+
+    bool FolderExists(string path) => false;
+
+    /// <summary>
+    /// The files in a folder and the folders inside it, as paths relative to it, in a stable order;
+    /// hidden and system files and links to elsewhere are left out. Throws when the folder cannot be read.
+    /// </summary>
+    IReadOnlyList<string> ListFiles(string folder) => [];
 }
 
 public interface IAppPaths
@@ -274,7 +316,10 @@ public interface IAppPaths
     string DatabasePath { get; }
     /// <summary>Written only by the engine adapter (AD-10).</summary>
     string EngineRoot { get; }
-    /// <summary>The single place received content is written (AD-6).</summary>
+    /// <summary>
+    /// The usual place received content is written (AD-6), until the person chooses another folder in
+    /// Settings (<see cref="UseCases.ReceivedFolder"/>).
+    /// </summary>
     string ReceivedRoot { get; }
     string LogsRoot { get; }
     /// <summary>Where files the person asks to save go, such as a download file: their Downloads folder.</summary>

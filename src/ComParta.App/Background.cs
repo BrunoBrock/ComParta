@@ -36,8 +36,26 @@ public sealed class WindowsPresence : IBackgroundPresence, IDisposable
 
 	public void StartWithSystem(bool on)
 	{
+		if (Packaged.IsPackaged)
+		{
+			_ = SetStartupTaskAsync(on);
+			return;
+		}
 		if (!StartupEntry.Set(_executable, on))
 			_log(new InvalidOperationException($"Could not {(on ? "add" : "remove")} the start-up entry."));
+	}
+
+	private async Task SetStartupTaskAsync(bool on)
+	{
+		try
+		{
+			if (!await Packaged.SetStartAtSignInAsync(on))
+				_log(new InvalidOperationException("Windows keeps the start-up task off."));
+		}
+		catch (Exception e)
+		{
+			_log(e);
+		}
 	}
 
 	public void Quit() => _quit();

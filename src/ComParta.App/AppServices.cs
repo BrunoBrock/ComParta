@@ -53,12 +53,21 @@ public sealed class AppServices
 		try
 		{
 			Directory.CreateDirectory(_paths.ReceivedRoot);
+			// The first packaged run brings over what the pilot build kept (epic 5 story 5).
+			if (Packaged.IsPackaged && AppPaths.IsUsualRoot)
+			{
+				try { PilotData.Import(AppPaths.PilotRoot(), AppPaths.DataRoot(), SqliteStore.CopyDatabase, Log); }
+				catch (Exception e) { Log(e); }
+			}
 			var store = await SqliteStore.OpenAsync(_paths.DatabasePath);
 			_engine = new MonoTorrentTransferEngine(_paths);
 			var shares = new ShareUseCases(store, _engine, new NativeFilePicker(), new LocalFileSystem(), paths: _paths);
+			// Where received files go: the usual folder, or the one chosen in Settings (epic 12 story 2).
+			var receivedFolder = new ReceivedFolder(store, _paths, new NativeFilePicker(), new LocalFileSystem());
 			var transfers = new TransferUseCases(
-				store, _engine, picker: new NativeFilePicker(), files: new LocalFileSystem(), storage: new LocalStorageInfo(_paths));
-			var settings = new SettingsUseCases(store, new SystemInfo(), _engine);
+				store, _engine, picker: new NativeFilePicker(), files: new LocalFileSystem(), storage: new LocalStorageInfo(_paths),
+				received: receivedFolder);
+			var settings = new SettingsUseCases(store, new SystemInfo(), _engine, receivedFolder);
 			var executable = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "ComParta.exe");
 			var connection = new ConnectionUseCases(_engine, new WindowsFirewall(executable));
 			var activity = new ActivityUseCases(_engine, store);
@@ -79,11 +88,14 @@ public sealed class AppServices
 			var background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, _presence);
 			var router = new BridgeRouter(
 				shares, transfers, settings, connection, Opened, activity, received, new NativeClipboard(), opener, thumbnails, Dropped,
-				sending, notifications, background, new MediaUseCases(shares, received, new LocalFileSystem()));
+				sending, notifications, background, new MediaUseCases(shares, received, new LocalFileSystem()),
+				new SupportUseCases(store, new SystemInfo(), settings, shares, transfers, connection));
 			router.CommandFailed += (_, e) => Log(e);
 
-			// Written at every start so a clicked link finds the app even after its folder moved.
-			LinkScheme.Register(executable);
+			// Written at every start so a clicked link finds the app even after its folder moved. The
+			// package declares the link itself.
+			if (!Packaged.IsPackaged)
+				LinkScheme.Register(executable);
 
 			await _engine.StartAsync(SharingPolicy.Default);
 			// The public servers the person named reach the engine before any file is shared again.

@@ -16,6 +16,7 @@ const arrived: TransferDto = {
   bytesPerSecond: 0,
   secondsLeft: null,
   neededBytes: null,
+  risky: false, folder: false,
 }
 
 describe('using the files with the keyboard', () => {
@@ -61,13 +62,17 @@ describe('using the files with the keyboard', () => {
     await waitFor(() => expect(bridge.copiedInvite).toMatch(/wants to send you/))
   })
 
-  it('opens a received file on a double-click and asks before deleting it with Delete', async () => {
+  it('opens a received file inside ComParta on a double-click and asks before deleting it with Delete', async () => {
     const { bridge, user } = setup({ transfers: [arrived] })
     await goToReceived(user)
     await within(transfersSection()).findByText(arrived.name!, { selector: '.visually-hidden, .name-start' })
 
     await user.dblClick(item(transfersSection(), arrived.name!))
-    expect(bridge.openedReceived).toEqual(['t1'])
+    // A document cannot be played here, so the viewer offers its folder instead.
+    const viewer = await screen.findByRole('dialog', { name: arrived.name! })
+    expect(await within(viewer).findByRole('alert')).toHaveTextContent(en['error.media.notPlayable'])
+    await user.click(within(viewer).getByRole('button', { name: en['viewer.cancel'] }))
+    expect(bridge.openedReceived).toEqual([])
 
     item(transfersSection(), arrived.name!).focus()
     await user.keyboard('{Delete}')
@@ -92,7 +97,7 @@ describe('the main action in the details', () => {
     await user.click(await screen.findByRole('button', { name: `Details of ${arrived.name}` }))
     const details = await screen.findByRole('dialog', { name: `Details of “${arrived.name}”` })
 
-    await user.click(await within(details).findByRole('button', { name: en['received.open'] }))
+    await user.click(await within(details).findByRole('button', { name: en['received.openWith'] }))
     await user.click(within(details).getByRole('button', { name: en['received.reveal'] }))
 
     expect(bridge.openedReceived).toEqual(['t1'])

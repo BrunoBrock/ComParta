@@ -43,7 +43,8 @@ public sealed class BridgeRouterTests
         _router = new BridgeRouter(shares, transfers, settings, connection, _opened, activity, received, _shell, _shell, thumbnails, _dropped,
             sending, _notifications,
             _background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, _settings, _notifications, _presence, _clock),
-            new MediaUseCases(shares, received, _files));
+            new MediaUseCases(shares, received, _files),
+            new SupportUseCases(_settings, new FakeSystem("pt-BR", "1.4.2"), settings, shares, transfers, connection, _clock));
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
         _picker.NextPick = Video;
@@ -56,7 +57,7 @@ public sealed class BridgeRouterTests
         public Task<string?> GetTextAsync(CancellationToken ct = default) => Task.FromResult(OnClipboard);
         public int Opened { get; private set; }
         public Task SetTextAsync(string text, CancellationToken ct = default) { Copied = text; return Task.CompletedTask; }
-        public Task OpenReceivedFolderAsync(CancellationToken ct = default) { Opened++; return Task.CompletedTask; }
+        public Task OpenReceivedFolderAsync(string? folder, CancellationToken ct = default) { Opened++; return Task.CompletedTask; }
         public Task<bool> OpenAsync(string path, CancellationToken ct = default) => Task.FromResult(true);
         public List<string> Revealed { get; } = [];
         public Task RevealAsync(string path, CancellationToken ct = default) { Revealed.Add(path); return Task.CompletedTask; }
@@ -72,12 +73,28 @@ public sealed class BridgeRouterTests
     }
 
     [Fact]
+    public async Task The_support_report_is_copied_and_lists_the_problems_commands_answered_with()
+    {
+        Assert.Equal("share.notFound", ErrorCode(await InvokeAsync(Commands.SharesRemove, new { id = "not-an-id" })));
+        Assert.Equal("unexpected", ErrorCode(await InvokeAsync("no.such.command")));
+
+        var result = await InvokeAsync(Commands.SupportReport);
+
+        var report = result.GetProperty("value").GetString()!;
+        Assert.Equal(report, _shell.Copied);
+        Assert.Contains("Version: 1.4.2\n", report);
+        Assert.EndsWith("2026-10-12 10:00 UTC  share.notFound\n2026-10-12 10:00 UTC  unexpected\n", report);
+    }
+
+    [Fact]
     public async Task Add_list_and_remove_a_share()
     {
         var added = await InvokeAsync(Commands.SharesAdd);
         Assert.True(added.GetProperty("ok").GetBoolean());
-        var share = added.GetProperty("value");
+        var share = added.GetProperty("value").GetProperty("share");
+        Assert.Equal(0, added.GetProperty("value").GetProperty("filesToName").GetInt32());
         Assert.Equal("birthday.mp4", share.GetProperty("name").GetString());
+        Assert.Equal((1, "file"), (share.GetProperty("itemCount").GetInt32(), share.GetProperty("kind").GetString()));
         Assert.Equal(5_000, share.GetProperty("sizeBytes").GetInt64());
 
         var listed = (await InvokeAsync(Commands.SharesList)).GetProperty("value");
@@ -91,6 +108,31 @@ public sealed class BridgeRouterTests
     }
 
     [Fact]
+    public async Task Several_files_are_named_then_shared_and_a_folder_is_shared_whole_with_no_path_on_the_bridge()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "Albums", "Party");
+        string[] files = [Path.Combine(folder, "a.jpg"), Path.Combine(folder, "b.jpg")];
+        foreach (var file in files)
+            _files.Files[file] = 10;
+        _picker.NextPicks = files;
+
+        var picked = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value");
+        Assert.Equal(2, picked.GetProperty("filesToName").GetInt32());
+        Assert.Equal(ErrorCodes.ShareNameInvalid, ErrorCode(await InvokeAsync(Commands.SharesAddPicked, new { name = "a:b" })));
+        var named = (await InvokeAsync(Commands.SharesAddPicked, new { name = "Party" })).GetProperty("value");
+        Assert.Equal(("Party", 2, "collection"), (named.GetProperty("name").GetString(), named.GetProperty("itemCount").GetInt32(), named.GetProperty("kind").GetString()));
+
+        _picker.NextFolder = Path.Combine(Path.GetTempPath(), "Albums");
+        var whole = (await InvokeAsync(Commands.SharesAddFolder)).GetProperty("value");
+        Assert.Equal(("Albums", 2, "folder"), (whole.GetProperty("name").GetString(), whole.GetProperty("itemCount").GetInt32(), whole.GetProperty("kind").GetString()));
+        Assert.DoesNotContain(Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar), (await InvokeAsync(Commands.SharesList)).GetRawText().Replace("\\\\", "\\"));
+
+        _picker.NextFolder = Path.Combine(Path.GetTempPath(), "Nothing");
+        _files.EmptyFolders.Add(_picker.NextFolder);
+        Assert.Equal(ErrorCodes.ShareFolderEmpty, ErrorCode(await InvokeAsync(Commands.SharesAddFolder)));
+    }
+
+    [Fact]
     public async Task Cancelling_the_file_dialog_is_ok_with_no_value()
     {
         _picker.NextPick = null;
@@ -98,7 +140,8 @@ public sealed class BridgeRouterTests
         var result = await InvokeAsync(Commands.SharesAdd);
 
         Assert.True(result.GetProperty("ok").GetBoolean());
-        Assert.False(result.TryGetProperty("value", out var value) && value.ValueKind != JsonValueKind.Null);
+        Assert.Equal(JsonValueKind.Null, result.GetProperty("value").GetProperty("share").ValueKind);
+        Assert.Equal(0, result.GetProperty("value").GetProperty("filesToName").GetInt32());
     }
 
     [Fact]
@@ -126,7 +169,7 @@ public sealed class BridgeRouterTests
     [Fact]
     public async Task Copying_an_invite_puts_it_on_the_clipboard()
     {
-        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("share").GetProperty("id").GetString();
 
         var result = await InvokeAsync(Commands.SharesCopyInvite, new { id, message = "Paulo sends you a file.\n{link}\nOpen it in ComParta." });
 
@@ -138,7 +181,7 @@ public sealed class BridgeRouterTests
     [Fact]
     public async Task Without_a_message_only_the_link_is_copied()
     {
-        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("share").GetProperty("id").GetString();
 
         await InvokeAsync(Commands.SharesCopyInvite, new { id });
 
@@ -148,7 +191,7 @@ public sealed class BridgeRouterTests
     [Fact]
     public async Task Saving_a_download_file_puts_it_in_Downloads_and_shows_it_there()
     {
-        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("share").GetProperty("id").GetString();
 
         var first = await InvokeAsync(Commands.SharesSaveDownloadFile, new { id });
         var second = await InvokeAsync(Commands.SharesSaveDownloadFile, new { id });
@@ -164,7 +207,7 @@ public sealed class BridgeRouterTests
     [Fact]
     public async Task A_download_file_that_cannot_be_saved_says_so()
     {
-        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("share").GetProperty("id").GetString();
         _files.Locked.Add(Path.Combine(_paths.SavedRoot, "birthday.mp4.download"));
 
         Assert.Equal(ErrorCodes.FileSaveFailed, ErrorCode(await InvokeAsync(Commands.SharesSaveDownloadFile, new { id })));
@@ -363,7 +406,7 @@ public sealed class BridgeRouterTests
     [Fact]
     public async Task A_shared_video_has_a_thumbnail_as_a_data_url_and_no_path_crosses_the_bridge()
     {
-        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("share").GetProperty("id").GetString();
 
         var picture = await InvokeAsync(Commands.ThumbnailsGet, new { kind = "share", id, size = 96 });
 
@@ -380,7 +423,7 @@ public sealed class BridgeRouterTests
         MediaUseCasesTests.Heads.Mp4.CopyTo(content, 0);
         content[4_999] = 42;
         _files.Contents[Video] = content;
-        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("share").GetProperty("id").GetString();
 
         var opened = (await InvokeAsync(Commands.MediaOpen, new { kind = "share", id })).GetProperty("value");
 
@@ -406,9 +449,12 @@ public sealed class BridgeRouterTests
         _files.Files[program] = 100;
         _files.Contents[program] = [.. "MZ"u8, 0, 0];
         _picker.NextPick = program;
-        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString();
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("share").GetProperty("id").GetString();
 
         Assert.Equal(ErrorCodes.MediaNotPlayable, ErrorCode(await InvokeAsync(Commands.MediaOpen, new { kind = "share", id })));
+        Assert.True((await InvokeAsync(Commands.SharesReveal, new { id })).GetProperty("ok").GetBoolean());
+        Assert.Equal([program], _shell.Revealed);
+        Assert.Equal(ErrorCodes.ShareNotFound, ErrorCode(await InvokeAsync(Commands.SharesReveal, new { id = "nope" })));
         Assert.Equal(ErrorCodes.ShareNotFound, ErrorCode(await InvokeAsync(Commands.MediaOpen, new { kind = "share", id = "nope" })));
         Assert.Equal(ErrorCodes.TransferNotFound, ErrorCode(await InvokeAsync(Commands.MediaOpen, new { kind = "transfer", id = TransferId.New().ToString() })));
     }
@@ -440,6 +486,52 @@ public sealed class BridgeRouterTests
         Assert.Equal(ErrorCodes.SettingsInvalid, ErrorCode(await InvokeAsync(Commands.SettingsSet, new { sendStepsSeen = 4 })));
         Assert.Equal(ErrorCodes.SettingsInvalid, ErrorCode(await InvokeAsync(Commands.SettingsSet, new { sendStepsSeen = -1 })));
         Assert.Equal(2, (await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("sendStepsSeen").GetInt32());
+    }
+
+    [Fact]
+    public async Task Your_name_and_colors_are_stored_and_odd_ones_refused()
+    {
+        var value = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.Equal(JsonValueKind.Null, value.GetProperty("yourName").ValueKind);
+        Assert.Equal(JsonValueKind.Null, value.GetProperty("theme").ValueKind);
+
+        Assert.True((await InvokeAsync(Commands.SettingsSet, new { yourName = "  Ana Maria ", theme = "dark" })).GetProperty("ok").GetBoolean());
+
+        value = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.Equal(("Ana Maria", "dark"), (value.GetProperty("yourName").GetString(), value.GetProperty("theme").GetString()));
+        foreach (var odd in new object[]
+        {
+            new { yourName = new string('a', SettingsUseCases.MaxNameLength + 1) },
+            new { yourName = "line\nbreak" },
+            new { theme = "blue" },
+        })
+            Assert.Equal(ErrorCodes.SettingsInvalid, ErrorCode(await InvokeAsync(Commands.SettingsSet, odd)));
+        Assert.Equal("Ana Maria", (await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("yourName").GetString());
+
+        // A blank name is no name: invites say "Someone" again.
+        Assert.True((await InvokeAsync(Commands.SettingsSet, new { yourName = "   " })).GetProperty("ok").GetBoolean());
+        value = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.Equal(JsonValueKind.Null, value.GetProperty("yourName").ValueKind);
+        Assert.Equal(JsonValueKind.Null, value.GetProperty("theme").ValueKind);
+    }
+
+    [Fact]
+    public async Task The_welcome_is_not_done_at_first_and_stays_done_once_it_is()
+    {
+        Assert.False((await InvokeAsync(Commands.SettingsGet)).GetProperty("value").GetProperty("welcomeDone").GetBoolean());
+
+        Assert.True((await InvokeAsync(Commands.SettingsSet, new { welcomeDone = true, yourName = "Ana" })).GetProperty("ok").GetBoolean());
+
+        var value = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.True(value.GetProperty("welcomeDone").GetBoolean());
+        Assert.Equal("Ana", value.GetProperty("yourName").GetString());
+    }
+
+    [Fact]
+    public async Task The_settings_say_which_version_this_is()
+    {
+        var settings = new SettingsUseCases(new FakeSettingsRepository(), new FakeSystem("en", "1.4.2"));
+        Assert.Equal("1.4.2", (await settings.GetAsync()).Version);
     }
 
     [Fact]
@@ -562,6 +654,41 @@ public sealed class BridgeRouterTests
     }
 
     [Fact]
+    public async Task Speed_limits_are_stored_and_reach_the_engine_only_when_they_change()
+    {
+        var set = (object args) => InvokeAsync(Commands.SettingsSet, args);
+
+        Assert.True((await set(new { receiveLimit = 500_000, sendLimit = 1_000_000 })).GetProperty("ok").GetBoolean());
+        Assert.Equal((500_000L, 1_000_000L), ((long, long))(_engine.SpeedLimits.Receive!.Value, _engine.SpeedLimits.Send!.Value));
+        var stored = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.Equal((500_000, 1_000_000), (stored.GetProperty("receiveLimit").GetInt64(), stored.GetProperty("sendLimit").GetInt64()));
+
+        await set(new { receiveLimit = 500_000, sendLimit = 1_000_000, language = "en" });
+        Assert.Equal(1, _engine.SpeedLimitCalls);
+
+        foreach (var wrong in new object[] { new { receiveLimit = 9_999 }, new { sendLimit = 0 }, new { sendLimit = -5 }, new { receiveLimit = 2_000_000_000 } })
+            Assert.Equal("settings.invalid", ErrorCode(await set(wrong)));
+        Assert.Equal(1, _engine.SpeedLimitCalls);
+
+        // Left out means no limit again.
+        await set(new { language = "en" });
+        Assert.Equal((null, null), _engine.SpeedLimits);
+        stored = (await InvokeAsync(Commands.SettingsGet)).GetProperty("value");
+        Assert.Equal(JsonValueKind.Null, stored.GetProperty("receiveLimit").ValueKind);
+    }
+
+    [Fact]
+    public async Task Stored_speed_limits_reach_the_engine_at_start()
+    {
+        await new SettingsUseCases(_settings, new FakeSystem("en")).SetAsync(null, null, null, receiveLimit: 250_000);
+        var engine = new FakeEngine();
+
+        await new SettingsUseCases(_settings, new FakeSystem("en"), engine).StartAsync();
+
+        Assert.Equal((250_000L, (long?)null), engine.SpeedLimits);
+    }
+
+    [Fact]
     public async Task Stored_public_servers_reach_the_engine_at_start()
     {
         await new SettingsUseCases(_settings, new FakeSystem("en")).SetAsync(null, null, null, publicServers: ["udp://open.example.org:6969"]);
@@ -637,7 +764,7 @@ public sealed class BridgeRouterTests
     [Fact]
     public async Task A_share_says_how_many_devices_are_getting_it_and_how_many_finished()
     {
-        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString()!;
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("share").GetProperty("id").GetString()!;
         var idle = (await InvokeAsync(Commands.SharesList)).GetProperty("value")[0];
         Assert.Equal("idle", idle.GetProperty("activity").GetString());
         Assert.Equal(JsonValueKind.Null, idle.GetProperty("secondsLeft").ValueKind);
@@ -707,7 +834,7 @@ public sealed class BridgeRouterTests
     [Fact]
     public async Task Each_moving_file_has_its_speeds_in_the_speed_report()
     {
-        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString()!;
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("share").GetProperty("id").GetString()!;
         ShareId.TryParse(id, out var shareId);
 
         _engine.Move(EngineActivity.None with
@@ -726,7 +853,7 @@ public sealed class BridgeRouterTests
     [Fact]
     public async Task A_shared_file_can_be_paused_and_continued()
     {
-        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString()!;
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("share").GetProperty("id").GetString()!;
 
         Assert.True((await InvokeAsync(Commands.SharesPause, new { id })).GetProperty("ok").GetBoolean());
         var shares = _events.Last(e => e.GetProperty("event").GetString() == Events.SharesChanged).GetProperty("payload");
@@ -746,7 +873,7 @@ public sealed class BridgeRouterTests
         Exception? logged = null;
         _router.CommandFailed += (_, e) => logged = e;
         _engine.OnStopOffering = () => throw new InvalidOperationException("router gone");
-        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString()!;
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("share").GetProperty("id").GetString()!;
 
         Assert.Equal(ErrorCodes.Unexpected, ErrorCode(await InvokeAsync(Commands.SharesRemove, new { id })));
         Assert.Equal("router gone", logged?.Message);
@@ -755,7 +882,7 @@ public sealed class BridgeRouterTests
     [Fact]
     public async Task A_shared_file_has_details_with_its_folder_and_what_it_sends()
     {
-        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("id").GetString()!;
+        var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("share").GetProperty("id").GetString()!;
         _engine.Activity = EngineActivity.None with
         {
             SendingBytesPerSecond = 900,

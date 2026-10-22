@@ -22,7 +22,7 @@ public sealed partial class MonoTorrentTransferEngine
     public string? GetReceiveKey(TransferId id) =>
         _incoming.TryGetValue(id, out var incoming) ? KeyOf(incoming.Manager.InfoHashes) : null;
 
-    public async Task<bool> ReceiveAsync(TransferId id, string inviteText, CancellationToken ct = default)
+    public async Task<bool> ReceiveAsync(TransferId id, string inviteText, string? folder = null, CancellationToken ct = default)
     {
         if (_engine is null || !TryReadInvite(inviteText, out var link, out var hints))
             return false;
@@ -30,7 +30,7 @@ public sealed partial class MonoTorrentTransferEngine
         var invitePath = InvitePath(id);
         var cleaned = link.ToV1String() + string.Concat(hints.Select(h => $"&{AddressHint}={h}"));
         await File.WriteAllTextAsync(invitePath, cleaned, ct);
-        if (await StartIncomingAsync(id, link, hints))
+        if (await StartIncomingAsync(id, folder, link, hints))
             return true;
         DeleteQuietly(invitePath);
         return false;
@@ -39,14 +39,14 @@ public sealed partial class MonoTorrentTransferEngine
     public string? ReadDownloadFileKey(byte[] content) =>
         TryLoadDownloadFile(content, out var torrent) ? KeyOf(torrent.InfoHashes) : null;
 
-    public async Task<bool> ReceiveFromFileAsync(TransferId id, byte[] content, CancellationToken ct = default)
+    public async Task<bool> ReceiveFromFileAsync(TransferId id, byte[] content, string? folder = null, CancellationToken ct = default)
     {
         if (_engine is null || !TryLoadDownloadFile(content, out var torrent))
             return false;
 
         var filePath = DownloadFilePath(id);
         await File.WriteAllBytesAsync(filePath, content, ct);
-        if (await StartIncomingAsync(id, torrent))
+        if (await StartIncomingAsync(id, folder, torrent))
             return true;
         DeleteQuietly(filePath);
         return false;
@@ -63,7 +63,7 @@ public sealed partial class MonoTorrentTransferEngine
             return false;
         try
         {
-            return Torrent.TryLoad(content, out torrent!) && torrent is not null;
+            return Torrent.TryLoad(content, out torrent!) && torrent is not null && torrent.Files.Count <= MaxFiles;
         }
         catch (Exception)
         {
@@ -101,7 +101,7 @@ public sealed partial class MonoTorrentTransferEngine
         }
     }
 
-    public async Task<bool> ResumeReceivingAsync(TransferId id, CancellationToken ct = default)
+    public async Task<bool> ResumeReceivingAsync(TransferId id, string? folder = null, CancellationToken ct = default)
     {
         if (_engine is null)
             return false;
@@ -109,34 +109,39 @@ public sealed partial class MonoTorrentTransferEngine
         if (File.Exists(filePath))
         {
             return TryLoadDownloadFile(await File.ReadAllBytesAsync(filePath, ct), out var torrent)
-                && await StartIncomingAsync(id, torrent);
+                && await StartIncomingAsync(id, folder, torrent);
         }
         var invitePath = InvitePath(id);
         if (!File.Exists(invitePath))
             return false;
         return TryReadInvite(await File.ReadAllTextAsync(invitePath, ct), out var link, out var hints)
-            && await StartIncomingAsync(id, link, hints);
+            && await StartIncomingAsync(id, folder, link, hints);
     }
 
-    private Task<bool> StartIncomingAsync(TransferId id, MagnetLink link, IReadOnlyList<IPEndPoint> hints) =>
-        StartIncomingAsync(id, hints, (engine, folder) =>
+    private Task<bool> StartIncomingAsync(TransferId id, string? root, MagnetLink link, IReadOnlyList<IPEndPoint> hints) =>
+        StartIncomingAsync(id, root, hints, (engine, folder) =>
             engine.AddAsync(link, folder, ToTorrentSettings(publicDownload: link.AnnounceUrls.Count > 0)));
 
-    private Task<bool> StartIncomingAsync(TransferId id, Torrent torrent) =>
-        StartIncomingAsync(id, [], (engine, folder) => engine.AddAsync(torrent, folder, ToTorrentSettings(publicDownload: true)));
+    private Task<bool> StartIncomingAsync(TransferId id, string? root, Torrent torrent) =>
+        StartIncomingAsync(id, root, [], (engine, folder) => engine.AddAsync(torrent, folder, ToTorrentSettings(publicDownload: true)));
 
+    /// <param name="root">The Received root the person chose for this transfer, or null for the usual one.</param>
     private async Task<bool> StartIncomingAsync(
-        TransferId id, IReadOnlyList<IPEndPoint> hints, Func<ClientEngine, string, Task<TorrentManager>> add)
+        TransferId id, string? root, IReadOnlyList<IPEndPoint> hints, Func<ClientEngine, string, Task<TorrentManager>> add)
     {
-        var folder = Path.Combine(_inProgressRoot, id.ToString());
+        // Unfinished data lives under the same Received root, so nothing received is written elsewhere
+        // (AD-6) and the finished file only changes its name, even on another drive.
+        root = Path.GetFullPath(root ?? _usualReceivedRoot);
+        var inProgress = Path.Combine(root, ".in-progress");
+        var folder = Path.Combine(inProgress, id.ToString());
         try
         {
             Directory.CreateDirectory(folder);
-            File.SetAttributes(_inProgressRoot, File.GetAttributes(_inProgressRoot) | FileAttributes.Hidden);
+            File.SetAttributes(inProgress, File.GetAttributes(inProgress) | FileAttributes.Hidden);
 
             var manager = await add(_engine!, folder);
             WatchIncoming(manager);
-            var incoming = new Incoming(id, manager, folder, hints);
+            var incoming = new Incoming(id, manager, root, folder, hints);
             _incoming[id] = incoming;
             manager.TorrentStateChanged += (_, _) => CheckContained(incoming);
             // While receiving is stopped a new transfer waits, unstarted, for the global continue.
@@ -263,8 +268,14 @@ public sealed partial class MonoTorrentTransferEngine
     }
 
     /// <summary>
-    /// Stops a transfer whose metadata names a path outside its own folder. MonoTorrent refuses such
-    /// paths itself; this is the second check AD-6 asks for.
+    /// More files than any family sends at once. Content announcing more is refused, so hostile
+    /// metadata cannot flood the disk with entries (CAP-9).
+    /// </summary>
+    internal const int MaxFiles = 10_000;
+
+    /// <summary>
+    /// Stops a transfer whose metadata names a path outside its own folder, or more files than
+    /// <see cref="MaxFiles"/>. MonoTorrent refuses such paths itself; this is the second check AD-6 asks for.
     /// </summary>
     private bool CheckContained(Incoming incoming)
     {
@@ -272,7 +283,8 @@ public sealed partial class MonoTorrentTransferEngine
             return false;
         if (!incoming.Manager.HasMetadata)
             return true;
-        if (incoming.Manager.Files.All(f => ReceivedNames.IsInside(incoming.Folder, f.FullPath)))
+        if (incoming.Manager.Files.Count <= MaxFiles
+            && incoming.Manager.Files.All(f => ReceivedNames.IsInside(incoming.Folder, f.FullPath)))
             return true;
 
         incoming.Rejected = true;
@@ -287,13 +299,16 @@ public sealed partial class MonoTorrentTransferEngine
             await RemoveFromEngineAsync(incoming.Manager);
 
             // The engine wrote one top-level entry into the transfer's folder; give it its final,
-            // sanitised name directly under the Received root without overwriting anything.
+            // sanitised name directly under its Received root without overwriting anything.
             string? finalName = null;
             foreach (var entry in Directory.GetFileSystemEntries(incoming.Folder))
             {
-                var target = ReceivedNames.UniquePathUnder(_receivedRoot, Path.GetFileName(entry), p => File.Exists(p) || Directory.Exists(p));
+                var target = ReceivedNames.UniquePathUnder(incoming.Root, Path.GetFileName(entry), p => File.Exists(p) || Directory.Exists(p));
                 if (Directory.Exists(entry))
+                {
+                    SanitizeInside(entry);
                     Directory.Move(entry, target);
+                }
                 else
                     File.Move(entry, target);
                 finalName ??= Path.GetFileName(target);
@@ -308,6 +323,29 @@ public sealed partial class MonoTorrentTransferEngine
         catch (Exception)
         {
             ReceiveProgressed?.Invoke(new ReceiveProgress(incoming.Id, incoming.Name, incoming.Size, 0, false, Failed: true));
+        }
+    }
+
+    /// <summary>
+    /// Gives every folder and file inside an arrived folder its safe name (AD-6, AD-19), deepest first, so a
+    /// nested "CON" or a name that hides its real extension is never kept as it was sent.
+    /// </summary>
+    private static void SanitizeInside(string folder)
+    {
+        foreach (var child in Directory.GetFileSystemEntries(folder))
+        {
+            var isFolder = Directory.Exists(child);
+            if (isFolder)
+                SanitizeInside(child);
+            var name = Path.GetFileName(child);
+            var safe = ReceivedNames.Sanitize(name);
+            if (safe == name)
+                continue;
+            var target = ReceivedNames.UniquePathUnder(folder, safe, p => File.Exists(p) || Directory.Exists(p));
+            if (isFolder)
+                Directory.Move(child, target);
+            else
+                File.Move(child, target);
         }
     }
 

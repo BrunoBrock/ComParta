@@ -48,7 +48,7 @@ public sealed class MediaUseCasesTests
         _files.Files[path] = content.Length;
         _files.Contents[path] = content;
         _picker.NextPick = path;
-        return (await _shares.AddAsync()).Value!.Share.Id.ToString();
+        return (await _shares.AddAsync()).Value!.Share!.Share.Id.ToString();
     }
 
     private async Task<string> ReceiveAsync(string name, byte[] content)

@@ -26,7 +26,7 @@ public sealed class SendingUseCasesTests
     private void Move(ShareId id, ItemActivity activity) =>
         _engine.Move(EngineActivity.None with { Shares = new Dictionary<ShareId, ItemActivity> { [id] = activity } });
 
-    private async Task<ShareId> ShareAsync() => (await _shares.AddAsync()).Value!.Share.Id;
+    private async Task<ShareId> ShareAsync() => (await _shares.AddAsync()).Value!.Share!.Share.Id;
 
     [Fact]
     public async Task A_share_nobody_gets_is_idle()

@@ -19,18 +19,23 @@ import HelpDialog from './components/HelpDialog.tsx'
 import type { ItemSpeed, ViewMode } from './components/ItemView.tsx'
 import { shareToggle, transferToggle } from './components/itemToggles.ts'
 import Notice from './components/Notice.tsx'
+import MediaViewer, { type ViewedItem } from './components/MediaViewer.tsx'
+import NameFilesDialog from './components/NameFilesDialog.tsx'
 import Rail, { type Section } from './components/Rail.tsx'
 import ReceiveDialog from './components/ReceiveDialog.tsx'
 import SendSteps from './components/SendSteps.tsx'
 import QuitDialog from './components/QuitDialog.tsx'
-import SettingsDialog from './components/SettingsDialog.tsx'
+import SettingsDialog, { type SpeedLimits, type Theme } from './components/SettingsDialog.tsx'
 import SharesSection from './components/SharesSection.tsx'
 import SpeedBar from './components/SpeedBar.tsx'
 import TransfersSection from './components/TransfersSection.tsx'
+import Welcome, { type WelcomeChoices } from './components/Welcome.tsx'
 import IconButton from './components/ui/IconButton.tsx'
 import Toast from './components/ui/Toast.tsx'
 import { errorMessage, getLanguage, type Language, pickLanguage, setLanguage, t } from './i18n/index.ts'
-import type { SortOrder } from './order.ts'
+import { playableKind } from './fileNames.ts'
+import { setSenderName } from './invite.ts'
+import { inOrder, type SortOrder } from './order.ts'
 
 interface AppProps {
   bridge: Bridge
@@ -74,10 +79,24 @@ export default function App({ bridge }: AppProps) {
     publicServers: [],
     helperAddress: null,
     helperKey: null,
+    yourName: null,
+    theme: null,
+    welcomeDone: false,
+    receiveLimit: null,
+    sendLimit: null,
   })
+  const [yourName, setYourName] = useState('')
+  const [theme, setTheme] = useState<Theme>('system')
+  const [version, setVersion] = useState('')
+  const [guidedSend, setGuidedSend] = useState(true)
+  const [speedLimits, setSpeedLimits] = useState<SpeedLimits>({ receive: null, send: null })
+  const [welcoming, setWelcoming] = useState(false)
+  const welcomeChecked = useRef(false)
   const [startWithWindows, setStartWithWindows] = useState(false)
   const [publicServers, setPublicServers] = useState<readonly string[]>([])
   const [helper, setHelper] = useState<{ address: string | null; key: string | null }>({ address: null, key: null })
+  // The name of the folder new received files go to, and whether the person chose it (epic 12 story 2).
+  const [receivedFolder, setReceivedFolder] = useState<{ name: string; chosen: boolean }>({ name: '', chosen: false })
   // Files that would stop moving if the app quit now; the person confirms first (AD-14).
   const [quitting, setQuitting] = useState<readonly string[] | null>(null)
   const [query, setQuery] = useState('')
@@ -85,6 +104,8 @@ export default function App({ bridge }: AppProps) {
   // An invite pasted anywhere in the window, already read, for the confirmation.
   const [pasted, setPasted] = useState<{ text: string; preview: InvitePreviewDto } | undefined>()
   const [adding, setAdding] = useState(false)
+  // Several files chosen together wait for a name (AD-19).
+  const [naming, setNaming] = useState<number | null>(null)
   // The guided send is open (UX design, "Send a file, first time").
   const [guiding, setGuiding] = useState(false)
   // Files are being dragged over the window (epic 8 story 6).
@@ -98,6 +119,7 @@ export default function App({ bridge }: AppProps) {
   const [opened, setOpened] = useState<'help' | 'settings' | null>(null)
   const [activity, setActivity] = useState<ActivityDto | null>(null)
   const [details, setDetails] = useState<DetailsOf | null>(null)
+  const [viewing, setViewing] = useState<{ items: ViewedItem[]; start: number } | null>(null)
   const [stuck, setStuck] = useState<ReadonlySet<string>>(() => new Set())
   // When this screen first saw each transfer waiting for the other computer.
   const waitingSince = useRef(new Map<string, number>())
@@ -107,6 +129,35 @@ export default function App({ bridge }: AppProps) {
   const clearToast = useCallback(() => setToast(null), [])
   const clearNotice = useCallback(() => setNotice(null), [])
   const clearSearch = useCallback(() => setQuery(''), [])
+
+  // The files the viewer moves between: the pictures, songs and videos in the same section that
+  // can be opened, in the order the section shows them (epic 18 stories 2 and 3).
+  function viewable(kind: 'share' | 'transfer'): ViewedItem[] {
+    const items =
+      kind === 'share'
+        ? inOrder(shares ?? [], sort, (s) => s.name, (s) => s.sizeBytes)
+            .filter((s) => s.status === 'ready')
+            .map((s) => ({ kind, id: s.id, name: s.name }))
+        : inOrder(transfers ?? [], sort, (tr) => tr.name ?? '', (tr) => tr.sizeBytes)
+            .filter((tr) => tr.state === 'done' && tr.name)
+            .map((tr) => ({ kind, id: tr.id, name: tr.name ?? '' }))
+    return items.filter((item) => playableKind(item.name) !== null)
+  }
+
+  const closeViewer = useCallback(() => setViewing(null), [])
+
+  // Any file that arrived or is shared can be opened; one ComParta cannot play shows the message
+  // that offers its folder instead (epic 18 stories 4 and 5).
+  const canView = (item: DetailsOf) =>
+    item.kind === 'share'
+      ? shares?.some((s) => s.id === item.id && s.status === 'ready')
+      : transfers?.some((tr) => tr.id === item.id && tr.state === 'done')
+
+  function openViewer(item: DetailsOf) {
+    const items = viewable(item.kind)
+    const at = items.findIndex((file) => file.id === item.id)
+    setViewing(at >= 0 ? { items, start: at } : { items: [item], start: 0 })
+  }
 
   // Each guided send that shared a file counts; opting out ends them at once.
   const endGuide = useCallback(
@@ -135,10 +186,30 @@ export default function App({ bridge }: AppProps) {
         publicServers: stored.publicServers,
         helperAddress: stored.helperAddress,
         helperKey: stored.helperKey,
+        yourName: stored.yourName,
+        theme: stored.theme,
+        welcomeDone: stored.welcomeDone,
+        receiveLimit: stored.receiveLimit,
+        sendLimit: stored.sendLimit,
       }
+      // The welcome shows once per install, the first time the settings arrive (epic 12 story 3).
+      if (!welcomeChecked.current) {
+        welcomeChecked.current = true
+        if (!stored.welcomeDone) setWelcoming(true)
+      }
+      setYourName(stored.yourName ?? '')
+      setSenderName(stored.yourName)
+      const shownTheme = stored.theme === 'light' || stored.theme === 'dark' ? stored.theme : 'system'
+      setTheme(shownTheme)
+      if (shownTheme === 'system') delete document.documentElement.dataset.theme
+      else document.documentElement.dataset.theme = shownTheme
+      setVersion(stored.version)
+      setGuidedSend(stored.sendStepsSeen < sendStepsShown)
+      setSpeedLimits({ receive: stored.receiveLimit, send: stored.sendLimit })
       setStartWithWindows(stored.startWithWindows)
       setPublicServers(stored.publicServers)
       setHelper({ address: stored.helperAddress, key: stored.helperKey })
+      setReceivedFolder({ name: stored.receivedFolder, chosen: stored.receivedFolderChosen })
       setView(stored.view === 'list' ? 'list' : 'grid')
       setSort(stored.sort === 'name' || stored.sort === 'size' ? stored.sort : 'added')
       const chosen = pickLanguage(stored.language, stored.systemLanguage)
@@ -308,6 +379,49 @@ export default function App({ bridge }: AppProps) {
     void saveSettings({ startWithWindows: on })
   }
 
+  // Finishing stores the name and start with Windows; skipping changes nothing else. Either way
+  // the welcome does not show again.
+  function endWelcome(choices: WelcomeChoices | null) {
+    setWelcoming(false)
+    if (choices) {
+      setYourName(choices.yourName)
+      setSenderName(choices.yourName || null)
+      setStartWithWindows(choices.startWithWindows)
+    }
+    void saveSettings({
+      welcomeDone: true,
+      ...(choices && { yourName: choices.yourName || null, startWithWindows: choices.startWithWindows }),
+    })
+  }
+
+  async function chooseName(name: string) {
+    const before = choices.current
+    choices.current = { ...before, yourName: name.trim() || null }
+    const result = await bridge.invoke('settings.set', choices.current)
+    if (!result.ok) {
+      choices.current = before
+      showError(result.error.code)
+      return false
+    }
+    showInfo(t('settings.nameSaved'))
+    return true
+  }
+
+  function chooseTheme(next: Theme) {
+    void saveSettings({ theme: next === 'system' ? null : next })
+  }
+
+  // On: the guided send runs again for the next sends. Off: Share opens the file dialog at once.
+  function chooseGuidedSend(on: boolean) {
+    setGuidedSend(on)
+    void saveSettings({ sendStepsSeen: on ? 0 : sendStepsShown })
+  }
+
+  function chooseSpeedLimits(next: SpeedLimits) {
+    setSpeedLimits(next)
+    void saveSettings({ receiveLimit: next.receive, sendLimit: next.send })
+  }
+
   async function choosePublicServers(servers: string[]) {
     const before = choices.current
     choices.current = { ...before, publicServers: servers }
@@ -336,6 +450,22 @@ export default function App({ bridge }: AppProps) {
     return true
   }
 
+  // Windows' folder dialog opens; new files go to the folder picked, earlier ones stay where they are.
+  // A problem is shown in Settings, next to the button, rather than behind it.
+  async function chooseReceivedFolder() {
+    const result = await bridge.invoke('settings.chooseReceivedFolder')
+    if (!result.ok) return errorMessage(result.error.code)
+    if (result.value !== null) showInfo(t('settings.receivedFolderSaved', { name: result.value }))
+    return null
+  }
+
+  async function useUsualReceivedFolder() {
+    const result = await bridge.invoke('settings.useUsualReceivedFolder')
+    if (!result.ok) return errorMessage(result.error.code)
+    showInfo(t('settings.receivedFolderUsual'))
+    return null
+  }
+
   async function quitAnyway() {
     setQuitting(null)
     const result = await bridge.invoke('app.quit', { force: true })
@@ -362,25 +492,34 @@ export default function App({ bridge }: AppProps) {
     }
     setAdding(true)
     try {
-      // The app opens the file dialog; a cancel comes back as ok with no value.
+      // The app opens the file dialog; a cancel comes back with no share and nothing to name.
       const result = await bridge.invoke('shares.add')
+      if (!result.ok) showError(result.error.code)
+      else if (result.value.filesToName > 0) setNaming(result.value.filesToName)
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  async function addFolder() {
+    clearNotice()
+    setSection('shared')
+    setAdding(true)
+    try {
+      // The app opens the folder dialog and shares every file in the folder as one.
+      const result = await bridge.invoke('shares.addFolder')
       if (!result.ok) showError(result.error.code)
     } finally {
       setAdding(false)
     }
   }
 
-  // Dropped files are shared as if picked. Folders wait for epic 11; the page never sees a path,
+  // Dropped files are shared as if picked, and a dropped folder whole. The page never sees a path,
   // it only hands the files to the window under a token (AD-7).
   async function drop(data: DataTransfer) {
     clearNotice()
-    const entries = [...data.items].map((item) => item.webkitGetAsEntry?.() ?? null)
-    const files = [...data.files].filter((_, i) => !entries[i]?.isDirectory)
-    const folders = files.length < data.files.length
-    if (files.length === 0) {
-      if (folders) setNotice(t('drop.folderNotYet'))
-      return
-    }
+    const files = [...data.files]
+    if (files.length === 0) return
     setSection('shared')
     const token = crypto.randomUUID()
     if (!bridge.handOverDrop(token, files)) {
@@ -394,7 +533,6 @@ export default function App({ bridge }: AppProps) {
     }
     const { added, problem } = result.value
     if (problem) showError(problem as ErrorCode)
-    else if (folders) setNotice(t('drop.folderNotYet'))
     if (added > 0) showInfo(added === 1 ? t('drop.sharedOne') : t('drop.sharedMany', { count: added }))
   }
 
@@ -480,6 +618,7 @@ export default function App({ bridge }: AppProps) {
       onContinueAll={continueReceiving}
       onDetails={setDetails}
       onReceive={startReceiving}
+      onView={openViewer}
     />
   )
 
@@ -546,6 +685,7 @@ export default function App({ bridge }: AppProps) {
         onConnection={() => setHelping(true)}
         onSection={setSection}
         onAdd={add}
+        onAddFolder={addFolder}
         onReceive={startReceiving}
         onHelp={() => setOpened('help')}
         onSettings={() => setOpened('settings')}
@@ -570,11 +710,24 @@ export default function App({ bridge }: AppProps) {
           onClose={() => setDetails(null)}
           onError={showError}
           onInfo={showInfo}
+          onView={canView(details) ? () => openViewer(details) : undefined}
+        />
+      )}
+
+      {viewing && (
+        <MediaViewer
+          bridge={bridge}
+          items={viewing.items}
+          start={viewing.start}
+          onClose={closeViewer}
+          onError={showError}
         />
       )}
 
       {opened === 'help' && (
         <HelpDialog
+          bridge={bridge}
+          onError={showError}
           onConnection={() => {
             setOpened(null)
             setHelping(true)
@@ -594,7 +747,31 @@ export default function App({ bridge }: AppProps) {
           helperAddress={helper.address}
           helperKey={helper.key}
           onHelper={chooseHelper}
+          yourName={yourName}
+          onYourName={chooseName}
+          theme={theme}
+          onTheme={chooseTheme}
+          guidedSend={guidedSend}
+          onGuidedSend={chooseGuidedSend}
+          speedLimits={speedLimits}
+          onSpeedLimits={chooseSpeedLimits}
+          receivedFolder={receivedFolder.name}
+          receivedFolderChosen={receivedFolder.chosen}
+          onChooseReceivedFolder={chooseReceivedFolder}
+          onUsualReceivedFolder={useUsualReceivedFolder}
+          version={version}
           onClose={() => setOpened(null)}
+        />
+      )}
+
+      {welcoming && <Welcome onDone={endWelcome} />}
+
+      {naming !== null && (
+        <NameFilesDialog
+          bridge={bridge}
+          count={naming}
+          onClose={() => setNaming(null)}
+          onError={showError}
         />
       )}
 

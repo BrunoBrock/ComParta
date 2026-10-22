@@ -35,7 +35,7 @@ public partial class App : Application
 			services.Stop();
 			Quit();
 		});
-		var startHidden = StartupEntry.IsBackgroundLaunch(Environment.GetCommandLineArgs());
+		var startHidden = StartupEntry.IsBackgroundLaunch(Environment.GetCommandLineArgs()) || Packaged.StartedAtSignIn();
 		window.HandlerChanged += (_, _) => KeepWhenClosed(window, services, startHidden);
 
 		// What this launch was started with, then whatever later launches hand over (AD-14). A

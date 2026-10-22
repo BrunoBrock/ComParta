@@ -6,6 +6,7 @@ import { formatSize, formatTimeLeft, t } from '../i18n/index.ts'
 import { inOrder, type SortOrder } from '../order.ts'
 import { matches } from '../search.ts'
 import type { DetailsOf } from './DetailsWindow.tsx'
+import FolderPictures from './ui/FolderPictures.tsx'
 import Thumbnail from './ui/Thumbnail.tsx'
 import { moveBetweenItems } from './itemKeys.ts'
 import { shareToggle } from './itemToggles.ts'
@@ -44,7 +45,12 @@ interface SharesSectionProps {
   onAdd: () => void
 }
 
-const tones: Record<ShareDto['status'], ChipTone> = { preparing: 'busy', ready: 'ok', unavailable: 'warn' }
+const tones: Record<ShareDto['status'], ChipTone> = {
+  preparing: 'busy',
+  ready: 'ok',
+  unavailable: 'warn',
+  partlyUnavailable: 'warn',
+}
 
 /** A ready share's chip and sentence say whether someone is getting it or has it (CAP-8). */
 function chipOf(share: ShareDto): string {
@@ -175,7 +181,11 @@ export default function SharesSection(props: SharesSectionProps) {
               <ItemView
                 key={share.id}
                 name={share.name}
-                size={formatSize(share.sizeBytes)}
+                size={
+                  share.itemCount > 1
+                    ? `${formatSize(share.sizeBytes)} · ${t('shares.itemCount', { count: share.itemCount })}`
+                    : formatSize(share.sizeBytes)
+                }
                 tone={stoppedHere || pausedHere ? 'paused' : sending ? 'busy' : tones[share.status]}
                 chip={stoppedHere ? t('stopped.chip') : chipOf(share)}
                 note={stoppedHere ? t('stopped.note') : noteOf(share)}
@@ -195,13 +205,23 @@ export default function SharesSection(props: SharesSectionProps) {
                 onMain={share.status === 'ready' ? () => copyInvite(share) : undefined}
                 onRemove={() => setRemoving(share)}
                 picture={
+                  share.kind !== 'file' ? (
+                    <FolderPictures
+                      bridge={bridge}
+                      id={share.id}
+                      name={share.name}
+                      itemCount={share.itemCount}
+                      ready={share.status !== 'unavailable' && share.status !== 'partlyUnavailable'}
+                    />
+                  ) : (
                   <Thumbnail
                     bridge={bridge}
                     kind="share"
                     id={share.id}
                     name={share.name}
-                    ready={share.status !== 'unavailable'}
+                    ready={share.status !== 'unavailable' && share.status !== 'partlyUnavailable'}
                   />
+                  )
                 }
                 actions={
                   <>

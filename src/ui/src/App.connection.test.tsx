@@ -65,6 +65,7 @@ describe('a transfer stuck waiting', () => {
     bytesPerSecond: 0,
     secondsLeft: null,
     neededBytes: null,
+    risky: false, folder: false,
   }
 
   afterEach(() => {

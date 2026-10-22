@@ -27,9 +27,40 @@ public readonly record struct TransferId(Guid Value)
     public override string ToString() => Value.ToString("D");
 }
 
-/// <summary>A file a person offers. The file stays where it is (AD-6).</summary>
-/// <param name="Paused">The person paused sending this file on its own; it stays paused across restarts.</param>
-public sealed record Share(ShareId Id, string FilePath, string Name, long SizeBytes, DateTimeOffset AddedAt, bool Paused = false);
+/// <summary>
+/// What a person offers: one file, a folder, or several files under one name (AD-19). The files
+/// stay where they are (AD-6).
+/// </summary>
+/// <param name="FilePath">The file, or the folder the items are in.</param>
+/// <param name="SizeBytes">All the items together.</param>
+/// <param name="Paused">The person paused sending this share on its own; it stays paused across restarts.</param>
+/// <param name="Items">What the share holds; one item, the file itself, when left out.</param>
+public sealed record Share(
+    ShareId Id, string FilePath, string Name, long SizeBytes, DateTimeOffset AddedAt, bool Paused = false,
+    IReadOnlyList<ShareItem>? Items = null, ShareKind Kind = ShareKind.File)
+{
+    public IReadOnlyList<ShareItem> Items { get; init; } = Items is { Count: > 0 } ? Items : [new ShareItem(Name, SizeBytes, FilePath)];
+
+    // Two shares are the same when their items are, not only the same list.
+    public bool Equals(Share? other) =>
+        other is not null && Id == other.Id && FilePath == other.FilePath && Name == other.Name && SizeBytes == other.SizeBytes
+        && AddedAt == other.AddedAt && Paused == other.Paused && Kind == other.Kind && Items.SequenceEqual(other.Items);
+
+    public override int GetHashCode() => HashCode.Combine(Id, FilePath, Name, SizeBytes, AddedAt, Paused, Kind, Items.Count);
+}
+
+/// <summary>One file in a share (AD-19).</summary>
+/// <param name="RelativePath">Where it goes under the share's name on the other computer, with / between folders.</param>
+/// <param name="ContentRef">Where the file is read from; only the shell understands it (AD-20).</param>
+public sealed record ShareItem(string RelativePath, long SizeBytes, string ContentRef);
+
+public enum ShareKind
+{
+    File,
+    Folder,
+    /// <summary>Several loose files under a name the person gave.</summary>
+    Collection,
+}
 
 public enum ShareStatus
 {
@@ -37,8 +68,10 @@ public enum ShareStatus
     Preparing,
     /// <summary>The file is offered and an invite can be given out.</summary>
     Ready,
-    /// <summary>The file was moved, renamed, deleted or changed outside the app.</summary>
+    /// <summary>The file was moved, renamed, deleted or changed outside the app; for a folder, all of its files.</summary>
     Unavailable,
+    /// <summary>Some of a folder's files were moved, renamed or deleted; it is not offered until they are back.</summary>
+    PartlyUnavailable,
 }
 
 public sealed record ShareView(Share Share, ShareStatus Status);
@@ -47,9 +80,13 @@ public sealed record ShareView(Share Share, ShareStatus Status);
 /// A file on its way into the Received folder, from another person's device or from a public
 /// download link or download file (AD-21).
 /// </summary>
+/// <param name="Folder">
+/// The Received folder it goes to, as chosen in Settings when it started, or null for the usual one
+/// (<see cref="Ports.IAppPaths.ReceivedRoot"/>). Choosing another folder later never moves it (epic 12 story 2).
+/// </param>
 public sealed record Transfer(
     TransferId Id, string? Name, long? SizeBytes, bool Done, DateTimeOffset AddedAt, bool Paused = false,
-    TransferSource Source = TransferSource.Invite);
+    TransferSource Source = TransferSource.Invite, string? Folder = null);
 
 /// <summary>Where a transfer came from, for the details window (CAP-26).</summary>
 public enum TransferSource
@@ -250,13 +287,29 @@ public enum ErrorKind
     SettingsInvalid,
     ReceivedNotFound,
     ReceivedOpenFailed,
+    /// <summary>The received file can run something; it opens only once the person confirms again.</summary>
+    ReceivedConfirmRisky,
     ShareDropFailed,
     /// <summary>A file the person asked to save could not be written.</summary>
     SaveFailed,
     /// <summary>The file cannot be shown or played inside ComParta; the person may open its folder instead.</summary>
     NotPlayable,
+    /// <summary>A folder with no files in it, once hidden ones are left out.</summary>
+    FolderEmpty,
+    /// <summary>A folder with more files than one share can hold.</summary>
+    FolderTooLarge,
+    /// <summary>The name given to several files shared together is empty, too long or has characters a folder cannot have.</summary>
+    ShareNameInvalid,
+    /// <summary>The folder the person picked for received files cannot hold them: ComParta cannot write there, or it is ComParta's own.</summary>
+    ReceivedFolderUnusable,
+    /// <summary>The folder chosen for received files is not there now, for example on a drive that was unplugged.</summary>
+    ReceivedFolderMissing,
     Unexpected,
 }
+
+/// <summary>What the file dialog gave: one file shared at once, or several that wait for a name.</summary>
+/// <param name="FilesToName">How many files wait for a name; 0 when nothing waits.</param>
+public sealed record AddedShare(ShareView? Share, int FilesToName = 0);
 
 public readonly record struct Result(ErrorKind? Error)
 {

@@ -34,12 +34,10 @@ describe('dropping files onto the window', () => {
     expect(within(sharesSection()).getAllByRole('listitem')).toHaveLength(2)
   })
 
-  it('explains that folders cannot be shared yet and shares the files beside them', async () => {
-    setup()
+  it('shares a dropped folder whole, beside the files dropped with it', async () => {
+    const { bridge } = setup()
+    bridge.folders = { Photos: { name: 'Photos', sizeBytes: 3_000, itemCount: 30 } }
     await screen.findByText(en['shares.empty'])
-
-    fireEvent.drop(app(), { dataTransfer: dropped([{ name: 'Photos', size: 0, folder: true }]) })
-    expect(await screen.findByRole('alert')).toHaveTextContent(en['drop.folderNotYet'])
 
     fireEvent.drop(app(), {
       dataTransfer: dropped([
@@ -47,8 +45,21 @@ describe('dropping files onto the window', () => {
         { name: 'Beach.jpg', size: 10 },
       ]),
     })
-    expect(await screen.findByText('Shared 1 file. Copy its invite to send it.')).toBeInTheDocument()
-    expect(screen.getByRole('alert')).toHaveTextContent(en['drop.folderNotYet'])
+
+    expect(await screen.findByText('Shared 2 files. Copy each invite to send them.')).toBeInTheDocument()
+    const folder = (await within(sharesSection()).findByText('Photos')).closest('li')!
+    expect(within(folder).getByText(/30 files/)).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('says when a dropped folder has nothing in it', async () => {
+    const { bridge } = setup()
+    bridge.folders = { Empty: { name: 'Empty', sizeBytes: 0, itemCount: 0 } }
+    await screen.findByText(en['shares.empty'])
+
+    fireEvent.drop(app(), { dataTransfer: dropped([{ name: 'Empty', size: 0, folder: true }]) })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(en['error.share.folderEmpty'])
   })
 
   it('says why a file was not shared', async () => {

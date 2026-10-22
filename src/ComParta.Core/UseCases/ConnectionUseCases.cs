@@ -31,6 +31,13 @@ public sealed class ConnectionUseCases
             return _health;
     }
 
+    /// <summary>The facts the health was last worked out from, or null before the engine reported any.</summary>
+    public ReachabilityFacts? Facts()
+    {
+        lock (_gate)
+            return _facts;
+    }
+
     /// <summary>Whether others get the files through the helper computer (AD-23), as last worked out.</summary>
     public bool ThroughHelper()
     {

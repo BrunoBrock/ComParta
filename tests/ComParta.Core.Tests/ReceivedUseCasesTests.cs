@@ -43,6 +43,34 @@ public sealed class ReceivedUseCasesTests
     }
 
     [Fact]
+    public async Task A_received_folder_lists_its_files_with_their_places_and_sizes()
+    {
+        var id = (await _transfers.ReceiveAsync("invite:trip")).Value!.Transfer.Id;
+        _engine.Report(new ReceiveProgress(id, "Trip", 30, 30, true));
+        var folder = Path.Combine(_paths.ReceivedRoot, "Trip");
+        _files.Files[Path.Combine(folder, "day 1", "photo.jpg")] = 10;
+        _files.Files[Path.Combine(folder, "notes.txt")] = 20;
+
+        Assert.True(_received.IsFolder(View(id)));
+        var listed = _received.ListFiles(id);
+
+        Assert.True(listed.Ok);
+        Assert.Equal(["day 1/photo.jpg", "notes.txt"], listed.Value!.Select(file => file.RelativePath));
+        Assert.Equal([10L, 20L], listed.Value!.Select(file => file.SizeBytes));
+    }
+
+    [Fact]
+    public async Task A_single_file_is_not_a_folder_and_lists_nothing()
+    {
+        var id = await ArrivedAsync("recipe.pdf");
+
+        Assert.False(_received.IsFolder(View(id)));
+        Assert.Equal(ErrorKind.ReceivedNotFound, _received.ListFiles(id).Error);
+    }
+
+    private TransferView View(TransferId id) => _transfers.List().Single(v => v.Transfer.Id == id);
+
+    [Fact]
     public async Task A_file_that_is_gone_or_has_not_arrived_says_so()
     {
         var gone = await ArrivedAsync("gone.pdf", onDisk: false);
@@ -55,13 +83,31 @@ public sealed class ReceivedUseCasesTests
     }
 
     [Fact]
-    public async Task Programs_are_never_opened()
+    public async Task A_program_opens_only_after_the_person_confirms_again()
     {
         var id = await ArrivedAsync("setup.EXE");
 
-        Assert.Equal(ErrorKind.ReceivedOpenFailed, (await _received.OpenAsync(id)).Error);
+        Assert.Equal(ErrorKind.ReceivedConfirmRisky, (await _received.OpenAsync(id)).Error);
         Assert.Empty(_opener.Opened);
+
+        Assert.True((await _received.OpenAsync(id, confirmed: true)).Ok);
+        Assert.Single(_opener.Opened);
         Assert.True((await _received.RevealAsync(id)).Ok);
+    }
+
+    [Theory]
+    [InlineData("photo.jpg", false)]
+    [InlineData("report.pdf", false)]
+    [InlineData("macro.XLSM", true)]
+    [InlineData("shortcut.lnk", true)]
+    [InlineData("photo\u202Egpj.exe", true)]
+    public async Task Only_risky_names_ask_again(string name, bool risky)
+    {
+        var id = await ArrivedAsync(name);
+
+        var result = await _received.OpenAsync(id);
+
+        Assert.Equal(risky ? ErrorKind.ReceivedConfirmRisky : null, result.Error);
     }
 
     [Fact]

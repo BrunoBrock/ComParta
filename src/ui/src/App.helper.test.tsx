@@ -80,7 +80,7 @@ describe('the helper computer in Settings', () => {
 
   it('refuses in the fake bridge what core refuses', async () => {
     const { bridge } = setup()
-    const base = { language: null, view: null, sort: null, sendStepsSeen: 0, startWithWindows: false, publicServers: [] }
+    const base = { language: null, view: null, sort: null, sendStepsSeen: 0, startWithWindows: false, publicServers: [], yourName: null, theme: null, welcomeDone: null, receiveLimit: null, sendLimit: null }
     for (const [badAddress, badKey] of [
       [address, null],
       [null, key],

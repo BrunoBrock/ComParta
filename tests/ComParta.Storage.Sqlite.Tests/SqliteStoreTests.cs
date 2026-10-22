@@ -124,7 +124,7 @@ public sealed class SqliteStoreTests : IDisposable
         {
             await connection.OpenAsync();
             var command = connection.CreateCommand();
-            command.CommandText = "DROP TABLE settings; ALTER TABLE transfers DROP COLUMN source; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 2;";
+            command.CommandText = "ALTER TABLE transfers DROP COLUMN folder; DROP TABLE share_items; ALTER TABLE shares DROP COLUMN kind; DROP TABLE settings; ALTER TABLE transfers DROP COLUMN source; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 2;";
             await command.ExecuteNonQueryAsync();
         }
 
@@ -159,13 +159,46 @@ public sealed class SqliteStoreTests : IDisposable
         {
             await connection.OpenAsync();
             var command = connection.CreateCommand();
-            command.CommandText = "ALTER TABLE transfers DROP COLUMN source; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 3;";
+            command.CommandText = "ALTER TABLE transfers DROP COLUMN folder; DROP TABLE share_items; ALTER TABLE shares DROP COLUMN kind; ALTER TABLE transfers DROP COLUMN source; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 3;";
             await command.ExecuteNonQueryAsync();
         }
 
         ITransferRepository store = await SqliteStore.OpenAsync(DatabasePath);
 
         Assert.Equal(TransferSource.Invite, Assert.Single(await store.GetAllAsync()).Source);
+    }
+
+    [Fact]
+    public async Task A_transfer_keeps_the_Received_folder_it_started_in()
+    {
+        var chosen = new Transfer(TransferId.New(), "film.mkv", 10, false, DateTimeOffset.UtcNow, Folder: @"D:\Family");
+        var usual = new Transfer(TransferId.New(), "song.mp3", 5, true, DateTimeOffset.UtcNow.AddSeconds(1));
+        ITransferRepository store = await SqliteStore.OpenAsync(DatabasePath);
+        await store.AddAsync(chosen);
+        await store.AddAsync(usual);
+        await store.UpdateAsync(chosen with { Done = true });
+
+        ITransferRepository reopened = await SqliteStore.OpenAsync(DatabasePath);
+        Assert.Equal([@"D:\Family", null], (await reopened.GetAllAsync()).Select(t => t.Folder));
+    }
+
+    [Fact]
+    public async Task Transfers_from_the_sixth_version_stay_in_the_usual_Received_folder()
+    {
+        var transfer = new Transfer(TransferId.New(), "film.mkv", 10, true, DateTimeOffset.UtcNow);
+        ITransferRepository first = await SqliteStore.OpenAsync(DatabasePath);
+        await first.AddAsync(transfer);
+        await using (var connection = new SqliteConnection($"Data Source={DatabasePath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            var command = connection.CreateCommand();
+            command.CommandText = "ALTER TABLE transfers DROP COLUMN folder; PRAGMA user_version = 6;";
+            await command.ExecuteNonQueryAsync();
+        }
+
+        ITransferRepository store = await SqliteStore.OpenAsync(DatabasePath);
+
+        Assert.Equal([transfer], await store.GetAllAsync());
     }
 
     [Fact]
@@ -193,12 +226,67 @@ public sealed class SqliteStoreTests : IDisposable
         {
             await connection.OpenAsync();
             var command = connection.CreateCommand();
-            command.CommandText = "ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 4;";
+            command.CommandText = "ALTER TABLE transfers DROP COLUMN folder; DROP TABLE share_items; ALTER TABLE shares DROP COLUMN kind; ALTER TABLE shares DROP COLUMN paused; PRAGMA user_version = 4;";
             await command.ExecuteNonQueryAsync();
         }
 
         IShareRepository store = await SqliteStore.OpenAsync(DatabasePath);
 
         Assert.Equal([share], await store.GetAllAsync());
+    }
+
+    [Fact]
+    public async Task A_folder_share_keeps_its_items_in_order()
+    {
+        var share = new Share(ShareId.New(), @"C:\Photos\Trip", "Trip", 60, DateTimeOffset.UtcNow, Kind: ShareKind.Folder, Items:
+        [
+            new ShareItem("beach.jpg", 10, @"C:\Photos\Trip\beach.jpg"),
+            new ShareItem("day 2/hill.jpg", 20, @"C:\Photos\Trip\day 2\hill.jpg"),
+            new ShareItem("day 2/notes.txt", 30, @"C:\Photos\Trip\day 2\notes.txt"),
+        ]);
+        IShareRepository store = await SqliteStore.OpenAsync(DatabasePath);
+        await store.AddAsync(share);
+
+        IShareRepository reopened = await SqliteStore.OpenAsync(DatabasePath);
+        var read = Assert.Single(await reopened.GetAllAsync());
+        Assert.Equal(share, read);
+        Assert.Equal(["beach.jpg", "day 2/hill.jpg", "day 2/notes.txt"], read.Items.Select(i => i.RelativePath));
+
+        await reopened.RemoveAsync(share.Id);
+        await reopened.AddAsync(share);
+        Assert.Equal(3, Assert.Single(await reopened.GetAllAsync()).Items.Count);
+    }
+
+    [Fact]
+    public async Task Every_share_from_the_fifth_version_becomes_one_file_with_one_item()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(DatabasePath)!);
+        var first = ShareId.New();
+        var second = ShareId.New();
+        await using (var connection = new SqliteConnection($"Data Source={DatabasePath};Pooling=False"))
+        {
+            await connection.OpenAsync();
+            var command = connection.CreateCommand();
+            command.CommandText = $"""
+                CREATE TABLE shares (id TEXT PRIMARY KEY, file_path TEXT NOT NULL, name TEXT NOT NULL,
+                    size_bytes INTEGER NOT NULL, added_at TEXT NOT NULL, paused INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE transfers (id TEXT PRIMARY KEY, name TEXT NULL, size_bytes INTEGER NULL, done INTEGER NOT NULL,
+                    added_at TEXT NOT NULL, paused INTEGER NOT NULL DEFAULT 0, source INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                INSERT INTO shares VALUES ('{first}', 'C:\Videos\party.mp4', 'party.mp4', 1000, '2026-10-01T10:00:00.0000000+00:00', 0);
+                INSERT INTO shares VALUES ('{second}', 'C:\Music\song.mp3', 'song.mp3', 200, '2026-10-01T11:00:00.0000000+00:00', 1);
+                PRAGMA user_version = 5;
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        IShareRepository store = await SqliteStore.OpenAsync(DatabasePath);
+
+        var shares = await store.GetAllAsync();
+        Assert.Equal([first, second], shares.Select(s => s.Id));
+        Assert.All(shares, s => Assert.Equal(ShareKind.File, s.Kind));
+        Assert.Equal(new ShareItem("party.mp4", 1000, @"C:\Videos\party.mp4"), Assert.Single(shares[0].Items));
+        Assert.Equal(new ShareItem("song.mp3", 200, @"C:\Music\song.mp3"), Assert.Single(shares[1].Items));
+        Assert.True(shares[1].Paused);
     }
 }

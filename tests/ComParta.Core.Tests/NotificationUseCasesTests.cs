@@ -65,7 +65,7 @@ public sealed class NotificationUseCasesTests
     {
         await _settings.SetAsync("en", null, null);
         await _notifications.StartAsync();
-        var id = (await _shares.AddAsync()).Value!.Share.Id;
+        var id = (await _shares.AddAsync()).Value!.Share!.Share.Id;
         void Finished(int count) => _engine.Move(EngineActivity.None with
         {
             Shares = new Dictionary<ShareId, ItemActivity> { [id] = new(0, 0, 0, 0, 10_000, Finished: count) },

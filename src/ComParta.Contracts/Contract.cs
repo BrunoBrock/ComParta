@@ -15,6 +15,9 @@ public static class Commands
     public const string SharesSaveDownloadFile = "shares.saveDownloadFile";
     public const string SharesPause = "shares.pause";
     public const string SharesResume = "shares.resume";
+    public const string SharesReveal = "shares.reveal";
+    public const string SharesAddFolder = "shares.addFolder";
+    public const string SharesAddPicked = "shares.addPicked";
     public const string TransfersList = "transfers.list";
     public const string TransfersPreview = "transfers.preview";
     public const string TransfersReceive = "transfers.receive";
@@ -27,8 +30,11 @@ public static class Commands
     public const string ReceivedOpen = "received.open";
     public const string ReceivedReveal = "received.reveal";
     public const string ReceivedDelete = "received.delete";
+    public const string ReceivedFiles = "received.files";
     public const string SettingsGet = "settings.get";
     public const string SettingsSet = "settings.set";
+    public const string SettingsChooseReceivedFolder = "settings.chooseReceivedFolder";
+    public const string SettingsUseUsualReceivedFolder = "settings.useUsualReceivedFolder";
     public const string ConnectionGet = "connection.get";
     public const string ConnectionOpenSettings = "connection.openSettings";
     public const string InvitesTakeOpened = "invites.takeOpened";
@@ -42,6 +48,7 @@ public static class Commands
     /// <summary>Back with nothing open on the screen: the app goes out of sight, or ends when it has no work.</summary>
     public const string AppLeave = "app.leave";
     public const string MediaOpen = "media.open";
+    public const string SupportReport = "support.report";
 }
 
 public static class Events
@@ -77,20 +84,29 @@ public static class ErrorCodes
     public const string SettingsInvalid = "settings.invalid";
     public const string ReceivedNotFound = "received.notFound";
     public const string ReceivedOpenFailed = "received.openFailed";
+    public const string ReceivedConfirmRisky = "received.confirmRisky";
     public const string ShareDropFailed = "share.dropFailed";
     public const string FileSaveFailed = "file.saveFailed";
     public const string MediaNotPlayable = "media.notPlayable";
+    public const string ShareFolderEmpty = "share.folderEmpty";
+    public const string ShareFolderTooLarge = "share.folderTooLarge";
+    public const string ShareNameInvalid = "share.nameInvalid";
+    public const string ReceivedFolderUnusable = "received.folderUnusable";
+    public const string ReceivedFolderMissing = "received.folderMissing";
     public const string Unexpected = "unexpected";
 
     public static IReadOnlyList<string> All { get; } =
     [
         ShareDuplicate, ShareNotFound, ShareNotReady, FileUnreadable,
         InviteInvalid, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, DiskFull, SettingsInvalid,
-        ReceivedNotFound, ReceivedOpenFailed, ShareDropFailed, FileSaveFailed, MediaNotPlayable, Unexpected,
+        ReceivedNotFound, ReceivedOpenFailed, ReceivedConfirmRisky, ShareDropFailed, FileSaveFailed, MediaNotPlayable,
+        ShareFolderEmpty, ShareFolderTooLarge, ShareNameInvalid, ReceivedFolderUnusable, ReceivedFolderMissing, Unexpected,
     ];
 }
 
-public enum ShareStatusDto { Preparing, Ready, Unavailable }
+public enum ShareStatusDto { Preparing, Ready, Unavailable, PartlyUnavailable }
+
+public enum ShareKindDto { File, Folder, Collection }
 
 public enum TransferStateDto { Connecting, Receiving, Paused, Done, Failed, Waiting, NoSpace, Blocked }
 
@@ -129,7 +145,8 @@ public static class MediaAddress
 }
 
 /// <param name="Size">The picture's longest side in pixels; the app keeps it between 32 and 512.</param>
-public sealed record ThumbnailArgs(ThumbnailKindDto Kind, string Id, int Size);
+/// <param name="Item">For a shared folder or several files, which of its photos and videos, from 0 to 3.</param>
+public sealed record ThumbnailArgs(ThumbnailKindDto Kind, string Id, int Size, int Item = 0);
 
 /// <summary>Whether another device can reach this computer. The words for it live in the UI (AD-11).</summary>
 public enum ConnectionHealthDto { Good, Limited, Blocked }
@@ -144,7 +161,8 @@ public enum TransferSourceDto { Invite, DownloadLink, DownloadFile }
 /// <param name="Paused">The person paused sending this file on its own.</param>
 public sealed record ShareDto(
     string Id, string Name, long SizeBytes, ShareStatusDto Status,
-    ShareActivityDto Activity, int ReceiverCount, int Percent, int FinishedCount, long? SecondsLeft, bool Paused);
+    ShareActivityDto Activity, int ReceiverCount, int Percent, int FinishedCount, long? SecondsLeft, bool Paused,
+    int ItemCount, ShareKindDto Kind);
 
 public enum ShareActivityDto { Idle, Sending, Sent }
 
@@ -152,9 +170,15 @@ public enum ShareActivityDto { Idle, Sending, Sent }
 /// <param name="SecondsLeft">Roughly how long is left, or null when it cannot be told.</param>
 public sealed record TransferDto(
     string Id, string? Name, long? SizeBytes, long ReceivedBytes, TransferStateDto State, long BytesPerSecond, long? SecondsLeft,
-    long? NeededBytes);
+    long? NeededBytes, bool Risky = false, bool Folder = false);
+
+/// <summary>A file inside a received folder, as the folder view lists it.</summary>
+public sealed record ReceivedFileDto(string RelativePath, long SizeBytes);
 
 public sealed record IdArgs(string Id);
+
+/// <param name="Confirmed">True once the person confirmed opening a file that can run something (AD-13).</param>
+public sealed record OpenReceivedArgs(string Id, bool? Confirmed = null);
 
 public sealed record ReceiveArgs(string Invite);
 
@@ -166,6 +190,12 @@ public sealed record CopyInviteArgs(string Id, string? Message);
 
 /// <param name="Token">The id the UI gave the drop when it handed the files to the window (AD-7).</param>
 public sealed record DropArgs(string Token);
+
+/// <summary>What Share files did: the one file shared, or how many chosen together wait for a name.</summary>
+public sealed record AddedDto(ShareDto? Share, int FilesToName);
+
+/// <summary>The name for the files chosen together; null forgets them.</summary>
+public sealed record AddPickedArgs(string? Name);
 
 /// <param name="Problem">The error code of the first file that could not be shared, or null.</param>
 public sealed record DropResultDto(int Added, string? Problem);
@@ -187,18 +217,28 @@ public sealed record InvitePreviewDto(
 /// <param name="PublicServers">Addresses of public servers that help others find what is shared; empty for none.</param>
 /// <param name="HelperAddress">Where the helper computer takes files; null for none.</param>
 /// <param name="HelperKey">The helper computer's key; null for none.</param>
+/// <param name="YourName">The name others see in invites; null until the person gives one.</param>
+/// <param name="Theme">"light" or "dark", or null to follow the system.</param>
+/// <param name="Version">The app's version, for About.</param>
+/// <param name="WelcomeDone">The first-run welcome was finished or skipped.</param>
+/// <param name="ReceivedFolder">The name of the folder new received files go to, without its path (AD-7).</param>
+/// <param name="ReceivedFolderChosen">The person chose that folder; false while it is the usual one.</param>
 public sealed record SettingsDto(
     string? Language, string SystemLanguage, string? View, string? Sort, int SendStepsSeen, bool StartWithWindows, string[] PublicServers,
-    string? HelperAddress, string? HelperKey);
+    string? HelperAddress, string? HelperKey, string? YourName, string? Theme, string Version, bool WelcomeDone,
+    long? ReceiveLimit, long? SendLimit, string ReceivedFolder, bool ReceivedFolderChosen);
 
 /// <summary>Every choice at once; the UI sends what it has, with the one it changed.</summary>
 /// <param name="Language">A language tag, or null to follow the system again.</param>
 /// <param name="PublicServers">Addresses of public servers, one per entry; null or empty for none.</param>
 /// <param name="HelperAddress">Where the helper computer takes files; null or empty for none. Goes with <paramref name="HelperKey"/>.</param>
 /// <param name="HelperKey">The helper computer's key; null or empty for none.</param>
+/// <param name="ReceiveLimit">The most received each second, in bytes, for the whole app; null for no limit.</param>
+/// <param name="SendLimit">The most sent each second, in bytes, for the whole app; null for no limit.</param>
 public sealed record SetSettingsArgs(
     string? Language, string? View, string? Sort, int? SendStepsSeen, bool? StartWithWindows, string[]? PublicServers,
-    string? HelperAddress = null, string? HelperKey = null);
+    string? HelperAddress = null, string? HelperKey = null, string? YourName = null, string? Theme = null, bool? WelcomeDone = null,
+    long? ReceiveLimit = null, long? SendLimit = null);
 
 /// <param name="Force">True once the person confirmed quitting although files are moving.</param>
 public sealed record QuitArgs(bool Force);
@@ -226,7 +266,7 @@ public sealed record SetActivityArgs(bool SendingStopped, bool ReceivingStopped)
 /// <param name="BytesSent">Sent since the app started.</param>
 public sealed record ShareDetailsDto(
     string Id, string Name, long SizeBytes, ShareStatusDto Status, string Folder, string AddedAt,
-    long SendingBytesPerSecond, int Connections, long BytesSent);
+    long SendingBytesPerSecond, int Connections, long BytesSent, int ItemCount, ShareKindDto Kind);
 
 /// <summary>The details window of a received file (CAP-26).</summary>
 /// <param name="AddedAt">When receiving started, as an ISO 8601 time.</param>
@@ -261,13 +301,18 @@ public static class Contract
     public static IReadOnlyList<CommandSpec> CommandSpecs { get; } =
     [
         new(Commands.SharesList, null, typeof(ShareDto[])),
-        new(Commands.SharesAdd, null, typeof(ShareDto), ResultMayBeNull: true),
+        // Several files chosen together come back as a count; the screen asks for their name (AD-19).
+        new(Commands.SharesAdd, null, typeof(AddedDto)),
+        new(Commands.SharesAddPicked, typeof(AddPickedArgs), typeof(ShareDto), ResultMayBeNull: true),
+        new(Commands.SharesAddFolder, null, typeof(ShareDto), ResultMayBeNull: true),
         new(Commands.SharesRemove, typeof(IdArgs), null),
         new(Commands.SharesCopyInvite, typeof(CopyInviteArgs), null),
         // The saved file's name, shown to the person; the folder opens with it selected (AD-18: no path crosses the bridge).
         new(Commands.SharesSaveDownloadFile, typeof(IdArgs), typeof(string)),
         new(Commands.SharesPause, typeof(IdArgs), null),
         new(Commands.SharesResume, typeof(IdArgs), null),
+        // Shows the shared file selected in its folder, as received.reveal does for one that arrived.
+        new(Commands.SharesReveal, typeof(IdArgs), null),
         new(Commands.TransfersList, null, typeof(TransferDto[])),
         new(Commands.TransfersPreview, typeof(ReceiveArgs), typeof(InvitePreviewDto)),
         new(Commands.TransfersReceive, typeof(ReceiveArgs), typeof(TransferDto)),
@@ -277,11 +322,16 @@ public static class Contract
         new(Commands.TransfersPause, typeof(IdArgs), null),
         new(Commands.TransfersResume, typeof(IdArgs), null),
         new(Commands.ReceivedOpenFolder, null, null),
-        new(Commands.ReceivedOpen, typeof(IdArgs), null),
+        new(Commands.ReceivedOpen, typeof(OpenReceivedArgs), null),
         new(Commands.ReceivedReveal, typeof(IdArgs), null),
         new(Commands.ReceivedDelete, typeof(IdArgs), null),
+        new(Commands.ReceivedFiles, typeof(IdArgs), typeof(ReceivedFileDto[])),
         new(Commands.SettingsGet, null, typeof(SettingsDto)),
         new(Commands.SettingsSet, typeof(SetSettingsArgs), null),
+        // Opens Windows' folder dialog (AD-7); the name of the folder picked, or null when it was closed.
+        // New transfers go there; running and finished ones stay where they are (epic 12 story 2).
+        new(Commands.SettingsChooseReceivedFolder, null, typeof(string), ResultMayBeNull: true),
+        new(Commands.SettingsUseUsualReceivedFolder, null, null),
         new(Commands.ConnectionGet, null, typeof(ConnectionDto)),
         new(Commands.ConnectionOpenSettings, null, null),
         new(Commands.InvitesTakeOpened, null, typeof(string), ResultMayBeNull: true),
@@ -296,6 +346,8 @@ public static class Contract
         new(Commands.AppLeave, null, null),
         // Fails with media.notPlayable when the file cannot be shown or played here.
         new(Commands.MediaOpen, typeof(MediaArgs), typeof(MediaDto)),
+        // Puts the report for whoever helps the person on the clipboard and returns it, so the Help page shows what was copied.
+        new(Commands.SupportReport, null, typeof(string)),
     ];
 
     public static IReadOnlyList<EventSpec> EventSpecs { get; } =

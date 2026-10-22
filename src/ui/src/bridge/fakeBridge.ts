@@ -1,6 +1,7 @@
 import type { Bridge } from './bridge.ts'
 import type {
   ActivityDto,
+  AddPickedArgs,
   CommandResult,
   ConnectionDto,
   ConnectionHealthDto,
@@ -10,6 +11,7 @@ import type {
   CopyInviteArgs,
   IdArgs,
   InvitePreviewDto,
+  OpenReceivedArgs,
   ItemSpeedDto,
   ReceiveArgs,
   SetActivityArgs,
@@ -32,6 +34,13 @@ import { readPublicServers } from '../publicServers.ts'
 export interface PickedFile {
   name: string
   sizeBytes: number
+}
+
+/** A folder in the fake's folder dialog or dropped on the window: its name, size and how many files it holds. */
+export interface PickedFolder extends PickedFile {
+  itemCount: number
+  /** How many of its files are photos or videos; none when left out. */
+  pictures?: number
 }
 
 export interface FakeBridgeOptions {
@@ -60,25 +69,50 @@ export interface FakeBridgeOptions {
   publicServers?: string[]
   /** The helper computer the person named, as the app stored it. */
   helper?: { address: string; key: string }
+  /** Whether the first-run welcome was done; done when left out, so only its own tests see it. */
+  welcomeDone?: boolean
+  /** The speed limits chosen in Settings, in bytes a second. */
+  receiveLimit?: number
+  sendLimit?: number
+  /** The name and colors the person chose in Settings. */
+  yourName?: string
+  theme?: 'light' | 'dark'
+  /** The name of a folder the person chose for received files; the usual one when left out. */
+  receivedFolder?: string
 }
 
 export interface FakeBridge extends Bridge {
-  /** What the next "file dialog" returns; null means the person cancelled. */
-  nextPick: PickedFile | null
+  /** What the next "file dialog" returns; several files wait for a name; null means the person cancelled. */
+  nextPick: PickedFile | PickedFile[] | null
+  /** What the next folder dialog returns; null means the person cancelled. */
+  nextFolder: PickedFolder | null
+  /**
+   * The name of the folder the next folder dialog for received files returns; null means the person
+   * cancelled, 'unusable' a folder ComParta cannot write to.
+   */
+  nextReceivedFolder: string | 'unusable' | null
+  /** Dropped items with these names are folders, as the window would find. */
+  folders: Record<string, PickedFolder>
   /** Make the next command fail with this code. */
   failNextWith: ErrorCode | null
   /** What the next "open a download file" dialog returns; null means cancelled, 'invalid' a wrong file. */
   nextDownloadFile: PickedFile | 'invalid' | null
   /** Text of the last invite message "copied". */
   copiedInvite: string | null
+  /** The last support report put on the clipboard. */
+  copiedReport: string | null
   /** Ids of shares whose download file was "saved", in order. */
   savedDownloadFiles: string[]
   /** What the system clipboard holds, for the "found an invite you copied" path. */
   clipboardText: string | null
   openedFolder: number
+  /** The name of the folder "Open my received files" last showed. */
+  openedFolderName: string | null
   /** Ids of received files "opened" and "shown in their folder", in order. */
   openedReceived: string[]
   revealedReceived: string[]
+  /** Shared files shown in their folder. */
+  revealedShares: string[]
   /** How many times the firewall settings were opened. */
   openedConnectionSettings: number
   /** How many times the app quit. */
@@ -114,6 +148,8 @@ export const notSending = {
   secondsLeft: null,
   neededBytes: null,
   paused: false,
+  itemCount: 1,
+  kind: 'file',
 } as const
 
 /** Roughly what one ready share sends while someone is getting it, in the moving fake. */
@@ -141,8 +177,32 @@ export function fakePicture(name: string): string {
   return `data:image/svg+xml;base64,${btoa(svg)}`
 }
 
+// As core's MinSpeedLimit and MaxSpeedLimit.
+/** The usual Received folder's name, as the app shows it: ComParta, inside Downloads. */
+const usualReceivedFolder = 'ComParta'
+const minSpeedLimit = 10_000
+const maxSpeedLimit = 1_000_000_000
+
 const ok = <T>(value: T): CommandResult<T> => ({ ok: true, value })
 const fail = (code: ErrorCode): CommandResult<never> => ({ ok: false, error: { code } })
+
+// The same list as the app's ReceivedNames: files that can run a program or change the computer.
+const riskyExtensions = new Set([
+  '.exe', '.com', '.scr', '.pif', '.cpl', '.msi', '.msix', '.msixbundle', '.appx', '.appxbundle', '.msp', '.mst',
+  '.appref-ms', '.application', '.gadget', '.dll', '.sys', '.drv', '.ocx', '.jar', '.msc',
+  '.bat', '.cmd', '.ps1', '.psm1', '.psd1', '.ps1xml', '.vbs', '.vbe', '.js', '.jse', '.wsf', '.wsh', '.wsc',
+  '.hta', '.sct', '.py', '.pyw', '.reg', '.inf', '.scf', '.chm', '.htm', '.html', '.mht', '.mhtml', '.svg', '.xht',
+  '.lnk', '.url', '.website', '.library-ms', '.settingcontent-ms', '.search-ms', '.searchconnector-ms',
+  '.iso', '.img', '.vhd', '.vhdx',
+  '.docm', '.dotm', '.xlsm', '.xltm', '.xlam', '.xla', '.pptm', '.potm', '.ppam', '.ppsm', '.sldm', '.xll',
+])
+const isRiskyName = (name: string | null): boolean => {
+  if (!name) return false
+  const dot = name.lastIndexOf('.')
+  return dot > 0 && riskyExtensions.has(name.slice(dot).toLowerCase())
+}
+// The app computes the risk flag from the name; the fake does the same so both screens agree.
+const withRisk = (transfer: TransferDto): TransferDto => ({ ...transfer, risky: isRiskyName(transfer.name) })
 
 const samplePicks: PickedFile[] = [
   { name: 'Birthday party.mp4', sizeBytes: 1_288_490_188 },
@@ -156,7 +216,7 @@ const samplePicks: PickedFile[] = [
  */
 export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   let shares = [...(options.shares ?? [])]
-  let transfers = [...(options.transfers ?? [])]
+  let transfers = (options.transfers ?? []).map(withRisk)
   let connection: ConnectionHealthDto | null = options.connection === undefined ? 'good' : options.connection
   let nextId = 1
   let nextSample = 0
@@ -208,7 +268,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   const newId = () => `fake-${nextId++}`
 
   const updateTransfer = (id: string, change: Partial<TransferDto>) => {
-    transfers = transfers.map((t) => (t.id === id ? { ...t, ...change } : t))
+    transfers = transfers.map((t) => (t.id === id ? withRisk({ ...t, ...change }) : t))
     emitTransfers()
   }
 
@@ -269,9 +329,10 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       bytesPerSecond: 0,
       secondsLeft: null,
       neededBytes: null,
+      risky: false, folder: false,
       ...known,
     }
-    transfers = [...transfers.filter((t) => t.id !== id), transfer]
+    transfers = [...transfers.filter((t) => t.id !== id), withRisk(transfer)]
     emitTransfers()
     simulateTransfer(id, name, total)
     return ok(transfer)
@@ -303,6 +364,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   }
 
   let openedInvite: string | null = null
+  let problems: { at: Date; code: ErrorCode }[] = []
   let settings: SettingsDto = {
     language: options.language ?? null,
     systemLanguage: options.systemLanguage ?? 'en',
@@ -313,6 +375,14 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     publicServers: options.publicServers ?? [],
     helperAddress: options.helper?.address ?? null,
     helperKey: options.helper?.key ?? null,
+    yourName: options.yourName ?? null,
+    theme: options.theme ?? null,
+    version: '1.2.0',
+    welcomeDone: options.welcomeDone ?? true,
+    receiveLimit: options.receiveLimit ?? null,
+    sendLimit: options.sendLimit ?? null,
+    receivedFolder: options.receivedFolder ?? usualReceivedFolder,
+    receivedFolderChosen: options.receivedFolder !== undefined,
   }
   // What quitting would stop: shares someone is getting and files arriving, as the app counts them.
   const moving = () => [
@@ -368,6 +438,27 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     return ok(share)
   }
 
+  // Several files chosen together, waiting for their name.
+  let picked: PickedFile[] | null = null
+
+  const shareItems = (name: string, kind: 'folder' | 'collection', itemCount: number, sizeBytes: number) => {
+    const made = shareFile({ name, sizeBytes })
+    if (!made.ok) return made
+    shares = shares.map((s) => (s.id === made.value.id ? { ...s, itemCount, kind } : s))
+    emitShares()
+    return ok(shares.find((s) => s.id === made.value.id)!)
+  }
+
+  // The photos and videos in each shared folder, as the app would count them.
+  const picturesIn = new Map<string, number>()
+
+  const shareFolder = (folder: PickedFolder) => {
+    if (folder.itemCount === 0) return fail('share.folderEmpty')
+    const made = shareItems(folder.name, 'folder', folder.itemCount, folder.sizeBytes)
+    if (made.ok) picturesIn.set(made.value.id, folder.pictures ?? 0)
+    return made
+  }
+
   // Files the page handed over with a drop, by token, as the window does in the app.
   const dropped = new Map<string, PickedFile[]>()
 
@@ -376,9 +467,36 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
 
     'shares.add': () => {
       const pick = fake.nextPick
-      if (pick === null) return ok(null)
+      picked = null
+      if (pick === null || (Array.isArray(pick) && pick.length === 0)) return ok({ share: null, filesToName: 0 })
       fake.nextPick = samplePicks[++nextSample % samplePicks.length]
-      return shareFile(pick)
+      if (Array.isArray(pick) && pick.length > 1) {
+        picked = pick
+        return ok({ share: null, filesToName: pick.length })
+      }
+      const one = shareFile(Array.isArray(pick) ? pick[0] : pick)
+      return one.ok ? ok({ share: one.value, filesToName: 0 }) : one
+    },
+
+    // As core: the name is trimmed, and refused when empty, too long or not possible for a folder.
+    'shares.addPicked': (args) => {
+      const { name } = args as AddPickedArgs
+      const files = picked
+      if (name === null || files === null) {
+        picked = null
+        return ok(null)
+      }
+      const trimmed = name.trim()
+      // eslint-disable-next-line no-control-regex
+      if (!trimmed || trimmed.length > 100 || trimmed.endsWith('.') || /[<>:"/\\|?*\u0000-\u001f]/.test(trimmed))
+        return fail('share.nameInvalid')
+      picked = null
+      return shareItems(trimmed, 'collection', files.length, files.reduce((sum, file) => sum + file.sizeBytes, 0))
+    },
+
+    'shares.addFolder': () => {
+      const folder = fake.nextFolder
+      return folder === null ? ok(null) : shareFolder(folder)
     },
 
     'shares.addDropped': (args) => {
@@ -389,7 +507,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       let added = 0
       let problem: ErrorCode | null = null
       for (const file of files) {
-        const result = shareFile(file)
+        const result = fake.folders[file.name] ? shareFolder(fake.folders[file.name]) : shareFile(file)
         if (result.ok) added++
         else problem ??= result.error.code
       }
@@ -407,6 +525,13 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     'shares.pause': (args) => setSharePaused((args as IdArgs).id, true),
 
     'shares.resume': (args) => setSharePaused((args as IdArgs).id, false),
+
+    'shares.reveal': (args) => {
+      const { id } = args as IdArgs
+      if (!shares.some((s) => s.id === id)) return fail('share.notFound')
+      fake.revealedShares.push(id)
+      return ok(null)
+    },
 
     'shares.copyInvite': (args) => {
       const { id, message } = args as CopyInviteArgs
@@ -503,6 +628,18 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       if (!('servers' in read) || entries.some((entry) => entry.includes('\n'))) return fail('settings.invalid')
       const helper = readHelper((args as SetSettingsArgs).helperAddress ?? '', (args as SetSettingsArgs).helperKey ?? '')
       if (!('helper' in helper)) return fail('settings.invalid')
+      // As core: a blank name is none; a long one or one with control characters is refused.
+      const yourName = (args as SetSettingsArgs).yourName?.trim() || null
+      // eslint-disable-next-line no-control-regex
+      if (yourName !== null && (yourName.length > 40 || /[\u0000-\u001f\u007f-\u009f]/.test(yourName)))
+        return fail('settings.invalid')
+      const theme = (args as SetSettingsArgs).theme ?? null
+      if (theme !== null && theme !== 'light' && theme !== 'dark') return fail('settings.invalid')
+      // As core: a limit is a whole number of bytes a second, from 10 thousand to a billion.
+      const { receiveLimit = null, sendLimit = null } = args as SetSettingsArgs
+      const limitOk = (limit: number | null) =>
+        limit === null || (Number.isInteger(limit) && limit >= minSpeedLimit && limit <= maxSpeedLimit)
+      if (!limitOk(receiveLimit) || !limitOk(sendLimit)) return fail('settings.invalid')
       const connectionBefore = connectionDto()
       settings = {
         ...settings,
@@ -514,11 +651,33 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
         publicServers: read.servers,
         helperAddress: helper.helper?.address ?? null,
         helperKey: helper.helper?.key ?? null,
+        yourName,
+        theme,
+        welcomeDone: (args as SetSettingsArgs).welcomeDone ?? false,
+        receiveLimit,
+        sendLimit,
       }
       emit({ event: 'settings.changed', payload: { ...settings } })
       const connectionAfter = connectionDto()
       if (connectionAfter.health !== connectionBefore.health || connectionAfter.throughHelper !== connectionBefore.throughHelper)
         emitConnection()
+      return ok(null)
+    },
+
+    // As the app: only the folder's name reaches the screen; new files go there, earlier ones stay.
+    'settings.chooseReceivedFolder': () => {
+      const picked = fake.nextReceivedFolder
+      if (picked === null) return ok(null)
+      if (picked === 'unusable') return fail('received.folderUnusable')
+      const chosen = picked !== usualReceivedFolder
+      settings = { ...settings, receivedFolder: picked, receivedFolderChosen: chosen }
+      emit({ event: 'settings.changed', payload: { ...settings } })
+      return ok(picked)
+    },
+
+    'settings.useUsualReceivedFolder': () => {
+      settings = { ...settings, receivedFolder: usualReceivedFolder, receivedFolderChosen: false }
+      emit({ event: 'settings.changed', payload: { ...settings } })
       return ok(null)
     },
 
@@ -538,6 +697,35 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       if (!(args as QuitArgs).force && names.length > 0) return ok({ quitting: false, moving: names })
       fake.quits++
       return ok({ quitting: true, moving: [] })
+    },
+
+    // As the app: the facts for whoever helps, the last problems with their times, and never a name, path or invite.
+    'support.report': () => {
+      const counts = (words: string[]) => {
+        const each = [...new Set(words)].sort().map((word) => `${word} ${words.filter((w) => w === word).length}`)
+        return words.length === 0 ? '0' : `${words.length} (${each.join(', ')})`
+      }
+      const time = (at: Date) => `${at.toISOString().slice(0, 16).replace('T', ' ')} UTC`
+      const report = [
+        'ComParta report',
+        `Made: ${time(new Date())}`,
+        `Version: ${settings.version || 'not known'}`,
+        'System: Microsoft Windows 10.0.22631',
+        `Language: ${settings.language ?? 'same as the system'} (system ${settings.systemLanguage})`,
+        '',
+        `Connection: ${connectionDto().health ?? 'not known yet'}`,
+        `Helper computer named: ${settings.helperAddress === null ? 'no' : 'yes'}`,
+        `Public servers named: ${settings.publicServers.length}`,
+        '',
+        `Shared: ${counts(shares.map((s) => (s.paused ? 'paused' : s.status === 'partlyUnavailable' ? 'partly unavailable' : s.status)))}`,
+        `Received: ${counts(transfers.map((t) => t.state))}`,
+        '',
+        'Last problems, newest last:',
+        ...(problems.length === 0 ? ['none'] : problems.map((p) => `${time(p.at)}  ${p.code}`)),
+        '',
+      ].join('\n')
+      fake.copiedReport = report
+      return ok(report)
     },
 
     'app.leave': () => {
@@ -568,10 +756,16 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     },
 
     'thumbnails.get': (args) => {
-      const { kind, id } = args as ThumbnailArgs
+      const { kind, id, item } = args as ThumbnailArgs
+      const folder = kind === 'share' ? shares.find((s) => s.id === id && s.kind !== 'file') : undefined
+      if (folder) {
+        if (folder.status === 'unavailable' || folder.status === 'partlyUnavailable') return ok(null)
+        return ok(item >= 0 && item < Math.min(4, picturesIn.get(id) ?? 0) ? fakePicture(`${folder.name} ${item}.jpg`) : null)
+      }
+      if (item !== 0) return ok(null)
       const name =
         kind === 'share'
-          ? shares.find((s) => s.id === id && s.status !== 'unavailable')?.name
+          ? shares.find((s) => s.id === id && s.status !== 'unavailable' && s.status !== 'partlyUnavailable')?.name
           : (transfers.find((t) => t.id === id && t.state === 'done')?.name ?? undefined)
       if (!name) return kind === 'share' && !shares.some((s) => s.id === id) ? fail('share.notFound') : ok(null)
       return ok(isPicture(name) ? fakePicture(name) : null)
@@ -626,10 +820,26 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
 
     'received.openFolder': () => {
       fake.openedFolder++
+      fake.openedFolderName = settings.receivedFolder
       return ok(null)
     },
 
-    'received.open': (args) => withArrived((args as IdArgs).id, (id) => fake.openedReceived.push(id)),
+    'received.files': (args) => {
+      const transfer = transfers.find((t) => t.id === (args as IdArgs).id)
+      if (!transfer) return fail('transfer.notFound')
+      if (transfer.state !== 'done' || !transfer.folder) return fail('received.notFound')
+      return ok([
+        { relativePath: 'day 1/photo.jpg', sizeBytes: 250_000 },
+        { relativePath: 'notes.txt', sizeBytes: 1_200 },
+      ])
+    },
+
+    'received.open': (args) => {
+      const { id, confirmed } = args as OpenReceivedArgs
+      // As the app: a file that can run a program opens only after the person confirms a second time.
+      if (transfers.some((t) => t.id === id && t.state === 'done' && t.risky) && !confirmed) return fail('received.confirmRisky')
+      return withArrived(id, (opened) => fake.openedReceived.push(opened))
+    },
 
     'received.reveal': (args) => withArrived((args as IdArgs).id, (id) => fake.revealedReceived.push(id)),
 
@@ -643,13 +853,19 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   const fake = {
     openedReceived: [] as string[],
     revealedReceived: [] as string[],
-    nextPick: samplePicks[0] as PickedFile | null,
+    revealedShares: [] as string[],
+    nextPick: samplePicks[0] as PickedFile | PickedFile[] | null,
+    nextFolder: { name: 'Holiday photos', sizeBytes: 734_003_200, itemCount: 200, pictures: 200 } as PickedFolder | null,
+    folders: {} as Record<string, PickedFolder>,
     nextDownloadFile: { name: 'Free documentary.mkv', sizeBytes: 2_147_483_648 } as PickedFile | 'invalid' | null,
     failNextWith: null as ErrorCode | null,
     copiedInvite: null as string | null,
+    copiedReport: null as string | null,
     savedDownloadFiles: [] as string[],
     clipboardText: null as string | null,
     openedFolder: 0,
+    openedFolderName: null as string | null,
+    nextReceivedFolder: 'Family photos' as string | 'unusable' | null,
     openedConnectionSettings: 0,
     quits: 0,
     leaves: 0,
@@ -660,12 +876,14 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     },
 
     async invoke(command: string, args?: unknown) {
+      let result: CommandResult<unknown>
       if (fake.failNextWith) {
-        const code = fake.failNextWith
+        result = fail(fake.failNextWith)
         fake.failNextWith = null
-        return fail(code)
-      }
-      return handlers[command]?.(args) ?? fail('unexpected')
+      } else result = (await handlers[command]?.(args)) ?? fail('unexpected')
+      // As the app: every problem a command answers with is written down for the support report.
+      if (!result.ok) problems = [...problems, { at: new Date(), code: result.error.code }].slice(-20)
+      return result
     },
 
     handOverDrop(token: string, files: File[]) {
@@ -723,7 +941,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     },
 
     setTransfers(next: TransferDto[]) {
-      transfers = [...next]
+      transfers = next.map(withRisk)
       emitTransfers()
     },
 

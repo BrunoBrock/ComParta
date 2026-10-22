@@ -98,6 +98,8 @@ describe('the fake bridge: opening a file inside the app', () => {
     finishedCount: 0,
     secondsLeft: null,
     paused: false,
+    itemCount: 1,
+    kind: 'file' as const,
   })
   const transfer = (id: string, name: string, state: 'done' | 'receiving') => ({
     id,
@@ -108,6 +110,7 @@ describe('the fake bridge: opening a file inside the app', () => {
     bytesPerSecond: 0,
     secondsLeft: null,
     neededBytes: null,
+    risky: false, folder: false,
   })
 
   it('gives an address for a picture, song or video, as the app does, and never a path', async () => {

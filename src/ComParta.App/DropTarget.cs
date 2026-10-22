@@ -39,11 +39,11 @@ internal static class DropTarget
 				if (!message.StartsWith(Prefix, StringComparison.Ordinal) || !Guid.TryParse(message[Prefix.Length..], out var token))
 					return;
 
-				// Folders are left out here too; they can be shared once epic 11 is built.
+				// A folder comes as a file whose path is the folder; core shares it whole (AD-19).
 				var paths = new List<string>();
 				if (e.AdditionalObjects is { } objects)
 					foreach (var item in objects)
-						if (item is CoreWebView2File file && File.Exists(file.Path))
+						if (item is CoreWebView2File file && (File.Exists(file.Path) || Directory.Exists(file.Path)))
 							paths.Add(file.Path);
 				dropped.Put(token, paths);
 			}

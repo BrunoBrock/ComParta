@@ -84,6 +84,15 @@ internal sealed class FakeEngine : ITransferEngine
         return Task.CompletedTask;
     }
 
+    /// <summary>Several files offered as one, by share; <see cref="Offered"/> holds their name.</summary>
+    public Dictionary<ShareId, IReadOnlyList<ShareItem>> OfferedItems { get; } = [];
+
+    public Task OfferItemsAsync(ShareId id, string name, IReadOnlyList<ShareItem> items, CancellationToken ct = default)
+    {
+        OfferedItems[id] = items;
+        return OfferAsync(id, name, ct);
+    }
+
     /// <summary>Runs while a share is being let go of, to see what the app shows meanwhile.</summary>
     public Action? OnStopOffering { get; set; }
 
@@ -119,6 +128,16 @@ internal sealed class FakeEngine : ITransferEngine
         return Task.CompletedTask;
     }
 
+    public (long? Receive, long? Send) SpeedLimits { get; private set; }
+    public int SpeedLimitCalls { get; private set; }
+
+    public Task SetSpeedLimitsAsync(long? receiveBytesPerSecond, long? sendBytesPerSecond, CancellationToken ct = default)
+    {
+        SpeedLimits = (receiveBytesPerSecond, sendBytesPerSecond);
+        SpeedLimitCalls++;
+        return Task.CompletedTask;
+    }
+
     public Task<string?> GetInviteAsync(ShareId id, CancellationToken ct = default) =>
         Task.FromResult(Offered.ContainsKey(id) ? InvitePrefix + id : null);
 
@@ -142,16 +161,24 @@ internal sealed class FakeEngine : ITransferEngine
 
     public string? GetReceiveKey(TransferId id) => Receiving.GetValueOrDefault(id);
 
-    public Task<bool> ReceiveAsync(TransferId id, string inviteText, CancellationToken ct = default)
+    /// <summary>The Received root each transfer was started or continued in; null for the usual one.</summary>
+    public Dictionary<TransferId, string?> Folders { get; } = [];
+
+    public Task<bool> ReceiveAsync(TransferId id, string inviteText, string? folder = null, CancellationToken ct = default)
     {
         var key = ReadInviteKey(inviteText);
         if (key is null)
             return Task.FromResult(false);
         Receiving[id] = key;
+        Folders[id] = folder;
         return Task.FromResult(true);
     }
 
-    public Task<bool> ResumeReceivingAsync(TransferId id, CancellationToken ct = default) => Task.FromResult(Receiving.ContainsKey(id));
+    public Task<bool> ResumeReceivingAsync(TransferId id, string? folder = null, CancellationToken ct = default)
+    {
+        Folders[id] = folder;
+        return Task.FromResult(Receiving.ContainsKey(id));
+    }
 
     public Task StopReceivingAsync(TransferId id, CancellationToken ct = default)
     {
@@ -166,12 +193,13 @@ internal sealed class FakeEngine : ITransferEngine
         return text.StartsWith(DownloadFilePrefix, StringComparison.Ordinal) ? text[DownloadFilePrefix.Length..] : null;
     }
 
-    public Task<bool> ReceiveFromFileAsync(TransferId id, byte[] content, CancellationToken ct = default)
+    public Task<bool> ReceiveFromFileAsync(TransferId id, byte[] content, string? folder = null, CancellationToken ct = default)
     {
         var key = ReadDownloadFileKey(content);
         if (key is null)
             return Task.FromResult(false);
         Receiving[id] = key;
+        Folders[id] = folder;
         return Task.FromResult(true);
     }
 
@@ -196,6 +224,12 @@ internal sealed class FakeFilePicker : IFilePicker
     public string? NextPick { get; set; }
     public Task<string?> PickFileAsync(CancellationToken ct = default) => Task.FromResult(NextPick);
     public Task<string?> PickDownloadFileAsync(CancellationToken ct = default) => Task.FromResult(NextPick);
+    /// <summary>Several files chosen together; when null, the one in <see cref="NextPick"/>.</summary>
+    public IReadOnlyList<string>? NextPicks { get; set; }
+    public Task<IReadOnlyList<string>> PickFilesAsync(CancellationToken ct = default) =>
+        Task.FromResult(NextPicks ?? (NextPick is null ? [] : [NextPick]));
+    public string? NextFolder { get; set; }
+    public Task<string?> PickFolderAsync(CancellationToken ct = default) => Task.FromResult(NextFolder);
 }
 
 /// <summary>Holds sizes only; it has no way to change, move or delete a file.</summary>
@@ -205,6 +239,21 @@ internal sealed class FakeFileSystem : IFileSystem
     public HashSet<string> Locked { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public bool FileExists(string path) => Files.ContainsKey(path);
+
+    /// <summary>Folders that exist but hold nothing; any folder above a file exists too.</summary>
+    public HashSet<string> EmptyFolders { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public bool FolderExists(string path) =>
+        EmptyFolders.Contains(path) || Files.Keys.Any(file => file.StartsWith(Path.TrimEndingDirectorySeparator(path) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+
+    public IReadOnlyList<string> ListFiles(string folder)
+    {
+        if (!FolderExists(folder))
+            throw new DirectoryNotFoundException(folder);
+        var root = Path.TrimEndingDirectorySeparator(folder) + Path.DirectorySeparatorChar;
+        return [.. Files.Keys.Where(file => file.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+            .Select(file => file[root.Length..]).Order(StringComparer.OrdinalIgnoreCase)];
+    }
 
     public Dictionary<string, byte[]> Contents { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -221,8 +270,13 @@ internal sealed class FakeFileSystem : IFileSystem
         Deleted.Add(path);
     }
 
+    /// <summary>Folders that can be read but not written, such as a CD or a folder Windows protects.</summary>
+    public HashSet<string> ReadOnlyFolders { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public void WriteNewFile(string path, byte[] content)
     {
+        if (ReadOnlyFolders.Contains(Path.GetDirectoryName(path) ?? ""))
+            throw new UnauthorizedAccessException("read only");
         if (Locked.Contains(path) || Files.ContainsKey(path))
             throw new IOException("cannot write");
         Files[path] = content.Length;
@@ -251,11 +305,13 @@ internal sealed class FakePaths(string root) : IAppPaths
 internal sealed class FakeOpener : IContentOpener
 {
     public int FolderOpened { get; private set; }
+    /// <summary>The Received root last shown; null for the usual one.</summary>
+    public string? OpenedFolder { get; private set; }
     public List<string> Opened { get; } = [];
     public List<string> Revealed { get; } = [];
     public bool OpenWorks { get; set; } = true;
 
-    public Task OpenReceivedFolderAsync(CancellationToken ct = default) { FolderOpened++; return Task.CompletedTask; }
+    public Task OpenReceivedFolderAsync(string? folder, CancellationToken ct = default) { FolderOpened++; OpenedFolder = folder; return Task.CompletedTask; }
     public Task<bool> OpenAsync(string path, CancellationToken ct = default) { Opened.Add(path); return Task.FromResult(OpenWorks); }
     public Task RevealAsync(string path, CancellationToken ct = default) { Revealed.Add(path); return Task.CompletedTask; }
 }
@@ -278,7 +334,9 @@ internal sealed class FakeThumbnails : IThumbnailProvider
 internal sealed class FakeStorage : IStorageInfo
 {
     public long? FreeBytes { get; set; }
-    public long? GetReceivedFreeBytes() => FreeBytes;
+    /// <summary>Free bytes on the drive of a chosen folder, when it differs from the usual one's.</summary>
+    public Dictionary<string, long?> FreeIn { get; } = [];
+    public long? GetReceivedFreeBytes(string? folder) => folder is not null && FreeIn.TryGetValue(folder, out var free) ? free : FreeBytes;
 }
 
 internal sealed class FakeSettingsRepository : ISettingsRepository
@@ -293,9 +351,11 @@ internal sealed class FakeSettingsRepository : ISettingsRepository
     }
 }
 
-internal sealed class FakeSystem(string uiLanguage) : ISystemInfo
+internal sealed class FakeSystem(string uiLanguage, string appVersion = "", string systemVersion = "") : ISystemInfo
 {
     public string UiLanguage { get; } = uiLanguage;
+    public string AppVersion { get; } = appVersion;
+    public string SystemVersion { get; } = systemVersion;
 }
 
 internal sealed class FakeFirewall : IFirewall

@@ -39,6 +39,7 @@ public sealed class ButtonsTests : IAsyncLifetime
     private Exception? _failure;
     private readonly Clipboard _clipboard = new();
     private FakePaths _paths = null!;
+    private readonly FakeOpener _opener = new();
     private readonly FakePresence _presence = new();
     private BackgroundUseCases _background = null!;
 
@@ -75,19 +76,24 @@ public sealed class ButtonsTests : IAsyncLifetime
 
         // As in AppServices.StartAsync.
         var shares = new ShareUseCases(store, _engine, _picker, _files, paths: paths);
-        var transfers = new TransferUseCases(store, _engine, picker: _picker, files: _files, storage: new FakeStorage());
-        var settings = new SettingsUseCases(store, new FakeSystem("en"), _engine);
+        // The folder dialog is a stand-in; whether a folder can be written is checked on the real disk.
+        var receivedFolder = new ReceivedFolder(store, paths, _picker, new LocalFileSystem());
+        var transfers = new TransferUseCases(store, _engine, picker: _picker, files: _files, storage: new FakeStorage(), received: receivedFolder);
+        var settings = new SettingsUseCases(store, new FakeSystem("en"), _engine, receivedFolder);
         var connection = new ConnectionUseCases(_engine, new FakeFirewall());
         var activity = new ActivityUseCases(_engine, store);
-        var opener = new FakeOpener();
-        var received = new ReceivedUseCases(transfers, paths, opener, _files);
+        var opener = _opener;
+        // What has arrived is read from the real Received folder, as in the app.
+        var disk = new LocalFileSystem();
+        var received = new ReceivedUseCases(transfers, paths, opener, disk);
         var thumbnails = new ThumbnailUseCases(shares, received, new FakeThumbnails());
         var sending = new SendingUseCases(_engine, shares);
         var notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, new FakeNotifier(), new FakeWindow());
         var background = _background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, _presence);
         _router = new BridgeRouter(
             shares, transfers, settings, connection, new OpenedInvites(), activity, received, _clipboard, opener, thumbnails,
-            new DroppedFiles(), sending, notifications, background, new MediaUseCases(shares, received, new LocalFileSystem()));
+            new DroppedFiles(), sending, notifications, background, new MediaUseCases(shares, received, disk),
+            new SupportUseCases(store, new FakeSystem("en"), settings, shares, transfers, connection));
         _router.EventRaised += json => _events.Enqueue(JsonDocument.Parse(json).RootElement.Clone());
         _router.CommandFailed += (_, e) => _failure = e;
 
@@ -150,13 +156,69 @@ public sealed class ButtonsTests : IAsyncLifetime
         _files.Files[path] = 200_000;
         _picker.NextPick = path;
 
-        var id = (await ClickAsync(Commands.SharesAdd)).GetProperty("id").GetString()!;
+        var id = (await ClickAsync(Commands.SharesAdd)).GetProperty("share").GetProperty("id").GetString()!;
         await ScreenShowsAsync(Events.SharesChanged, shares => shares.EnumerateArray().Any(s =>
             s.GetProperty("id").GetString() == id && s.GetProperty("status").GetString() == "ready"));
         // Once the router has mapped the port, stopping the last file used to wait for it to unmap.
         for (var i = 0; i < 100 && _engine.PortMapper!.Mappings.Created.Count == 0; i++)
             await Task.Delay(50);
         return id;
+    }
+
+    [Fact]
+    public async Task A_folder_and_several_named_files_each_become_one_share_kept_in_the_database()
+    {
+        var folder = Path.Combine(_folder, "originals", "Trip");
+        Directory.CreateDirectory(Path.Combine(folder, "day 2"));
+        foreach (var name in new[] { "beach.jpg", Path.Combine("day 2", "hill.jpg") })
+        {
+            File.WriteAllBytes(Path.Combine(folder, name), RandomNumberGenerator.GetBytes(1_000));
+            _files.Files[Path.Combine(folder, name)] = 1_000;
+        }
+
+        _picker.NextFolder = folder;
+        var shared = await ClickAsync(Commands.SharesAddFolder);
+        Assert.Equal(("Trip", "folder", 2), (shared.GetProperty("name").GetString(), shared.GetProperty("kind").GetString(), shared.GetProperty("itemCount").GetInt32()));
+        await ScreenShowsAsync(Events.SharesChanged, list => list.EnumerateArray().Any(s => s.GetProperty("kind").GetString() == "folder"));
+        var folderId = shared.GetProperty("id").GetString()!;
+        // Its card shows its photos, and its details how many files it has.
+        Assert.Equal(JsonValueKind.String, (await ClickAsync(Commands.ThumbnailsGet, new ThumbnailArgs(ThumbnailKindDto.Share, folderId, 96, 1))).ValueKind);
+        Assert.NotEqual(JsonValueKind.String, (await ClickAsync(Commands.ThumbnailsGet, new ThumbnailArgs(ThumbnailKindDto.Share, folderId, 96, 2))).ValueKind);
+        var details = await ClickAsync(Commands.SharesDetails, new IdArgs(folderId));
+        Assert.Equal((2, "folder"), (details.GetProperty("itemCount").GetInt32(), details.GetProperty("kind").GetString()));
+
+        _picker.NextPicks = [Path.Combine(folder, "beach.jpg"), Path.Combine(folder, "day 2", "hill.jpg")];
+        Assert.Equal(2, (await ClickAsync(Commands.SharesAdd)).GetProperty("filesToName").GetInt32());
+        var named = await ClickAsync(Commands.SharesAddPicked, new AddPickedArgs("Best of the trip"));
+        Assert.Equal(("collection", 2000L), (named.GetProperty("kind").GetString(), named.GetProperty("sizeBytes").GetInt64()));
+
+        // The engine reads each file where it is, so both are ready to send with one invite each.
+        await ScreenShowsAsync(Events.SharesChanged, list => list.GetArrayLength() == 2
+            && list.EnumerateArray().All(s => s.GetProperty("status").GetString() == "ready"));
+        await ClickAsync(Commands.SharesCopyInvite, new CopyInviteArgs(named.GetProperty("id").GetString()!, null));
+        Assert.Contains("Best", _clipboard.Text);
+
+        var stored = await ((IShareRepository)await SqliteStore.OpenAsync(_paths.DatabasePath)).GetAllAsync();
+        Assert.Equal([ShareKind.Folder, ShareKind.Collection], stored.Select(s => s.Kind));
+        Assert.Equal(["beach.jpg", "day 2/hill.jpg"], stored[0].Items.Select(i => i.RelativePath));
+        Assert.Equal(Path.Combine(folder, "day 2", "hill.jpg"), stored[1].Items[1].ContentRef);
+        _picker.NextPicks = null;
+    }
+
+    [Fact]
+    public async Task A_shared_file_is_one_item_kept_in_the_database_and_marked_when_it_goes_missing()
+    {
+        var id = await ShareAFileAsync("letter.pdf");
+        var path = Path.Combine(_folder, "originals", "letter.pdf");
+
+        var listed = Assert.Single((await ClickAsync(Commands.SharesList)).EnumerateArray());
+        Assert.Equal((1, "file"), (listed.GetProperty("itemCount").GetInt32(), listed.GetProperty("kind").GetString()));
+        var stored = Assert.Single(await ((IShareRepository)await SqliteStore.OpenAsync(_paths.DatabasePath)).GetAllAsync());
+        Assert.Equal(new ShareItem("letter.pdf", 200_000, path), Assert.Single(stored.Items));
+
+        _files.Files.Remove(path);
+        var missing = Assert.Single((await ClickAsync(Commands.SharesList)).EnumerateArray());
+        Assert.Equal((id, "unavailable"), (missing.GetProperty("id").GetString(), missing.GetProperty("status").GetString()));
     }
 
     [Theory]
@@ -195,10 +257,254 @@ public sealed class ButtonsTests : IAsyncLifetime
             Assert.Equal(ErrorCodes.MediaNotPlayable, result.GetProperty("error").GetProperty("code").GetString());
         }
 
-        // A program renamed to look like a video is refused too.
+        // A program renamed to look like a video is refused too, and Open the folder shows it selected there.
         var renamed = await ShareAFileAsync("film.mp4", "MZ"u8.ToArray());
         var answer = await _router.InvokeAsync(Commands.MediaOpen, JsonSerializer.Serialize(new MediaArgs(ItemKindDto.Share, renamed), Contract.Json));
         Assert.Contains(ErrorCodes.MediaNotPlayable, answer, StringComparison.Ordinal);
+        await ClickAsync(Commands.SharesReveal, new IdArgs(renamed));
+        Assert.Equal([Path.Combine(_folder, "originals", "film.mp4")], _opener.Revealed);
+    }
+
+    [Fact]
+    public async Task A_received_program_opens_only_after_the_person_confirms_a_second_time()
+    {
+        // Another device on this computer shares a program.
+        var originals = Path.Combine(_folder, "originals");
+        Directory.CreateDirectory(originals);
+        var program = Path.Combine(originals, "setup.exe");
+        File.WriteAllBytes(program, [0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00]);
+        await using var sender = new MonoTorrentTransferEngine(new FakePaths(Path.Combine(_folder, "sender-program")));
+        await sender.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var offered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shareId = ShareId.New();
+        sender.OfferChanged += (changed, state) =>
+        {
+            if (changed == shareId && state == OfferState.Ready)
+                offered.TrySetResult();
+        };
+        await sender.OfferAsync(shareId, program);
+        await offered.Task.WaitAsync(Timeout);
+        var invite = (await sender.GetInviteAsync(shareId))!;
+
+        var id = (await ClickAsync(Commands.TransfersReceive, new ReceiveArgs(invite))).GetProperty("id").GetString()!;
+        Assert.True(TransferId.TryParse(id, out var transferId));
+        await _engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        var shown = await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+        var row = shown.EnumerateArray().Single(t => t.GetProperty("id").GetString() == id);
+        Assert.True(row.GetProperty("risky").GetBoolean());
+
+        // The first ask is refused and nothing runs; the second ask, after the person confirms, opens it.
+        var first = JsonDocument.Parse(await _router.InvokeAsync(
+            Commands.ReceivedOpen, JsonSerializer.Serialize(new OpenReceivedArgs(id), Contract.Json)).WaitAsync(Quick)).RootElement;
+        Assert.Equal(ErrorCodes.ReceivedConfirmRisky, first.GetProperty("error").GetProperty("code").GetString());
+        Assert.Empty(_opener.Opened);
+
+        await ClickAsync(Commands.ReceivedOpen, new OpenReceivedArgs(id, true));
+        Assert.Single(_opener.Opened);
+        Assert.EndsWith("setup.exe", _opener.Opened[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_received_folder_is_one_item_marked_as_a_folder_and_lists_its_files()
+    {
+        // Another device on this computer shares a folder with a file one level down.
+        var originals = Path.Combine(_folder, "originals-trip");
+        Directory.CreateDirectory(Path.Combine(originals, "day 1"));
+        var items = new List<ShareItem>();
+        foreach (var place in new[] { "day 1/photo.jpg", "notes.txt" })
+        {
+            var file = Path.Combine(originals, place.Replace('/', Path.DirectorySeparatorChar));
+            File.WriteAllBytes(file, RandomNumberGenerator.GetBytes(150_000));
+            items.Add(new ShareItem(place, new FileInfo(file).Length, file));
+        }
+        await using var sender = new MonoTorrentTransferEngine(new FakePaths(Path.Combine(_folder, "sender-trip")));
+        await sender.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var offered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shareId = ShareId.New();
+        sender.OfferChanged += (changed, state) =>
+        {
+            if (changed == shareId && state == OfferState.Ready)
+                offered.TrySetResult();
+        };
+        await sender.OfferItemsAsync(shareId, "Trip", items);
+        await offered.Task.WaitAsync(Timeout);
+        var invite = (await sender.GetInviteAsync(shareId))!;
+
+        var id = (await ClickAsync(Commands.TransfersReceive, new ReceiveArgs(invite))).GetProperty("id").GetString()!;
+        Assert.True(TransferId.TryParse(id, out var transferId));
+        await _engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+
+        var rows = await ClickAsync(Commands.TransfersList);
+        var row = rows.EnumerateArray().Single(t => t.GetProperty("id").GetString() == id);
+        Assert.Equal("Trip", row.GetProperty("name").GetString());
+        Assert.True(row.GetProperty("folder").GetBoolean());
+
+        var listed = await ClickAsync(Commands.ReceivedFiles, new IdArgs(id));
+        Assert.Equal(["day 1/photo.jpg", "notes.txt"], listed.EnumerateArray().Select(f => f.GetProperty("relativePath").GetString()));
+    }
+
+    [Fact]
+    public async Task A_received_photo_opens_in_the_viewer_from_the_Received_folder()
+    {
+        // Another device on this computer shares a photo.
+        var originals = Path.Combine(_folder, "originals");
+        Directory.CreateDirectory(originals);
+        var photo = Path.Combine(originals, "from grandma.jpg");
+        var content = RandomNumberGenerator.GetBytes(150_000);
+        new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }.CopyTo(content, 0);
+        File.WriteAllBytes(photo, content);
+        await using var sender = new MonoTorrentTransferEngine(new FakePaths(Path.Combine(_folder, "sender")));
+        await sender.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var offered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shareId = ShareId.New();
+        sender.OfferChanged += (changed, state) =>
+        {
+            if (changed == shareId && state == OfferState.Ready)
+                offered.TrySetResult();
+        };
+        await sender.OfferAsync(shareId, photo);
+        await offered.Task.WaitAsync(Timeout);
+        var invite = (await sender.GetInviteAsync(shareId))!;
+
+        var id = (await ClickAsync(Commands.TransfersReceive, new ReceiveArgs(invite))).GetProperty("id").GetString()!;
+        // Discovery is closed in tests, so the two are introduced by hand.
+        Assert.True(TransferId.TryParse(id, out var transferId));
+        await _engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+
+        var opened = await ClickAsync(Commands.MediaOpen, new MediaArgs(ItemKindDto.Transfer, id));
+        Assert.Equal(("picture", "from grandma.jpg"), (opened.GetProperty("kind").GetString(), opened.GetProperty("name").GetString()));
+        var reply = _router.ServeMedia(opened.GetProperty("url").GetString()!, null);
+        Assert.Equal((200, "image/jpeg"), (reply.Status, reply.ContentType));
+        Assert.Equal(content, ReadAll(reply));
+    }
+
+    /// <summary>Another device on this computer shares a file of this name; this app receives it through the screen's Receive button.</summary>
+    private async Task<(string Id, byte[] Content)> ReceiveFromAnotherDeviceAsync(string name)
+    {
+        var originals = Path.Combine(_folder, "originals");
+        Directory.CreateDirectory(originals);
+        var original = Path.Combine(originals, name);
+        var content = RandomNumberGenerator.GetBytes(120_000);
+        File.WriteAllBytes(original, content);
+        await using var sender = new MonoTorrentTransferEngine(new FakePaths(Path.Combine(_folder, "sender-" + Guid.NewGuid().ToString("N"))));
+        await sender.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var offered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shareId = ShareId.New();
+        sender.OfferChanged += (changed, state) =>
+        {
+            if (changed == shareId && state == OfferState.Ready)
+                offered.TrySetResult();
+        };
+        await sender.OfferAsync(shareId, original);
+        await offered.Task.WaitAsync(Timeout);
+        var invite = (await sender.GetInviteAsync(shareId))!;
+
+        var id = (await ClickAsync(Commands.TransfersReceive, new ReceiveArgs(invite))).GetProperty("id").GetString()!;
+        Assert.True(TransferId.TryParse(id, out var transferId));
+        await _engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+        return (id, content);
+    }
+
+    [Fact]
+    public async Task A_received_folder_chosen_in_settings_takes_new_files_and_earlier_ones_stay_where_they_are()
+    {
+        var before = await ReceiveFromAnotherDeviceAsync("before.jpg");
+
+        // The person picks a folder on another drive in Windows' folder dialog.
+        var family = Path.Combine(_folder, "other drive", "Family");
+        Directory.CreateDirectory(family);
+        _files.EmptyFolders.Add(family);
+        _picker.NextFolder = family;
+        Assert.Equal("Family", (await ClickAsync(Commands.SettingsChooseReceivedFolder)).GetString());
+        await ScreenShowsAsync(Events.SettingsChanged, s =>
+            s.GetProperty("receivedFolder").GetString() == "Family" && s.GetProperty("receivedFolderChosen").GetBoolean());
+        // The screen is given the folder's name, never its path (AD-7).
+        Assert.DoesNotContain(_folder, (await ClickAsync(Commands.SettingsGet)).GetRawText(), StringComparison.OrdinalIgnoreCase);
+
+        var after = await ReceiveFromAnotherDeviceAsync("after.jpg");
+
+        // The new file is in the chosen folder, the earlier one where it was, and nothing unfinished is left.
+        Assert.Equal(after.Content, File.ReadAllBytes(Path.Combine(family, "after.jpg")));
+        Assert.Equal(before.Content, File.ReadAllBytes(Path.Combine(_paths.ReceivedRoot, "before.jpg")));
+        Assert.False(File.Exists(Path.Combine(_paths.ReceivedRoot, "after.jpg")));
+        Assert.Empty(Directory.EnumerateFiles(Path.Combine(family, ".in-progress"), "*", SearchOption.AllDirectories));
+
+        // Open, and Open my received files, each go to the right place.
+        await ClickAsync(Commands.ReceivedOpen, new OpenReceivedArgs(before.Id));
+        await ClickAsync(Commands.ReceivedOpen, new OpenReceivedArgs(after.Id));
+        Assert.Equal([Path.Combine(_paths.ReceivedRoot, "before.jpg"), Path.Combine(family, "after.jpg")], _opener.Opened);
+        await ClickAsync(Commands.ReceivedOpenFolder);
+        Assert.Equal(family, _opener.OpenedFolder);
+
+        // The app opens the same choice and the same places next time.
+        var store = await SqliteStore.OpenAsync(_paths.DatabasePath);
+        var next = new ReceivedFolder(store, _paths);
+        await next.LoadAsync();
+        Assert.Equal(family, next.Chosen);
+        var stored = await ((ITransferRepository)store).GetAllAsync();
+        Assert.Equal([null, family], stored.Select(t => t.Folder));
+
+        // Back to the usual folder.
+        await ClickAsync(Commands.SettingsUseUsualReceivedFolder);
+        await ScreenShowsAsync(Events.SettingsChanged, s => !s.GetProperty("receivedFolderChosen").GetBoolean());
+        await ClickAsync(Commands.ReceivedOpenFolder);
+        Assert.Null(_opener.OpenedFolder);
+    }
+
+    [Fact]
+    public async Task A_received_folder_that_cannot_be_written_is_refused_with_its_own_words()
+    {
+        _picker.NextFolder = Path.Combine(_folder, "not there");
+        var json = await _router.InvokeAsync(Commands.SettingsChooseReceivedFolder, "null").WaitAsync(Quick);
+        Assert.Equal(ErrorCodes.ReceivedFolderUnusable, JsonDocument.Parse(json).RootElement.GetProperty("error").GetProperty("code").GetString());
+
+        // Closing the dialog is not a problem and changes nothing.
+        _picker.NextFolder = null;
+        Assert.Equal(JsonValueKind.Undefined, (await ClickAsync(Commands.SettingsChooseReceivedFolder)).ValueKind);
+        Assert.False((await ClickAsync(Commands.SettingsGet)).GetProperty("receivedFolderChosen").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_receive_limit_chosen_in_settings_slows_a_file_down_and_is_kept()
+    {
+        await ClickAsync(Commands.SettingsSet, new SetSettingsArgs(null, null, null, 0, false, null, WelcomeDone: true, ReceiveLimit: 100_000));
+        await ScreenShowsAsync(Events.SettingsChanged, s => s.GetProperty("receiveLimit").ValueKind == JsonValueKind.Number);
+
+        var originals = Path.Combine(_folder, "originals");
+        Directory.CreateDirectory(originals);
+        var file = Path.Combine(originals, "slow.bin");
+        File.WriteAllBytes(file, RandomNumberGenerator.GetBytes(600_000));
+        await using var sender = new MonoTorrentTransferEngine(new FakePaths(Path.Combine(_folder, "sender")));
+        await sender.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var offered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shareId = ShareId.New();
+        sender.OfferChanged += (changed, state) =>
+        {
+            if (changed == shareId && state == OfferState.Ready)
+                offered.TrySetResult();
+        };
+        await sender.OfferAsync(shareId, file);
+        await offered.Task.WaitAsync(Timeout);
+        var invite = (await sender.GetInviteAsync(shareId))!;
+
+        var id = (await ClickAsync(Commands.TransfersReceive, new ReceiveArgs(invite))).GetProperty("id").GetString()!;
+        Assert.True(TransferId.TryParse(id, out var transferId));
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await _engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+
+        // 600 KB at 100 KB a second: about six seconds, where it would otherwise take under one.
+        Assert.True(watch.Elapsed > TimeSpan.FromSeconds(3), $"It arrived in {watch.Elapsed}.");
+        var store = await SqliteStore.OpenAsync(_paths.DatabasePath);
+        Assert.Equal(100_000, (await new SettingsUseCases(store, new FakeSystem("en")).GetAsync()).ReceiveLimit);
     }
 
     private static byte[] ReadAll(MediaReply reply)
@@ -344,6 +650,48 @@ public sealed class ButtonsTests : IAsyncLifetime
         var preview = await ClickAsync(Commands.TransfersPreview, new ReceiveArgs(message));
         Assert.Equal("for other apps.bin", preview.GetProperty("name").GetString());
         Assert.Equal(magnet.Size, preview.GetProperty("sizeBytes").GetInt64());
+    }
+
+    [Fact]
+    public async Task Your_name_and_colors_chosen_in_settings_are_shown_and_kept_after_a_restart()
+    {
+        await ClickAsync(Commands.SettingsSet, new SetSettingsArgs(null, null, null, 0, false, null, YourName: "Ana", Theme: "dark", WelcomeDone: true));
+
+        await ScreenShowsAsync(Events.SettingsChanged, s => s.GetProperty("yourName").GetString() == "Ana" && s.GetProperty("theme").GetString() == "dark");
+        var shown = await ClickAsync(Commands.SettingsGet);
+        Assert.Equal(("Ana", "dark"), (shown.GetProperty("yourName").GetString(), shown.GetProperty("theme").GetString()));
+
+        // The app opens the same stored choices next time.
+        var store = await SqliteStore.OpenAsync(_paths.DatabasePath);
+        var next = await new SettingsUseCases(store, new FakeSystem("en")).GetAsync();
+        Assert.Equal(("Ana", "dark", true), (next.YourName, next.Theme, next.WelcomeDone));
+
+        var json = await _router.InvokeAsync(Commands.SettingsSet, JsonSerializer.Serialize(new { theme = "blue" }, Contract.Json)).WaitAsync(Quick);
+        Assert.Equal(ErrorCodes.SettingsInvalid, JsonDocument.Parse(json).RootElement.GetProperty("error").GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task The_help_page_copies_a_report_with_the_last_problems_and_no_file_names()
+    {
+        await ShareAFileAsync("Family secrets.bin");
+        var json = await _router.InvokeAsync(Commands.SharesRemove, JsonSerializer.Serialize(new { id = Guid.NewGuid() }, Contract.Json)).WaitAsync(Quick);
+        Assert.Equal(ErrorCodes.ShareNotFound, JsonDocument.Parse(json).RootElement.GetProperty("error").GetProperty("code").GetString());
+
+        var report = (await ClickAsync(Commands.SupportReport)).GetString()!;
+
+        Assert.Equal(report, _clipboard.Text);
+        Assert.Contains("Shared: 1 (", report);
+        Assert.Contains("UTC  share.notFound\n", report);
+        Assert.DoesNotContain("secrets", report, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(_folder, report);
+
+        // The problems are kept in the app's own data, so they are still in the report after a restart.
+        var store = await SqliteStore.OpenAsync(_paths.DatabasePath);
+        var settings = new SettingsUseCases(store, new FakeSystem("en"));
+        var again = await new SupportUseCases(
+            store, new FakeSystem("en"), settings, new ShareUseCases(store, _engine, _picker, _files),
+            new TransferUseCases(store, _engine), new ConnectionUseCases(_engine)).ReportAsync();
+        Assert.Contains("UTC  share.notFound\n", again);
     }
 
     [Fact]

@@ -19,6 +19,7 @@ public sealed class TransferUseCases
     private readonly IFilePicker? _picker;
     private readonly IFileSystem? _files;
     private readonly IStorageInfo? _storage;
+    private readonly ReceivedFolder? _received;
     private readonly TimeProvider _clock;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Dictionary<TransferId, TransferView> _transfers = [];
@@ -34,13 +35,15 @@ public sealed class TransferUseCases
         TimeProvider? clock = null,
         IFilePicker? picker = null,
         IFileSystem? files = null,
-        IStorageInfo? storage = null)
+        IStorageInfo? storage = null,
+        ReceivedFolder? received = null)
     {
         _repository = repository;
         _engine = engine;
         _picker = picker;
         _files = files;
         _storage = storage;
+        _received = received;
         _clock = clock ?? TimeProvider.System;
         _engine.ReceiveProgressed += OnReceiveProgressed;
         _engine.ActivityChanged += OnActivityChanged;
@@ -61,7 +64,7 @@ public sealed class TransferUseCases
                 {
                     Set(new TransferView(transfer, TransferState.Done, transfer.SizeBytes ?? 0));
                 }
-                else if (await _engine.ResumeReceivingAsync(transfer.Id, ct))
+                else if (await _engine.ResumeReceivingAsync(transfer.Id, transfer.Folder, ct))
                 {
                     if (transfer.Paused)
                         await _engine.PauseReceivingAsync(transfer.Id, ct);
@@ -99,7 +102,7 @@ public sealed class TransferUseCases
             Name = invite.Hints.Name ?? summary.Name,
             SizeBytes = invite.Hints.SizeBytes ?? summary.SizeBytes,
         };
-        return Result<InvitePreview>.Success(new InvitePreview(hints, invite.IsLink, _storage?.GetReceivedFreeBytes()));
+        return Result<InvitePreview>.Success(new InvitePreview(hints, invite.IsLink, _storage?.GetReceivedFreeBytes(_received?.Chosen)));
     }
 
     /// <summary>Starts receiving the file an invite or a download link points to.</summary>
@@ -116,7 +119,7 @@ public sealed class TransferUseCases
         if (key is null)
             return Result<TransferView>.Fail(ErrorKind.InviteInvalid);
         var source = invite.IsLink ? TransferSource.Invite : TransferSource.DownloadLink;
-        return await StartAsync(key, id => _engine.ReceiveAsync(id, invite.EngineText, ct), ErrorKind.InviteInvalid, source, ct);
+        return await StartAsync(key, (id, folder) => _engine.ReceiveAsync(id, invite.EngineText, folder, ct), ErrorKind.InviteInvalid, source, ct);
     }
 
     /// <summary>
@@ -168,13 +171,17 @@ public sealed class TransferUseCases
         if (key is null)
             return Result<TransferView?>.Fail(ErrorKind.DownloadFileInvalid);
         var started = await StartAsync(
-            key, id => _engine.ReceiveFromFileAsync(id, content, ct), ErrorKind.DownloadFileInvalid, TransferSource.DownloadFile, ct);
+            key, (id, folder) => _engine.ReceiveFromFileAsync(id, content, folder, ct), ErrorKind.DownloadFileInvalid, TransferSource.DownloadFile, ct);
         return started.Ok ? Result<TransferView?>.Success(started.Value) : Result<TransferView?>.Fail(started.Error!.Value);
     }
 
     private async Task<Result<TransferView>> StartAsync(
-        string key, Func<TransferId, Task<bool>> receive, ErrorKind refused, TransferSource source, CancellationToken ct)
+        string key, Func<TransferId, string?, Task<bool>> receive, ErrorKind refused, TransferSource source, CancellationToken ct)
     {
+        // A new transfer goes where the person chose now; one already running stays where it is.
+        var folder = _received?.Chosen;
+        if (folder is not null && _files is not null && !_files.FolderExists(folder))
+            return Result<TransferView>.Fail(ErrorKind.ReceivedFolderMissing);
         TransferView view;
         await _gate.WaitAsync(ct);
         try
@@ -183,8 +190,8 @@ public sealed class TransferUseCases
             if (running.Any(id => _engine.GetReceiveKey(id) == key))
                 return Result<TransferView>.Fail(ErrorKind.TransferDuplicate);
 
-            var transfer = new Transfer(TransferId.New(), null, null, false, _clock.GetUtcNow(), Source: source);
-            if (!await receive(transfer.Id))
+            var transfer = new Transfer(TransferId.New(), null, null, false, _clock.GetUtcNow(), Source: source, Folder: folder);
+            if (!await receive(transfer.Id, folder))
                 return Result<TransferView>.Fail(refused);
             await _repository.AddAsync(transfer, ct);
             view = Set(new TransferView(transfer, TransferState.Connecting, 0));
@@ -292,7 +299,7 @@ public sealed class TransferUseCases
             if (received > view.ReceivedBytes)
                 _lastContact[progress.Id] = now;
             var left = transfer.SizeBytes is { } size ? size - received : (long?)null;
-            var free = _storage?.GetReceivedFreeBytes();
+            var free = _storage?.GetReceivedFreeBytes(transfer.Folder);
             outOfRoom = !progress.Done && !progress.Failed && !progress.NoSpace && left is > 0 && free is { } room && room < left;
 
             var state = progress.Done ? TransferState.Done
@@ -367,7 +374,7 @@ public sealed class TransferUseCases
                 {
                     _roomCheckedAt[id] = now;
                     var left = (view.Transfer.SizeBytes ?? 0) - view.ReceivedBytes;
-                    if (_storage?.GetReceivedFreeBytes() is not { } free || free >= left)
+                    if (_storage?.GetReceivedFreeBytes(view.Transfer.Folder) is not { } free || free >= left)
                     {
                         retry.Add(id);
                         _roomCheckedAt.Remove(id);

@@ -19,14 +19,26 @@ public sealed class AppPaths : Ports.IAppPaths
 			: Path.Combine(_root, "Received");
 	}
 
-	/// <summary>The folder that holds the database and engine data, and names the running copy (AD-14).</summary>
+	/// <summary>
+	/// The folder that holds the database and engine data, and names the running copy (AD-14). The
+	/// packaged install keeps its own in the package's folder, which Windows removes with it.
+	/// </summary>
 	public static string DataRoot()
 	{
 		var home = Environment.GetEnvironmentVariable("COMPARTA_HOME");
-		return string.IsNullOrWhiteSpace(home)
-			? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ComParta")
-			: Path.GetFullPath(home);
+		if (!string.IsNullOrWhiteSpace(home))
+			return Path.GetFullPath(home);
+		return Packaged.IsPackaged
+			? Path.Combine(global::Windows.Storage.ApplicationData.Current.LocalFolder.Path, "ComParta")
+			: PilotRoot();
 	}
+
+	/// <summary>Where the unpackaged build keeps its data; the packaged install imports it once (epic 5 story 5).</summary>
+	public static string PilotRoot() =>
+		Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ComParta");
+
+	/// <summary>True when the data folder is the usual one, not one COMPARTA_HOME chose for testing.</summary>
+	public static bool IsUsualRoot => string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("COMPARTA_HOME"));
 
 	public string DatabasePath => Path.Combine(_root, "comparta.db");
 	public string EngineRoot => Path.Combine(_root, "engine");
@@ -55,6 +67,28 @@ public sealed class NativeFilePicker : Ports.IFilePicker
 		var picked = await MainThread.InvokeOnMainThreadAsync(() => FilePicker.Default.PickAsync(new PickOptions { FileTypes = types }));
 		return picked?.FullPath;
 	}
+
+	public async Task<IReadOnlyList<string>> PickFilesAsync(CancellationToken ct = default)
+	{
+		var picked = await MainThread.InvokeOnMainThreadAsync(() => FilePicker.Default.PickMultipleAsync());
+		return [.. (picked ?? []).Where(file => file is not null).Select(file => file!.FullPath)];
+	}
+
+	/// <summary>Windows' own folder dialog, on top of ComParta's window.</summary>
+	public Task<string?> PickFolderAsync(CancellationToken ct = default) =>
+		MainThread.InvokeOnMainThreadAsync(async () =>
+		{
+			var picker = new Windows.Storage.Pickers.FolderPicker
+			{
+				SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary,
+			};
+			// Every file type, or Windows shows the folder dialog with nothing to choose.
+			picker.FileTypeFilter.Add("*");
+			if (Application.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView is Microsoft.UI.Xaml.Window window)
+				WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(window));
+			var folder = await picker.PickSingleFolderAsync();
+			return folder?.Path;
+		});
 }
 
 public sealed class NativeClipboard : Ports.IClipboard
@@ -85,12 +119,16 @@ public sealed class NativeClipboard : Ports.IClipboard
 
 public sealed class LocalStorageInfo(Ports.IAppPaths paths) : Ports.IStorageInfo
 {
-	public long? GetReceivedFreeBytes()
+	public long? GetReceivedFreeBytes(string? folder)
 	{
 		try
 		{
-			Directory.CreateDirectory(paths.ReceivedRoot);
-			var root = Path.GetPathRoot(Path.GetFullPath(paths.ReceivedRoot));
+			// A chosen folder on a drive that was unplugged is not made again on another one.
+			if (folder is null)
+				Directory.CreateDirectory(paths.ReceivedRoot);
+			else if (!Directory.Exists(folder))
+				return null;
+			var root = Path.GetPathRoot(Path.GetFullPath(folder ?? paths.ReceivedRoot));
 			return root is null ? null : new DriveInfo(root).AvailableFreeSpace;
 		}
 		catch (Exception)
@@ -102,11 +140,12 @@ public sealed class LocalStorageInfo(Ports.IAppPaths paths) : Ports.IStorageInfo
 
 public sealed class ReceivedFolderOpener(Ports.IAppPaths paths) : Ports.IContentOpener
 {
-	public Task OpenReceivedFolderAsync(CancellationToken ct = default)
+	public Task OpenReceivedFolderAsync(string? folder, CancellationToken ct = default)
 	{
-		Directory.CreateDirectory(paths.ReceivedRoot);
+		folder ??= paths.ReceivedRoot;
+		Directory.CreateDirectory(folder);
 		// Shows the folder; nothing received is ever run by the app.
-		Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { paths.ReceivedRoot } })?.Dispose();
+		Process.Start(new ProcessStartInfo("explorer.exe") { ArgumentList = { folder } })?.Dispose();
 		return Task.CompletedTask;
 	}
 
@@ -157,4 +196,8 @@ public sealed class WindowsThumbnails : Ports.IThumbnailProvider
 public sealed class SystemInfo : Ports.ISystemInfo
 {
 	public string UiLanguage => System.Globalization.CultureInfo.CurrentUICulture.Name is { Length: > 0 } name ? name : "en";
+
+	public string AppVersion => AppInfo.Current.VersionString;
+
+	public string SystemVersion => System.Runtime.InteropServices.RuntimeInformation.OSDescription;
 }

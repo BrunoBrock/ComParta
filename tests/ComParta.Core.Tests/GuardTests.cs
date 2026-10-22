@@ -77,6 +77,80 @@ public sealed partial class GuardTests
             "A notification sentence changed. Run: dotnet run --project tools/ComParta.Contracts.TypeGen");
     }
 
+    // The only files that start a program: the Windows adapter that opens or shows a file when the person
+    // asks, and the one that opens Windows' firewall page, which is not a received file (AD-6).
+    private static readonly string[] FilesStartingPrograms =
+    [
+        Path.Combine("src", "ComParta.App", "PlatformPorts.cs"),
+        Path.Combine("src", "ComParta.Shell", "WindowsFirewall.cs"),
+    ];
+
+    // The only files that name the opener, so a notification or any other screen cannot reach it.
+    private static readonly string[] FilesNamingTheOpener =
+    [
+        Path.Combine("src", "ComParta.Core", "Ports.cs"),
+        Path.Combine("src", "ComParta.Core", "UseCases", "ReceivedUseCases.cs"),
+        Path.Combine("src", "ComParta.Contracts", "BridgeRouter.cs"),
+        Path.Combine("src", "ComParta.App", "PlatformPorts.cs"),
+        Path.Combine("src", "ComParta.App", "AppServices.cs"),
+    ];
+
+    // Each explicit command that opens or shows a file, and how many calls it makes: received.open and
+    // received.reveal, shares.reveal, shares.saveDownloadFile (shows the saved file), received.openFolder.
+    private static readonly string[] OpenerCalls =
+    [
+        $"{Path.Combine("src", "ComParta.Core", "UseCases", "ReceivedUseCases.cs")} 2",
+        $"{Path.Combine("src", "ComParta.Contracts", "BridgeRouter.cs")} 5",
+    ];
+
+    [GeneratedRegex(@"\bProcess\.Start\(|\bUseShellExecute\b")]
+    private static partial Regex StartsProcess();
+
+    [GeneratedRegex(@"\bIContentOpener\b|\bReceivedFolderOpener\b")]
+    private static partial Regex NamesTheOpener();
+
+    [GeneratedRegex(@"\b_?(?:opener|received)\.(?:OpenAsync|RevealAsync|OpenReceivedFolderAsync)\(")]
+    private static partial Regex CallsTheOpener();
+
+    [Fact]
+    public void Only_the_windows_adapter_and_the_firewall_page_start_a_process()
+    {
+        var offences = ProductionLines()
+            .Where(line => StartsProcess().IsMatch(line.Text) && !FilesStartingPrograms.Contains(line.Relative))
+            .Select(line => $"{line.Relative}:{line.Number}")
+            .ToList();
+
+        Assert.True(offences.Count == 0, "A process is started outside the adapters:\n" + string.Join("\n", offences));
+    }
+
+    [Fact]
+    public void Only_the_explicit_commands_reach_the_opener_so_nothing_opens_by_itself()
+    {
+        // Notifications, timers and the transfer engine never name the opener, so they cannot open a file.
+        var namers = ProductionLines().Where(line => NamesTheOpener().IsMatch(line.Text)).Select(line => line.Relative).ToHashSet();
+        Assert.True(namers.SetEquals(FilesNamingTheOpener),
+            "The opener is named in: " + string.Join(", ", namers.Order()));
+
+        var calls = ProductionLines()
+            .Where(line => CallsTheOpener().IsMatch(line.Text))
+            .GroupBy(line => line.Relative)
+            .Select(group => $"{group.Key} {group.Count()}")
+            .Order()
+            .ToList();
+        Assert.Equal(OpenerCalls.Order(), calls);
+    }
+
+    private static IEnumerable<(string Relative, int Number, string Text)> ProductionLines()
+    {
+        foreach (var file in SourceFiles().Where(file => Path.GetRelativePath(RepositoryRoot, file).StartsWith("src" + Path.DirectorySeparatorChar, StringComparison.Ordinal)))
+        {
+            var relative = Path.GetRelativePath(RepositoryRoot, file);
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+                yield return (relative, i + 1, lines[i]);
+        }
+    }
+
     private static IEnumerable<string> SourceFiles()
     {
         string[] extensions = [".cs", ".ts", ".tsx", ".css", ".html", ".xaml", ".csproj"];

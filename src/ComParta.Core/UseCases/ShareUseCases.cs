@@ -13,6 +13,13 @@ public sealed class ShareUseCases
     private readonly IAppPaths? _paths;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Dictionary<ShareId, ShareView> _shares = [];
+    // Several files chosen together, waiting for the name the person gives them.
+    private IReadOnlyList<string>? _picked;
+
+    /// <summary>The most files one share holds; the other computer refuses more (AD-19).</summary>
+    public const int MaxItems = 10_000;
+    /// <summary>The longest name for several files shared together; it becomes a folder's name on the other computer.</summary>
+    public const int MaxNameLength = 100;
 
     public ShareUseCases(IShareRepository repository, ITransferEngine engine, IFilePicker picker, IFileSystem files, TimeProvider? clock = null, IAppPaths? paths = null)
     {
@@ -36,9 +43,9 @@ public sealed class ShareUseCases
         {
             foreach (var share in await _repository.GetAllAsync(ct))
             {
-                var available = _files.FileExists(share.FilePath);
-                Set(share, available ? ShareStatus.Preparing : ShareStatus.Unavailable);
-                if (available)
+                var missing = Missing(share);
+                Set(share, missing ?? ShareStatus.Preparing);
+                if (missing is null)
                     await OfferAsync(share, ct);
             }
         }
@@ -54,13 +61,15 @@ public sealed class ShareUseCases
         {
             foreach (var view in Snapshot())
             {
-                var exists = _files.FileExists(view.Share.FilePath);
-                if (!exists && view.Status != ShareStatus.Unavailable)
+                var missing = Missing(view.Share);
+                var wasMissing = view.Status is ShareStatus.Unavailable or ShareStatus.PartlyUnavailable;
+                if (missing is { } status && status != view.Status)
                 {
-                    Set(view.Share, ShareStatus.Unavailable);
-                    await _engine.StopOfferingAsync(view.Share.Id, ct);
+                    Set(view.Share, status);
+                    if (!wasMissing)
+                        await _engine.StopOfferingAsync(view.Share.Id, ct);
                 }
-                else if (exists && view.Status == ShareStatus.Unavailable)
+                else if (missing is null && wasMissing)
                 {
                     Set(view.Share, ShareStatus.Preparing);
                     await OfferAsync(view.Share, ct);
@@ -71,13 +80,74 @@ public sealed class ShareUseCases
         finally { _gate.Release(); }
     }
 
-    /// <summary>Opens the file dialog and shares the chosen file. The value is null when the person cancels.</summary>
-    public async Task<Result<ShareView?>> AddAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Opens the file dialog. One file chosen is shared at once; several wait for a name
+    /// (<see cref="AddPickedAsync"/>). Nothing is shared when the person cancels.
+    /// </summary>
+    public async Task<Result<AddedShare>> AddAsync(CancellationToken ct = default)
     {
-        var path = await _picker.PickFileAsync(ct);
-        if (path is null)
+        var paths = await _picker.PickFilesAsync(ct);
+        _picked = null;
+        if (paths.Count == 0)
+            return Result<AddedShare>.Success(new AddedShare(null));
+        if (paths.Count == 1)
+        {
+            var one = await ShareFileAsync(paths[0], ct);
+            return one.Ok ? Result<AddedShare>.Success(new AddedShare(one.Value)) : Result<AddedShare>.Fail(one.Error!.Value);
+        }
+        if (paths.Count > MaxItems)
+            return Result<AddedShare>.Fail(ErrorKind.FolderTooLarge);
+        _picked = paths;
+        return Result<AddedShare>.Success(new AddedShare(null, paths.Count));
+    }
+
+    /// <summary>
+    /// Shares the files chosen together under the name the person gave, or forgets them when the
+    /// name is null (the person cancelled). The value is null when nothing was waiting.
+    /// </summary>
+    public async Task<Result<ShareView?>> AddPickedAsync(string? name, CancellationToken ct = default)
+    {
+        var picked = _picked;
+        if (name is null || picked is null)
+        {
+            _picked = null;
             return Result<ShareView?>.Success(null);
-        return await ShareFileAsync(path, ct);
+        }
+        name = name.Trim();
+        if (name.Length == 0 || name.Length > MaxNameLength || name.EndsWith('.') || name.IndexOfAny(NotInNames) >= 0)
+            return Result<ShareView?>.Fail(ErrorKind.ShareNameInvalid);
+        _picked = null;
+
+        // The file dialog chooses from one folder; files from elsewhere are refused as unreadable.
+        var full = picked.Select(Path.GetFullPath).ToList();
+        var root = Path.GetDirectoryName(full[0])!;
+        return await AddItemsAsync(root, name, ShareKind.Collection, [.. full.Select(path => Path.GetRelativePath(root, path))], ct);
+    }
+
+    private static readonly char[] NotInNames = ['<', '>', ':', '"', '/', '\\', '|', '?', '*', .. Enumerable.Range(0, 32).Select(c => (char)c)];
+
+    /// <summary>Opens the folder dialog and shares the folder chosen, with every file in it. Null when the person cancels.</summary>
+    public async Task<Result<ShareView?>> AddFolderAsync(CancellationToken ct = default)
+    {
+        var folder = await _picker.PickFolderAsync(ct);
+        return folder is null ? Result<ShareView?>.Success(null) : await ShareFolderAsync(folder, ct);
+    }
+
+    private async Task<Result<ShareView?>> ShareFolderAsync(string folder, CancellationToken ct)
+    {
+        folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+        IReadOnlyList<string> files;
+        try { files = _files.ListFiles(folder); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
+        }
+        if (files.Count == 0)
+            return Result<ShareView?>.Fail(ErrorKind.FolderEmpty);
+        if (files.Count > MaxItems)
+            return Result<ShareView?>.Fail(ErrorKind.FolderTooLarge);
+        var name = Path.GetFileName(folder);
+        return await AddItemsAsync(folder, string.IsNullOrEmpty(name) ? folder : name, ShareKind.Folder, files, ct);
     }
 
     /// <summary>
@@ -90,7 +160,8 @@ public sealed class ShareUseCases
         ErrorKind? problem = null;
         foreach (var path in paths)
         {
-            var result = await ShareFileAsync(path, ct);
+            // A dropped folder is shared whole, as if chosen in the folder dialog.
+            var result = _files.FolderExists(path) ? await ShareFolderAsync(path, ct) : await ShareFileAsync(path, ct);
             if (result.Ok)
                 added++;
             else
@@ -99,34 +170,58 @@ public sealed class ShareUseCases
         return (added, problem);
     }
 
-    private async Task<Result<ShareView?>> ShareFileAsync(string path, CancellationToken ct)
+    private Task<Result<ShareView?>> ShareFileAsync(string path, CancellationToken ct)
+    {
+        path = Path.GetFullPath(path);
+        return AddItemsAsync(path, Path.GetFileName(path), ShareKind.File, [Path.GetFileName(path)], ct);
+    }
+
+    /// <summary>
+    /// Shares a set of files as one (AD-19): each relative path is read from under
+    /// <paramref name="root"/>, the file itself for a single file. Every file must be readable and
+    /// not empty, and no path may leave the root.
+    /// </summary>
+    public async Task<Result<ShareView?>> AddItemsAsync(
+        string root, string name, ShareKind kind, IReadOnlyList<string> relativePaths, CancellationToken ct = default)
     {
         ShareView view;
         await _gate.WaitAsync(ct);
         try
         {
-            path = Path.GetFullPath(path);
-            if (Snapshot().Any(v =>string.Equals(v.Share.FilePath, path, StringComparison.OrdinalIgnoreCase)))
+            root = Path.GetFullPath(root);
+            if (relativePaths.Count == 0 || string.IsNullOrWhiteSpace(name))
+                return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
+            // The same file or folder shared twice; several files from one folder may be shared in many ways.
+            if (kind != ShareKind.Collection && Snapshot().Any(v =>
+                    v.Share.Kind == kind && string.Equals(v.Share.FilePath, root, StringComparison.OrdinalIgnoreCase)))
                 return Result<ShareView?>.Fail(ErrorKind.ShareDuplicate);
 
-            long size;
-            try
+            var items = new List<ShareItem>();
+            foreach (var relative in relativePaths)
             {
-                if (!_files.FileExists(path))
+                var path = kind == ShareKind.File ? root : Path.GetFullPath(Path.Combine(root, relative));
+                if (kind != ShareKind.File && !path.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                     return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
-                size = _files.GetReadableFileSize(path);
+                long size;
+                try
+                {
+                    if (!_files.FileExists(path))
+                        return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
+                    size = _files.GetReadableFileSize(path);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
+                }
+                if (size == 0)
+                    return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
+                items.Add(new ShareItem(relative.Replace('\\', '/'), size, path));
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
-            }
-            if (size == 0)
-                return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
 
-            var share = new Share(ShareId.New(), path, Path.GetFileName(path), size, _clock.GetUtcNow());
+            var share = new Share(ShareId.New(), root, name, items.Sum(i => i.SizeBytes), _clock.GetUtcNow(), Items: items, Kind: kind);
             await _repository.AddAsync(share, ct);
             view = Set(share, ShareStatus.Preparing);
-            await _engine.OfferAsync(share.Id, share.FilePath, ct);
+            await OfferContentAsync(share, ct);
         }
         finally { _gate.Release(); }
 
@@ -186,10 +281,16 @@ public sealed class ShareUseCases
         return Result.Success;
     }
 
+    /// <summary>One file is offered as itself; a folder or several files as one, each read where it is (AD-19).</summary>
+    private Task OfferContentAsync(Share share, CancellationToken ct) =>
+        share.Kind == ShareKind.File
+            ? _engine.OfferAsync(share.Id, share.FilePath, ct)
+            : _engine.OfferItemsAsync(share.Id, share.Name, share.Items, ct);
+
     /// <summary>Offers a share, still paused when the person paused it.</summary>
     private async Task OfferAsync(Share share, CancellationToken ct)
     {
-        await _engine.OfferAsync(share.Id, share.FilePath, ct);
+        await OfferContentAsync(share, ct);
         if (share.Paused)
             await _engine.PauseOfferingAsync(share.Id, ct);
     }
@@ -273,6 +374,13 @@ public sealed class ShareUseCases
             _shares[id] = view with { Status = status };
         }
         Changed?.Invoke();
+    }
+
+    /// <summary>Null when every file is there; else whether some or all of them are gone.</summary>
+    private ShareStatus? Missing(Share share)
+    {
+        var gone = share.Items.Count(item => !_files.FileExists(item.ContentRef));
+        return gone == 0 ? null : gone == share.Items.Count ? ShareStatus.Unavailable : ShareStatus.PartlyUnavailable;
     }
 
     private ShareView Set(Share share, ShareStatus status)

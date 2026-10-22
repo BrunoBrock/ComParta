@@ -81,6 +81,7 @@ An arrow means "may depend on". `ComParta.Core` depends on no other project and 
 - **Binds:** core, engine, shell, UI
 - **Prevents:** stories disagreeing on what "remove" means, causing data loss; received files scattered across the disk.
 - **Rule:** Adding a share references the file where it is; it is never copied, moved or modified. Removing a share stops offering it and deletes only ComParta's own records; the original file is never deleted or changed. Received content is written only under the single Received root supplied by `IAppPaths`, and every path taken from received metadata passes through one sanitising function in core before use.
+- **Amended 2026-10-22 (epic 12 story 2):** the person may choose another Received root in Settings, through the native folder picker (AD-7). `IAppPaths.ReceivedRoot` is then the usual root, and core's `ReceivedFolder` holds the choice. Each transfer records the root it started in and is written only under that one, unfinished parts included; a new choice applies to new transfers only. The sanitising function and the containment check apply to every root alike, and a root inside ComParta's own data folders is refused.
 
 ### AD-7 — File paths enter only through the native picker
 

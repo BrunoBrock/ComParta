@@ -1,8 +1,10 @@
 // Generated from ComParta.Contracts by tools/ComParta.Contracts.TypeGen. Do not edit.
 
-export type ShareStatusDto = "preparing" | "ready" | "unavailable";
+export type ShareStatusDto = "preparing" | "ready" | "unavailable" | "partlyUnavailable";
 
 export type ShareActivityDto = "idle" | "sending" | "sent";
+
+export type ShareKindDto = "file" | "folder" | "collection";
 
 export type TransferStateDto = "connecting" | "receiving" | "paused" | "done" | "failed" | "waiting" | "noSpace" | "blocked";
 
@@ -27,6 +29,17 @@ export interface ShareDto {
   finishedCount: number;
   secondsLeft: number | null;
   paused: boolean;
+  itemCount: number;
+  kind: ShareKindDto;
+}
+
+export interface AddedDto {
+  share: ShareDto | null;
+  filesToName: number;
+}
+
+export interface AddPickedArgs {
+  name: string | null;
 }
 
 export interface IdArgs {
@@ -47,6 +60,8 @@ export interface TransferDto {
   bytesPerSecond: number;
   secondsLeft: number | null;
   neededBytes: number | null;
+  risky: boolean;
+  folder: boolean;
 }
 
 export interface ReceiveArgs {
@@ -62,6 +77,16 @@ export interface InvitePreviewDto {
   freeBytes: number | null;
 }
 
+export interface OpenReceivedArgs {
+  id: string;
+  confirmed: boolean | null;
+}
+
+export interface ReceivedFileDto {
+  relativePath: string;
+  sizeBytes: number;
+}
+
 export interface SettingsDto {
   language: string | null;
   systemLanguage: string;
@@ -72,6 +97,14 @@ export interface SettingsDto {
   publicServers: string[];
   helperAddress: string | null;
   helperKey: string | null;
+  yourName: string | null;
+  theme: string | null;
+  version: string;
+  welcomeDone: boolean;
+  receiveLimit: number | null;
+  sendLimit: number | null;
+  receivedFolder: string;
+  receivedFolderChosen: boolean;
 }
 
 export interface SetSettingsArgs {
@@ -83,6 +116,11 @@ export interface SetSettingsArgs {
   publicServers: string[] | null;
   helperAddress: string | null;
   helperKey: string | null;
+  yourName: string | null;
+  theme: string | null;
+  welcomeDone: boolean | null;
+  receiveLimit: number | null;
+  sendLimit: number | null;
 }
 
 export interface ConnectionDto {
@@ -119,6 +157,8 @@ export interface ShareDetailsDto {
   sendingBytesPerSecond: number;
   connections: number;
   bytesSent: number;
+  itemCount: number;
+  kind: ShareKindDto;
 }
 
 export interface TransferDetailsDto {
@@ -149,6 +189,7 @@ export interface ThumbnailArgs {
   kind: ThumbnailKindDto;
   id: string;
   size: number;
+  item: number;
 }
 
 export interface QuitArgs {
@@ -191,9 +232,15 @@ export const errorCodes = [
   "settings.invalid",
   "received.notFound",
   "received.openFailed",
+  "received.confirmRisky",
   "share.dropFailed",
   "file.saveFailed",
   "media.notPlayable",
+  "share.folderEmpty",
+  "share.folderTooLarge",
+  "share.nameInvalid",
+  "received.folderUnusable",
+  "received.folderMissing",
   "unexpected",
 ] as const;
 
@@ -201,12 +248,15 @@ export type ErrorCode = (typeof errorCodes)[number];
 
 export interface Commands {
   "shares.list": { args: undefined; result: ShareDto[] };
-  "shares.add": { args: undefined; result: ShareDto | null };
+  "shares.add": { args: undefined; result: AddedDto };
+  "shares.addPicked": { args: AddPickedArgs; result: ShareDto | null };
+  "shares.addFolder": { args: undefined; result: ShareDto | null };
   "shares.remove": { args: IdArgs; result: null };
   "shares.copyInvite": { args: CopyInviteArgs; result: null };
   "shares.saveDownloadFile": { args: IdArgs; result: string };
   "shares.pause": { args: IdArgs; result: null };
   "shares.resume": { args: IdArgs; result: null };
+  "shares.reveal": { args: IdArgs; result: null };
   "transfers.list": { args: undefined; result: TransferDto[] };
   "transfers.preview": { args: ReceiveArgs; result: InvitePreviewDto };
   "transfers.receive": { args: ReceiveArgs; result: TransferDto };
@@ -216,11 +266,14 @@ export interface Commands {
   "transfers.pause": { args: IdArgs; result: null };
   "transfers.resume": { args: IdArgs; result: null };
   "received.openFolder": { args: undefined; result: null };
-  "received.open": { args: IdArgs; result: null };
+  "received.open": { args: OpenReceivedArgs; result: null };
   "received.reveal": { args: IdArgs; result: null };
   "received.delete": { args: IdArgs; result: null };
+  "received.files": { args: IdArgs; result: ReceivedFileDto[] };
   "settings.get": { args: undefined; result: SettingsDto };
   "settings.set": { args: SetSettingsArgs; result: null };
+  "settings.chooseReceivedFolder": { args: undefined; result: string | null };
+  "settings.useUsualReceivedFolder": { args: undefined; result: null };
   "connection.get": { args: undefined; result: ConnectionDto };
   "connection.openSettings": { args: undefined; result: null };
   "invites.takeOpened": { args: undefined; result: string | null };
@@ -233,6 +286,7 @@ export interface Commands {
   "app.quit": { args: QuitArgs; result: QuitAnswerDto };
   "app.leave": { args: undefined; result: null };
   "media.open": { args: MediaArgs; result: MediaDto };
+  "support.report": { args: undefined; result: string };
 }
 
 export interface Events {
