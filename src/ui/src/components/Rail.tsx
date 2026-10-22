@@ -1,6 +1,7 @@
 import { CircleHelp, Download, Inbox, Plus, Settings, Upload } from 'lucide-react'
 import type { ConnectionHealthDto } from '../bridge/index.ts'
 import { t } from '../i18n/index.ts'
+import ActionButton from './ActionButton.tsx'
 import ConnectionIndicator from './ConnectionIndicator.tsx'
 
 export type Section = 'shared' | 'received'
@@ -25,7 +26,7 @@ interface RailProps {
  * The two things a person comes to do, always in reach, the two places their files live, and Help
  * and Settings. A column on a wide window, icons with small labels between 600 and 900 px, and a
  * bar along the bottom on a narrow one, where the floating ＋ takes the two actions (UX design,
- * Layout).
+ * Layout). The ＋ belongs to the bar so it always floats just above it, however tall the bar is.
  */
 export default function Rail(props: RailProps) {
   const { section, sharedCount, receivedCount, adding, connection, onConnection, onSection, onAdd, onReceive } = props
@@ -88,6 +89,7 @@ export default function Rail(props: RailProps) {
 
       <p className="rail-tagline">{t('app.tagline')}</p>
       <ConnectionIndicator health={connection} throughHelper={throughHelper} onOpen={onConnection} />
+      <ActionButton adding={adding} onAdd={onAdd} onReceive={onReceive} />
     </aside>
   )
 }

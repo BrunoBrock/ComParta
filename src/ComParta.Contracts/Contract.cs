@@ -39,6 +39,8 @@ public static class Commands
     public const string ThumbnailsGet = "thumbnails.get";
     public const string SharesAddDropped = "shares.addDropped";
     public const string AppQuit = "app.quit";
+    /// <summary>Back with nothing open on the screen: the app goes out of sight, or ends when it has no work.</summary>
+    public const string AppLeave = "app.leave";
     public const string MediaOpen = "media.open";
 }
 
@@ -55,6 +57,8 @@ public static class Events
     public const string DetailsChanged = "details.changed";
     /// <summary>Quitting from the notification-area icon found files moving; the screen asks first (AD-14).</summary>
     public const string QuitChanged = "quit.changed";
+    /// <summary>The person pressed the system's back button; the screen closes what is on top, or sends <c>app.leave</c>.</summary>
+    public const string BackChanged = "back.changed";
 }
 
 /// <summary>Stable codes; the words for them live in the UI's translation catalog (AD-11).</summary>
@@ -289,6 +293,7 @@ public static class Contract
         new(Commands.SharesAddDropped, typeof(DropArgs), typeof(DropResultDto)),
         new(Commands.ThumbnailsGet, typeof(ThumbnailArgs), typeof(string), ResultMayBeNull: true),
         new(Commands.AppQuit, typeof(QuitArgs), typeof(QuitAnswerDto)),
+        new(Commands.AppLeave, null, null),
         // Fails with media.notPlayable when the file cannot be shown or played here.
         new(Commands.MediaOpen, typeof(MediaArgs), typeof(MediaDto)),
     ];
@@ -303,6 +308,7 @@ public static class Contract
         new(Events.ActivityChanged, typeof(ActivityDto)),
         new(Events.DetailsChanged, typeof(DetailsTargetDto)),
         new(Events.QuitChanged, typeof(QuitAnswerDto)),
+        new(Events.BackChanged, typeof(bool)),
     ];
 
     /// <summary>camelCase JSON with enums as camelCase strings, as the conventions require.</summary>

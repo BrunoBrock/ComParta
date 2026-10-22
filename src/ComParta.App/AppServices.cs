@@ -40,6 +40,9 @@ public sealed class AppServices
 	/// <summary>Raised when the app should end now. Any thread.</summary>
 	public event Action? QuitRequested;
 
+	/// <summary>Raised when the window should go to the notification area, as when it is closed with work. Any thread.</summary>
+	public event Action? HideWindowRequested;
+
 	/// <summary>Whether there is work, and quitting, once the app has started (AD-14).</summary>
 	public BackgroundUseCases? Background { get; private set; }
 
@@ -72,7 +75,7 @@ public sealed class AppServices
 				},
 				Log);
 			notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, _notifier, Focus);
-			_presence = new WindowsPresence(executable, () => QuitRequested?.Invoke(), Log);
+			_presence = new WindowsPresence(executable, () => QuitRequested?.Invoke(), () => HideWindowRequested?.Invoke(), Log);
 			var background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, _presence);
 			var router = new BridgeRouter(
 				shares, transfers, settings, connection, Opened, activity, received, new NativeClipboard(), opener, thumbnails, Dropped,

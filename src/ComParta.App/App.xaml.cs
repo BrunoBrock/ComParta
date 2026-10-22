@@ -28,6 +28,7 @@ public partial class App : Application
 		services.Focus.Watch(window);
 		services.NotificationClicked += () => MainThread.BeginInvokeOnMainThread(() => BringToFront(window));
 		services.ShowWindowRequested += () => MainThread.BeginInvokeOnMainThread(() => BringToFront(window));
+		services.HideWindowRequested += () => MainThread.BeginInvokeOnMainThread(() => Hide(window));
 		services.QuitRequested += () => MainThread.BeginInvokeOnMainThread(() =>
 		{
 			_quitting = true;
@@ -68,6 +69,14 @@ public partial class App : Application
 			}
 		};
 		if (startHidden)
+			native.AppWindow.Hide();
+#endif
+	}
+
+	private static void Hide(Window window)
+	{
+#if WINDOWS
+		if (window.Handler?.PlatformView is Microsoft.UI.Xaml.Window native)
 			native.AppWindow.Hide();
 #endif
 	}

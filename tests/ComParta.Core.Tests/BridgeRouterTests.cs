@@ -26,6 +26,7 @@ public sealed class BridgeRouterTests
     private readonly BridgeRouter _router;
     private readonly NotificationUseCases _notifications;
     private readonly FakePresence _presence = new();
+    private readonly BackgroundUseCases _background;
     private readonly FakePaths _paths = new(Path.Combine(Path.GetTempPath(), "home"));
 
     public BridgeRouterTests()
@@ -41,7 +42,7 @@ public sealed class BridgeRouterTests
         _notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, new FakeNotifier(), new FakeWindow());
         _router = new BridgeRouter(shares, transfers, settings, connection, _opened, activity, received, _shell, _shell, thumbnails, _dropped,
             sending, _notifications,
-            new BackgroundUseCases(_engine, shares, transfers, sending, settings, _settings, _notifications, _presence, _clock),
+            _background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, _settings, _notifications, _presence, _clock),
             new MediaUseCases(shares, received, _files));
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
@@ -584,6 +585,16 @@ public sealed class BridgeRouterTests
         Assert.Equal(0, _presence.Quits);
 
         Assert.True((await InvokeAsync(Commands.AppQuit, new { force = true })).GetProperty("value").GetProperty("quitting").GetBoolean());
+        Assert.Equal(1, _presence.Quits);
+    }
+
+    [Fact]
+    public async Task The_back_button_asks_the_screen_and_leave_quits_when_nothing_is_shared()
+    {
+        _background.BackPressed();
+        Assert.True(_events.Last(e => e.GetProperty("event").GetString() == Events.BackChanged).GetProperty("payload").GetBoolean());
+
+        Assert.True((await InvokeAsync(Commands.AppLeave)).GetProperty("ok").GetBoolean());
         Assert.Equal(1, _presence.Quits);
     }
 

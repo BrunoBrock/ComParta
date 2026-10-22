@@ -61,6 +61,12 @@ public sealed class BackgroundUseCases
     /// <summary>Raised when quitting from outside the window found files moving; the screen asks the person.</summary>
     public event Action<QuitAnswer>? QuitAsked;
 
+    /// <summary>
+    /// Raised when the person pressed the system's back button (Android). The screen closes what is
+    /// open on top, and leaves with <see cref="Leave"/> when nothing is.
+    /// </summary>
+    public event Action? BackAsked;
+
     /// <summary>Reads whether the first hide was explained already, and applies start with Windows.</summary>
     public async Task StartAsync(CancellationToken ct = default)
     {
@@ -92,6 +98,23 @@ public sealed class BackgroundUseCases
             _ = RememberExplainedAsync();
         }
         return CloseChoice.Hide;
+    }
+
+    /// <summary>The shell calls this when the person presses the system's back button.</summary>
+    public void BackPressed() => BackAsked?.Invoke();
+
+    /// <summary>
+    /// Back with nothing open on the screen: the same as closing the window, so the app stays out of
+    /// sight while there is work and ends otherwise (AD-14).
+    /// </summary>
+    public CloseChoice Leave()
+    {
+        var choice = WindowClosing();
+        if (choice == CloseChoice.Hide)
+            _presence.Hide();
+        else
+            _presence.Quit();
+        return choice;
     }
 
     /// <summary>
