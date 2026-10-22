@@ -30,6 +30,7 @@ public static class Commands
     public const string ReceivedOpen = "received.open";
     public const string ReceivedReveal = "received.reveal";
     public const string ReceivedDelete = "received.delete";
+    public const string ReceivedFiles = "received.files";
     public const string SettingsGet = "settings.get";
     public const string SettingsSet = "settings.set";
     public const string SettingsChooseReceivedFolder = "settings.chooseReceivedFolder";
@@ -165,7 +166,10 @@ public enum ShareActivityDto { Idle, Sending, Sent }
 /// <param name="SecondsLeft">Roughly how long is left, or null when it cannot be told.</param>
 public sealed record TransferDto(
     string Id, string? Name, long? SizeBytes, long ReceivedBytes, TransferStateDto State, long BytesPerSecond, long? SecondsLeft,
-    long? NeededBytes, bool Risky = false);
+    long? NeededBytes, bool Risky = false, bool Folder = false);
+
+/// <summary>A file inside a received folder, as the folder view lists it.</summary>
+public sealed record ReceivedFileDto(string RelativePath, long SizeBytes);
 
 public sealed record IdArgs(string Id);
 
@@ -317,6 +321,7 @@ public static class Contract
         new(Commands.ReceivedOpen, typeof(OpenReceivedArgs), null),
         new(Commands.ReceivedReveal, typeof(IdArgs), null),
         new(Commands.ReceivedDelete, typeof(IdArgs), null),
+        new(Commands.ReceivedFiles, typeof(IdArgs), typeof(ReceivedFileDto[])),
         new(Commands.SettingsGet, null, typeof(SettingsDto)),
         new(Commands.SettingsSet, typeof(SetSettingsArgs), null),
         // Opens Windows' folder dialog (AD-7); the name of the folder picked, or null when it was closed.

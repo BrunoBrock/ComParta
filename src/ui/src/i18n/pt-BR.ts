@@ -304,6 +304,9 @@ export const ptBR: Catalog = {
   'riskyOpen.title': 'Abrir “{name}”?',
   'riskyOpen.body': 'Este arquivo pode executar um programa ou mudar o seu computador. Abra-o somente se confia no lugar de onde ele veio.',
   'riskyOpen.confirm': 'Abrir mesmo assim',
+  'folderView.title': '“{name}”',
+  'folderView.empty': 'Esta pasta não tem arquivos.',
+  'folderView.close': 'Fechar',
   'riskyOpen.cancel': 'Cancelar',
 
   'connection.good': 'Outros conseguem chegar a este computador',

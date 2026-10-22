@@ -61,6 +61,7 @@ export interface TransferDto {
   secondsLeft: number | null;
   neededBytes: number | null;
   risky: boolean;
+  folder: boolean;
 }
 
 export interface ReceiveArgs {
@@ -79,6 +80,11 @@ export interface InvitePreviewDto {
 export interface OpenReceivedArgs {
   id: string;
   confirmed: boolean | null;
+}
+
+export interface ReceivedFileDto {
+  relativePath: string;
+  sizeBytes: number;
 }
 
 export interface SettingsDto {
@@ -263,6 +269,7 @@ export interface Commands {
   "received.open": { args: OpenReceivedArgs; result: null };
   "received.reveal": { args: IdArgs; result: null };
   "received.delete": { args: IdArgs; result: null };
+  "received.files": { args: IdArgs; result: ReceivedFileDto[] };
   "settings.get": { args: undefined; result: SettingsDto };
   "settings.set": { args: SetSettingsArgs; result: null };
   "settings.chooseReceivedFolder": { args: undefined; result: string | null };

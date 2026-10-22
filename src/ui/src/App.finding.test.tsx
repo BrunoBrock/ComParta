@@ -95,8 +95,8 @@ describe('finding my files', () => {
   })
 
   it('puts files still on their way above finished ones', async () => {
-    const done: TransferDto = { id: 't2', name: 'Old photo.jpg', sizeBytes: 10, receivedBytes: 10, state: 'done', bytesPerSecond: 0, secondsLeft: null, neededBytes: null, risky: false }
-    const coming: TransferDto = { id: 't3', name: 'New video.mp4', sizeBytes: 100, receivedBytes: 40, state: 'receiving', bytesPerSecond: 0, secondsLeft: null, neededBytes: null, risky: false }
+    const done: TransferDto = { id: 't2', name: 'Old photo.jpg', sizeBytes: 10, receivedBytes: 10, state: 'done', bytesPerSecond: 0, secondsLeft: null, neededBytes: null, risky: false, folder: false }
+    const coming: TransferDto = { id: 't3', name: 'New video.mp4', sizeBytes: 100, receivedBytes: 40, state: 'receiving', bytesPerSecond: 0, secondsLeft: null, neededBytes: null, risky: false, folder: false }
     const { user } = setup({ transfers: [done, coming] })
     await goToReceived(user)
 

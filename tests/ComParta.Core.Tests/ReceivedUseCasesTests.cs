@@ -43,6 +43,34 @@ public sealed class ReceivedUseCasesTests
     }
 
     [Fact]
+    public async Task A_received_folder_lists_its_files_with_their_places_and_sizes()
+    {
+        var id = (await _transfers.ReceiveAsync("invite:trip")).Value!.Transfer.Id;
+        _engine.Report(new ReceiveProgress(id, "Trip", 30, 30, true));
+        var folder = Path.Combine(_paths.ReceivedRoot, "Trip");
+        _files.Files[Path.Combine(folder, "day 1", "photo.jpg")] = 10;
+        _files.Files[Path.Combine(folder, "notes.txt")] = 20;
+
+        Assert.True(_received.IsFolder(View(id)));
+        var listed = _received.ListFiles(id);
+
+        Assert.True(listed.Ok);
+        Assert.Equal(["day 1/photo.jpg", "notes.txt"], listed.Value!.Select(file => file.RelativePath));
+        Assert.Equal([10L, 20L], listed.Value!.Select(file => file.SizeBytes));
+    }
+
+    [Fact]
+    public async Task A_single_file_is_not_a_folder_and_lists_nothing()
+    {
+        var id = await ArrivedAsync("recipe.pdf");
+
+        Assert.False(_received.IsFolder(View(id)));
+        Assert.Equal(ErrorKind.ReceivedNotFound, _received.ListFiles(id).Error);
+    }
+
+    private TransferView View(TransferId id) => _transfers.List().Single(v => v.Transfer.Id == id);
+
+    [Fact]
     public async Task A_file_that_is_gone_or_has_not_arrived_says_so()
     {
         var gone = await ArrivedAsync("gone.pdf", onDisk: false);

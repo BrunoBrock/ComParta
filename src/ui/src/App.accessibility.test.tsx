@@ -14,7 +14,7 @@ const arriving: TransferDto = {
   bytesPerSecond: 100,
   secondsLeft: 6,
   neededBytes: null,
-  risky: false,
+  risky: false, folder: false,
 }
 
 describe('the screen for assistive technology', () => {

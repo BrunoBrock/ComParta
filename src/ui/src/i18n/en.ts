@@ -298,6 +298,9 @@ export const en = {
   'riskyOpen.title': 'Open “{name}”?',
   'riskyOpen.body': 'This file can run a program or change your computer. Open it only if you trust where it came from.',
   'riskyOpen.confirm': 'Open anyway',
+  'folderView.title': '“{name}”',
+  'folderView.empty': 'This folder has no files.',
+  'folderView.close': 'Close',
   'riskyOpen.cancel': 'Cancel',
 
   'connection.good': 'Others can reach this computer',

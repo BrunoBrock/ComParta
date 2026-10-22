@@ -325,7 +325,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       bytesPerSecond: 0,
       secondsLeft: null,
       neededBytes: null,
-      risky: false,
+      risky: false, folder: false,
       ...known,
     }
     transfers = [...transfers.filter((t) => t.id !== id), withRisk(transfer)]
@@ -813,6 +813,16 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       fake.openedFolder++
       fake.openedFolderName = settings.receivedFolder
       return ok(null)
+    },
+
+    'received.files': (args) => {
+      const transfer = transfers.find((t) => t.id === (args as IdArgs).id)
+      if (!transfer) return fail('transfer.notFound')
+      if (transfer.state !== 'done' || !transfer.folder) return fail('received.notFound')
+      return ok([
+        { relativePath: 'day 1/photo.jpg', sizeBytes: 250_000 },
+        { relativePath: 'notes.txt', sizeBytes: 1_200 },
+      ])
     },
 
     'received.open': (args) => {
