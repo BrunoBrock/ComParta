@@ -50,6 +50,7 @@ public sealed class BridgeRouter
         _support = support;
         _background = background;
         _background.QuitAsked += answer => Raise(Events.QuitChanged, ToDto(answer));
+        _background.BackAsked += () => Raise(Events.BackChanged, true);
         notifications.OpenRequested += (kind, id, name) => Raise(
             Events.DetailsChanged,
             new DetailsTargetDto(kind == NotifiedItem.Share ? ItemKindDto.Share : ItemKindDto.Transfer, id, name));
@@ -271,6 +272,10 @@ public sealed class BridgeRouter
                 await _clipboard.SetTextAsync(report);
                 return CommandResult.Success(report);
             }
+
+            case Commands.AppLeave:
+                _background.Leave();
+                return CommandResult.Success(null);
 
             case Commands.SettingsGet:
                 return CommandResult.Success(ToDto(await _settings.GetAsync()));

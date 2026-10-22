@@ -389,7 +389,9 @@ internal sealed class FakePresence : IBackgroundPresence
     public List<bool> Awake { get; } = [];
     public List<bool> StartWithSystem { get; } = [];
     public int Quits { get; private set; }
+    public int Hides { get; private set; }
     public void KeepAwake(bool awake) => Awake.Add(awake);
+    public void Hide() => Hides++;
     void IBackgroundPresence.StartWithSystem(bool on) => StartWithSystem.Add(on);
     public void Quit() => Quits++;
 }

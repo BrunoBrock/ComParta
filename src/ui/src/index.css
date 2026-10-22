@@ -89,6 +89,7 @@ body {
 .search input {
   flex: 1;
   min-width: 0;
+  min-height: var(--target);
   border: 0;
   background: transparent;
   font: inherit;
@@ -939,11 +940,14 @@ dialog.help {
 
 .help-questions details {
   border-top: 1px solid var(--color-border);
-  padding: var(--space) 0;
+  padding-bottom: var(--space);
 }
 
+/* A question is a target a finger presses: the full height, with its words in the middle. */
 .help-questions summary {
-  min-height: 32px;
+  box-sizing: border-box;
+  min-height: var(--target);
+  padding-block: 10px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -998,8 +1002,30 @@ dialog.help {
     flex-basis: 100%;
   }
 
+  /* Room at the end so the last files scroll out from under the floating ＋. */
   .content {
-    padding: calc(var(--space) * 2);
+    padding: calc(var(--space) * 2) calc(var(--space) * 2) calc(var(--space) * 12);
+  }
+
+  /* A row is too narrow for its buttons beside the name: they go on a line of their own. */
+  .items-list .item {
+    flex-wrap: wrap;
+    row-gap: var(--space);
+  }
+
+  .items-list .item-actions {
+    order: 1;
+    flex-basis: 100%;
+  }
+
+  /* Two cards to a row leave little room: the buttons keep their words on one line. */
+  .items-grid .item-actions {
+    padding: var(--space);
+  }
+
+  .items-grid .item-actions button {
+    gap: 6px;
+    padding-inline: var(--space);
   }
 
   .rail {
@@ -1031,7 +1057,7 @@ dialog.help {
 
   button.connection {
     justify-content: center;
-    min-height: 32px;
+    min-height: var(--target);
     padding-block: 0;
   }
 
@@ -1082,9 +1108,9 @@ dialog.help {
   }
 
   .fab {
-    position: fixed;
+    position: absolute;
     right: calc(var(--space) * 2);
-    bottom: 104px;
+    bottom: calc(100% + var(--space) * 2);
     z-index: 15;
     display: flex;
     flex-direction: column;
@@ -1129,6 +1155,11 @@ dialog.help {
   .speed-bar {
     gap: var(--space) calc(var(--space) * 2);
     padding: 4px calc(var(--space) * 2);
+  }
+
+  /* A finger needs the full height the bar takes on a wide window from a mouse. */
+  .stop-control > button {
+    min-height: var(--target);
   }
 
   /* Narrow windows keep the arrows and numbers and drop the words. */
@@ -1460,6 +1491,7 @@ dialog.sheet {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: var(--target);
   margin-top: 16px;
 }
 

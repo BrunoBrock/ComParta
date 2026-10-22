@@ -40,6 +40,8 @@ public sealed class ButtonsTests : IAsyncLifetime
     private readonly Clipboard _clipboard = new();
     private FakePaths _paths = null!;
     private readonly FakeOpener _opener = new();
+    private readonly FakePresence _presence = new();
+    private BackgroundUseCases _background = null!;
 
     private sealed class SlowRouter : INatGateway
     {
@@ -87,7 +89,7 @@ public sealed class ButtonsTests : IAsyncLifetime
         var thumbnails = new ThumbnailUseCases(shares, received, new FakeThumbnails());
         var sending = new SendingUseCases(_engine, shares);
         var notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, new FakeNotifier(), new FakeWindow());
-        var background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, new FakePresence());
+        var background = _background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, _presence);
         _router = new BridgeRouter(
             shares, transfers, settings, connection, new OpenedInvites(), activity, received, _clipboard, opener, thumbnails,
             new DroppedFiles(), sending, notifications, background, new MediaUseCases(shares, received, disk),
@@ -511,6 +513,24 @@ public sealed class ButtonsTests : IAsyncLifetime
         using var copy = new MemoryStream();
         body.CopyTo(copy);
         return copy.ToArray();
+    }
+
+    [Fact]
+    public async Task The_phones_back_button_reaches_the_screen_and_leaving_keeps_a_shared_file_offered()
+    {
+        // Nothing shared: leaving ends the app, as closing the window does.
+        _background.BackPressed();
+        Assert.True((await ScreenShowsAsync(Events.BackChanged, pressed => pressed.GetBoolean())).GetBoolean());
+        await ClickAsync(Commands.AppLeave);
+        Assert.Equal((1, 0), (_presence.Quits, _presence.Hides));
+
+        // With a file shared, the app only goes out of sight and the file stays offered.
+        var id = await ShareAFileAsync("keep.bin");
+        await ClickAsync(Commands.AppLeave);
+        Assert.Equal((1, 1), (_presence.Quits, _presence.Hides));
+        ShareId.TryParse(id, out var shareId);
+        Assert.NotEqual(global::MonoTorrent.Client.TorrentState.Stopped, _engine.OfferStateOf(shareId));
+        Assert.Equal(id, (await ClickAsync(Commands.SharesList))[0].GetProperty("id").GetString());
     }
 
     [Fact]

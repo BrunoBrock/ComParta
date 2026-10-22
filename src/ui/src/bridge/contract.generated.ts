@@ -284,6 +284,7 @@ export interface Commands {
   "shares.addDropped": { args: DropArgs; result: DropResultDto };
   "thumbnails.get": { args: ThumbnailArgs; result: string | null };
   "app.quit": { args: QuitArgs; result: QuitAnswerDto };
+  "app.leave": { args: undefined; result: null };
   "media.open": { args: MediaArgs; result: MediaDto };
   "support.report": { args: undefined; result: string };
 }
@@ -297,6 +298,7 @@ export interface Events {
   "activity.changed": ActivityDto;
   "details.changed": DetailsTargetDto;
   "quit.changed": QuitAnswerDto;
+  "back.changed": boolean;
 }
 
 export type CommandResult<T> = { ok: true; value: T } | { ok: false; error: { code: ErrorCode } };
