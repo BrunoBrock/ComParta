@@ -7,6 +7,11 @@ public partial class App : Application
 {
 	// Set once the app is really ending, so closing the window no longer hides it.
 	private bool _quitting;
+#if ANDROID
+	// Android makes the screen again while the app still runs (the system closed it to save memory,
+	// or it was opened anew), so the engine and storage already running are kept, never started twice.
+	private static AppServices? s_running;
+#endif
 
 	public App()
 	{
@@ -15,7 +20,11 @@ public partial class App : Application
 
 	protected override Window CreateWindow(IActivationState? activationState)
 	{
+#if ANDROID
+		var services = s_running is { Stopped: false } ? s_running : s_running = AppServices.Start();
+#else
 		var services = AppServices.Start();
+#endif
 		var window = new Window(new MainPage(services))
 		{
 			Title = "ComParta",
@@ -24,7 +33,9 @@ public partial class App : Application
 			MinimumWidth = 420,
 			MinimumHeight = 520,
 		};
+#if WINDOWS
 		window.Destroying += (_, _) => services.Stop();
+#endif
 		services.Focus.Watch(window);
 		services.NotificationClicked += () => MainThread.BeginInvokeOnMainThread(() => BringToFront(window));
 		services.ShowWindowRequested += () => MainThread.BeginInvokeOnMainThread(() => BringToFront(window));
@@ -35,17 +46,20 @@ public partial class App : Application
 			services.Stop();
 			Quit();
 		});
+		// What this launch was started with (AD-14).
+		services.Opened.Open(LaunchArguments.Current());
+#if WINDOWS
 		var startHidden = StartupEntry.IsBackgroundLaunch(Environment.GetCommandLineArgs()) || Packaged.StartedAtSignIn();
 		window.HandlerChanged += (_, _) => KeepWhenClosed(window, services, startHidden);
 
-		// What this launch was started with, then whatever later launches hand over (AD-14). A
-		// later launch always shows the window, which may be hidden in the notification area.
-		services.Opened.Open(LaunchArguments.Current());
+		// Whatever later launches hand over. A later launch always shows the window, which may be
+		// hidden in the notification area.
 		Launch.OnArguments(arguments =>
 		{
 			services.Opened.Open(arguments);
 			MainThread.BeginInvokeOnMainThread(() => BringToFront(window));
 		});
+#endif
 		return window;
 	}
 
@@ -53,9 +67,9 @@ public partial class App : Application
 	/// Closing the window hides it while something is shared or moving, and quits otherwise
 	/// (AD-14). Started from the start-up entry, the window begins hidden.
 	/// </summary>
+#if WINDOWS
 	private void KeepWhenClosed(Window window, AppServices services, bool startHidden)
 	{
-#if WINDOWS
 		if (window.Handler?.PlatformView is not Microsoft.UI.Xaml.Window native)
 			return;
 		native.AppWindow.Closing += (appWindow, args) =>
@@ -70,8 +84,8 @@ public partial class App : Application
 		};
 		if (startHidden)
 			native.AppWindow.Hide();
-#endif
 	}
+#endif
 
 	private static void Hide(Window window)
 	{

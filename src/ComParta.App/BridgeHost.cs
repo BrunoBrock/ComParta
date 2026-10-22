@@ -9,6 +9,9 @@ namespace ComParta.App;
 public sealed class BridgeHost
 {
 	private readonly AppServices _services;
+#if ANDROID
+	private int _answered;
+#endif
 
 	public BridgeHost(AppServices services, HybridWebView webView)
 	{
@@ -21,7 +24,13 @@ public sealed class BridgeHost
 		try
 		{
 			var router = await _services.Router;
-			return await router.InvokeAsync(command, argsJson);
+			var result = await router.InvokeAsync(command, argsJson);
+#if ANDROID
+			// The Android check in CI looks for this: the screen loaded and the bridge answered it.
+			if (Interlocked.Exchange(ref _answered, 1) == 0)
+				Android.Util.Log.Info("ComParta", $"Screen answered: {command}");
+#endif
+			return result;
 		}
 		catch (Exception e)
 		{

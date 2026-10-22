@@ -1,8 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<!-- Windows only for now; the Android target is added by the Android epic (AD-1). -->
-		<TargetFrameworks>net10.0-windows10.0.19041.0</TargetFrameworks>
+		<!--
+			Windows is built on Windows. Android is built anywhere else (the Linux job in CI), and on
+			Windows too with -p:BuildAndroid=true and the maui-android workload (AD-1, epic 7).
+		-->
+		<TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">net10.0-windows10.0.19041.0</TargetFrameworks>
+		<TargetFrameworks Condition="!$([MSBuild]::IsOSPlatform('windows')) Or '$(BuildAndroid)' == 'true'">$(TargetFrameworks);net10.0-android</TargetFrameworks>
 
 		<OutputType>Exe</OutputType>
 		<RootNamespace>ComParta.App</RootNamespace>
@@ -18,12 +22,25 @@
 		<ApplicationDisplayVersion>0.1</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
 
+	</PropertyGroup>
+
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">
 		<!-- A plain .exe in a folder: no Store package, nothing to install first. -->
 		<WindowsPackageType>None</WindowsPackageType>
 		<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
 
 		<SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
 		<TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<!-- Android 8.0, the oldest .NET MAUI 10 supports (epic 7 Notes). -->
+		<SupportedOSPlatformVersion>26.0</SupportedOSPlatformVersion>
+		<!-- A plain APK people can install by hand; Google Play takes the bundle later (epic 7 story 11). -->
+		<AndroidPackageFormat>apk</AndroidPackageFormat>
+		<!-- The bridge and the engine read types by reflection; trimming only the framework keeps them whole. -->
+		<TrimMode>partial</TrimMode>
+		<JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
 	</PropertyGroup>
 
 	<ItemGroup>
