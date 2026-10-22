@@ -53,6 +53,6 @@ Friends, devices, private delivery and the known-sources rule. Not group chats, 
 
 - Candidate ideas for the spike, not decisions: the invite carries the sender's device key, so accepting it is the friend request; a long-lived pairing key per pair of devices; "new share for you" and "what you share with me" messages over the BitTorrent extension protocol between friends' devices when both are online; announcing a value derived from a secret instead of the real fingerprint.
 - Default taken 2026-10-20 (coordinator, where the ask was open): "unknown sources" covers both files and requests to connect from people who are not friends, and the switch lives on the first Settings screen.
-- Default taken 2026-10-20, to confirm (D-7): download links and download files from websites (epic 14) also count as unknown sources, so with the switch off ComParta says so and points to the switch instead of downloading.
+- Decided 2026-10-20 (D-7, the maintainer): download links and download files from websites (epic 14) also count as unknown sources, so with the switch off ComParta says so and points to the switch instead of downloading.
 - Sharing to the open internet (epic 16, any torrent app) is untouched: the rule is about what this ComParta accepts, not about what it offers.
 - Changed 2026-10-20: no longer waits on epic 7; the spike designs friends for phones and PCs from the start.
