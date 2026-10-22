@@ -85,6 +85,15 @@ public sealed partial class MonoTorrentTransferEngine
         }
         foreach (var incoming in _incoming.Values)
         {
+            // A file shared after it arrived is sending, so it follows the sending switch.
+            if (incoming.Sharing)
+            {
+                if (sending)
+                    work.Add(StopFullyAsync(incoming.Manager));
+                else if (incoming.Manager.State == TorrentState.Stopped)
+                    work.Add(incoming.Manager.StartAsync());
+                continue;
+            }
             if (incoming.Finishing)
                 continue;
             // Stopping, not pausing: a transfer still fetching the file's details cannot pause.

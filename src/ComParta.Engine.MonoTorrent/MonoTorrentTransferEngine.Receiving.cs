@@ -39,6 +39,12 @@ public sealed partial class MonoTorrentTransferEngine
     public string? ReadDownloadFileKey(byte[] content) =>
         TryLoadDownloadFile(content, out var torrent) ? KeyOf(torrent.InfoHashes) : null;
 
+    public InviteSummary? DescribeDownloadFile(byte[] content) =>
+        TryLoadDownloadFile(content, out var torrent) ? new InviteSummary(torrent.Name, torrent.Size) : null;
+
+    /// <summary>A download link anywhere in the text, such as one Windows opened the app with; null when there is none.</summary>
+    public static string? FindLinkIn(string text) => MagnetInText().Match(text) is { Success: true } found ? found.Value : null;
+
     public async Task<bool> ReceiveFromFileAsync(TransferId id, byte[] content, CancellationToken ct = default)
     {
         if (_engine is null || !TryLoadDownloadFile(content, out var torrent))
@@ -125,6 +131,67 @@ public sealed partial class MonoTorrentTransferEngine
     private Task<bool> StartIncomingAsync(TransferId id, Torrent torrent) =>
         StartIncomingAsync(id, [], (engine, folder) => engine.AddAsync(torrent, folder, ToTorrentSettings(publicDownload: true)));
 
+    public IReadOnlyList<ReceiveFile>? GetReceiveFiles(TransferId id)
+    {
+        if (!_incoming.TryGetValue(id, out var incoming) || incoming.Finishing || !incoming.Manager.HasMetadata)
+            return null;
+        var skipped = incoming.Skipped;
+        return [.. incoming.Manager.Files.Select((file, index) =>
+            new ReceiveFile(index, ShownPath(file.Path), file.Length, !skipped.Contains(index)))];
+    }
+
+    /// <summary>A file's place inside the download, each part made safe, as the person sees it.</summary>
+    private static string ShownPath(string path) =>
+        string.Join('/', path.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries).Select(ReceivedNames.Sanitize));
+
+    public async Task SetSkippedFilesAsync(TransferId id, IReadOnlyCollection<int> skipped, CancellationToken ct = default)
+    {
+        if (!_incoming.TryGetValue(id, out var incoming))
+            return;
+        incoming.Skipped = skipped.ToHashSet();
+        await ApplySkippedAsync(incoming);
+    }
+
+    /// <summary>Gives the engine the person's choice of files, once it knows them.</summary>
+    private static async Task ApplySkippedAsync(Incoming incoming)
+    {
+        var manager = incoming.Manager;
+        if (!manager.HasMetadata || incoming.Finishing)
+            return;
+        var skipped = incoming.Skipped;
+        var files = manager.Files;
+        // Never every file: a download that gets nothing would never finish.
+        if (files.Count > 0 && Enumerable.Range(0, files.Count).All(skipped.Contains))
+            return;
+        for (var i = 0; i < files.Count; i++)
+        {
+            var wanted = skipped.Contains(i) ? Priority.DoNotDownload : Priority.Normal;
+            if (files[i].Priority != wanted)
+                await manager.SetFilePriorityAsync(files[i], wanted);
+        }
+        incoming.SkippedApplied = true;
+    }
+
+    public async Task SetSharingWhenDoneAsync(TransferId id, bool keep, CancellationToken ct = default)
+    {
+        if (!_incoming.TryGetValue(id, out var incoming))
+            return;
+        incoming.KeepSharing = keep;
+        if (!keep && incoming.Sharing)
+            await StopSharingAsync(incoming);
+    }
+
+    public bool IsSharingReceived(TransferId id) => _incoming.TryGetValue(id, out var incoming) && incoming.Sharing;
+
+    /// <summary>Stops sharing a file that arrived. The file stays in the Received folder; only leftovers of files left out go.</summary>
+    private async Task StopSharingAsync(Incoming incoming)
+    {
+        incoming.Sharing = false;
+        _incoming.TryRemove(incoming.Id, out _);
+        await RemoveFromEngineAsync(incoming.Manager);
+        DeleteFolderQuietly(incoming.Folder);
+    }
+
     private async Task<bool> StartIncomingAsync(
         TransferId id, IReadOnlyList<IPEndPoint> hints, Func<ClientEngine, string, Task<TorrentManager>> add)
     {
@@ -138,7 +205,12 @@ public sealed partial class MonoTorrentTransferEngine
             WatchIncoming(manager);
             var incoming = new Incoming(id, manager, folder, hints);
             _incoming[id] = incoming;
-            manager.TorrentStateChanged += (_, _) => CheckContained(incoming);
+            manager.TorrentStateChanged += (_, _) =>
+            {
+                // Once it has arrived its files sit in the Received folder, outside its own.
+                if (!incoming.Finishing)
+                    CheckContained(incoming);
+            };
             // While receiving is stopped a new transfer waits, unstarted, for the global continue.
             if (!_receivingStopped)
             {
@@ -225,15 +297,21 @@ public sealed partial class MonoTorrentTransferEngine
                     continue;
                 }
 
+                if (incoming.Skipped.Count > 0 && !incoming.SkippedApplied)
+                    _ = ApplySkippedAsync(incoming);
+                // Only the files the person gets count, for the size and the progress.
+                var leftOut = manager.Files.Any(f => f.Priority == Priority.DoNotDownload);
                 incoming.Name = ReceivedNames.Sanitize(torrent.Name);
-                incoming.Size = torrent.Size;
-                if (manager.Complete && manager.State == TorrentState.Seeding)
+                incoming.Size = leftOut ? manager.Files.Where(f => f.Priority != Priority.DoNotDownload).Sum(f => f.Length) : torrent.Size;
+                if (manager.State == TorrentState.Seeding && manager.Complete
+                    || leftOut && manager.State is TorrentState.Downloading or TorrentState.Seeding
+                        && manager.Files.Where(f => f.Priority != Priority.DoNotDownload).All(f => f.BitField.AllTrue))
                 {
                     incoming.Finishing = true;
                     _ = FinishAsync(incoming);
                     continue;
                 }
-                var received = (long)(torrent.Size * (manager.Progress / 100.0));
+                var received = (long)(incoming.Size.Value * ((leftOut ? manager.PartialProgress : manager.Progress) / 100.0));
                 ReceiveProgressed?.Invoke(new ReceiveProgress(
                     incoming.Id, incoming.Name, incoming.Size, received, false, BytesPerSecond: manager.Monitor.DownloadRate));
             }
@@ -276,6 +354,8 @@ public sealed partial class MonoTorrentTransferEngine
     {
         if (incoming.Rejected)
             return false;
+        if (incoming.Finishing)
+            return true;
         if (!incoming.Manager.HasMetadata)
             return true;
         if (incoming.Manager.Files.Count <= MaxFiles
@@ -287,33 +367,68 @@ public sealed partial class MonoTorrentTransferEngine
         return false;
     }
 
+    /// <summary>
+    /// Moves the files the person gets to their final, sanitised names directly under the Received
+    /// root, without overwriting anything, and leaves out the rest. A public download the person
+    /// keeps sharing goes on being shared from there until the app quits (epic 14 story 4).
+    /// </summary>
     private async Task FinishAsync(Incoming incoming)
     {
         try
         {
-            await RemoveFromEngineAsync(incoming.Manager);
+            var manager = incoming.Manager;
+            var keep = incoming.KeepSharing;
+            if (keep)
+                await StopFullyAsync(manager);
+            else
+                await RemoveFromEngineAsync(manager);
 
-            // The engine wrote one top-level entry into the transfer's folder; give it its final,
-            // sanitised name directly under the Received root without overwriting anything.
-            string? finalName = null;
-            foreach (var entry in Directory.GetFileSystemEntries(incoming.Folder))
+            // The engine wrote one top-level entry into the transfer's folder: the file, or the
+            // folder holding all of them.
+            string? finalTop = null;
+            foreach (var file in manager.Files.Where(f => f.Priority != Priority.DoNotDownload))
             {
-                var target = ReceivedNames.UniquePathUnder(_receivedRoot, Path.GetFileName(entry), p => File.Exists(p) || Directory.Exists(p));
-                if (Directory.Exists(entry))
-                    Directory.Move(entry, target);
+                var parts = Path.GetRelativePath(incoming.Folder, file.FullPath).Split(Path.DirectorySeparatorChar, 2);
+                finalTop ??= ReceivedNames.UniquePathUnder(_receivedRoot, parts[0], p => File.Exists(p) || Directory.Exists(p));
+                var target = parts.Length == 1 ? finalTop : Path.Combine(finalTop, parts[1]);
+                if (!ReceivedNames.IsInside(_receivedRoot, target))
+                    throw new IOException("A received file would land outside the Received folder.");
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                if (!File.Exists(file.FullPath))
+                {
+                    // An empty file has nothing to write, so the engine may never have made it.
+                    if (file.Length > 0)
+                        throw new IOException("A received file is missing.");
+                    File.WriteAllBytes(target, []);
+                }
+                else if (keep)
+                    await manager.MoveFileAsync(file, target);
                 else
-                    File.Move(entry, target);
-                finalName ??= Path.GetFileName(target);
+                    File.Move(file.FullPath, target);
             }
-            DeleteFolderQuietly(incoming.Folder);
             DeleteQuietly(InvitePath(incoming.Id));
             DeleteQuietly(DownloadFilePath(incoming.Id));
-            _incoming.TryRemove(incoming.Id, out _);
+            if (keep)
+            {
+                // What is left in its own folder is only the parts of files left out, which others may still ask for.
+                incoming.Sharing = true;
+                if (!_sendingStopped)
+                    await manager.StartAsync();
+                if (!incoming.KeepSharing)
+                    await StopSharingAsync(incoming);
+            }
+            else
+            {
+                DeleteFolderQuietly(incoming.Folder);
+                _incoming.TryRemove(incoming.Id, out _);
+            }
 
-            ReceiveProgressed?.Invoke(new ReceiveProgress(incoming.Id, finalName ?? incoming.Name, incoming.Size, incoming.Size ?? 0, true));
+            var finalName = finalTop is null ? incoming.Name : Path.GetFileName(finalTop);
+            ReceiveProgressed?.Invoke(new ReceiveProgress(incoming.Id, finalName, incoming.Size, incoming.Size ?? 0, true));
         }
         catch (Exception)
         {
+            incoming.Sharing = false;
             ReceiveProgressed?.Invoke(new ReceiveProgress(incoming.Id, incoming.Name, incoming.Size, 0, false, Failed: true));
         }
     }

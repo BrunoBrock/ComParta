@@ -100,7 +100,7 @@ export default function App({ bridge }: AppProps) {
   const [query, setQuery] = useState('')
   const [receiving, setReceiving] = useState(false)
   // An invite pasted anywhere in the window, already read, for the confirmation.
-  const [pasted, setPasted] = useState<{ text: string; preview: InvitePreviewDto } | undefined>()
+  const [pasted, setPasted] = useState<{ text: string; preview: InvitePreviewDto; openedFile?: boolean } | undefined>()
   const [adding, setAdding] = useState(false)
   // Several files chosen together wait for a name (AD-19).
   const [naming, setNaming] = useState<number | null>(null)
@@ -297,6 +297,15 @@ export default function App({ bridge }: AppProps) {
     const take = async () => {
       const result = await bridge.invoke('invites.takeOpened')
       if (active && result.ok && result.value) await confirmReceiving(result.value, false)
+      // A download file opened in Windows waits in the app; only what it holds comes here (epic 14 story 5).
+      const file = await bridge.invoke('transfers.takeOpenedFile')
+      if (!active) return
+      if (!file.ok) showError(file.error.code)
+      else if (file.value) {
+        setNotice(null)
+        setPasted({ text: '', preview: file.value, openedFile: true })
+        setReceiving(true)
+      }
     }
     void take()
     const unsubscribe = bridge.subscribe((event) => {
@@ -306,7 +315,7 @@ export default function App({ bridge }: AppProps) {
       active = false
       unsubscribe()
     }
-  }, [bridge, confirmReceiving])
+  }, [bridge, confirmReceiving, showError])
 
   // Notes when each transfer started waiting, and which have waited long enough to offer help.
   useEffect(() => {
@@ -692,6 +701,8 @@ export default function App({ bridge }: AppProps) {
           onError={showError}
           onInfo={showInfo}
           onView={canView(details) ? () => openViewer(details) : undefined}
+          speedLimits={speedLimits}
+          onSpeedLimits={chooseSpeedLimits}
         />
       )}
 

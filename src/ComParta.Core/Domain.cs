@@ -80,9 +80,15 @@ public sealed record ShareView(Share Share, ShareStatus Status);
 /// A file on its way into the Received folder, from another person's device or from a public
 /// download link or download file (AD-21).
 /// </summary>
+/// <param name="SkippedFiles">For a download of several files: the positions of the ones the person chose not to get; null for none.</param>
+/// <param name="KeepSharing">For a public download: whether it is shared with others once it has arrived, while ComParta is open.</param>
 public sealed record Transfer(
     TransferId Id, string? Name, long? SizeBytes, bool Done, DateTimeOffset AddedAt, bool Paused = false,
-    TransferSource Source = TransferSource.Invite);
+    TransferSource Source = TransferSource.Invite, IReadOnlyList<int>? SkippedFiles = null, bool KeepSharing = true)
+{
+    /// <summary>Public downloads share back what they received, unless the person said not to (epic 14 story 4).</summary>
+    public bool SharesWhenDone => Source != TransferSource.Invite && KeepSharing;
+}
 
 /// <summary>Where a transfer came from, for the details window (CAP-26).</summary>
 public enum TransferSource
@@ -122,6 +128,16 @@ public sealed record InvitePreview(InviteHints Hints, bool IsInvite, long? FreeB
     /// <summary>True when the size is known and larger than the room left.</summary>
     public bool NotEnoughSpace => Hints.SizeBytes is { } size && FreeBytes is { } free && size > free;
 }
+
+/// <summary>The choices under "More options" on a download (epic 14 story 4).</summary>
+/// <param name="Files">The files it holds, or null while they are not known yet or once it has arrived.</param>
+/// <param name="Sharing">It has arrived and others can get it from this computer now.</param>
+public sealed record TransferOptions(IReadOnlyList<ReceiveFile>? Files, bool KeepSharing, bool Sharing);
+
+/// <summary>One file of a download, as the person picks it (epic 14 story 4).</summary>
+/// <param name="Index">Its position in the download, which the choice is kept by.</param>
+/// <param name="Path">Its place inside the download, made safe to show; never a path on this computer.</param>
+public sealed record ReceiveFile(int Index, string Path, long SizeBytes, bool Wanted);
 
 /// <param name="SecondsLeft">Roughly how long is left, from a smoothed speed, or null when it cannot be told.</param>
 /// <param name="NeededBytes">With <see cref="TransferState.NoSpace"/>: how much room to free, or null when it cannot be told.</param>
@@ -296,6 +312,8 @@ public enum ErrorKind
     FolderTooLarge,
     /// <summary>The name given to several files shared together is empty, too long or has characters a folder cannot have.</summary>
     ShareNameInvalid,
+    /// <summary>Every file of a download was left out; at least one must stay.</summary>
+    NoFilesChosen,
     Unexpected,
 }
 

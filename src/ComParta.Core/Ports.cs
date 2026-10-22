@@ -179,6 +179,26 @@ public interface ITransferEngine
     Task PauseReceivingAsync(TransferId id, CancellationToken ct = default);
     /// <summary>Continues a paused transfer, or one that stopped because the disk was full.</summary>
     Task ContinueReceivingAsync(TransferId id, CancellationToken ct = default);
+
+    /// <summary>The name and size a download file announces, or null when the bytes are not one.</summary>
+    InviteSummary? DescribeDownloadFile(byte[] content) => null;
+    /// <summary>
+    /// The files a transfer holds, with the ones it gets marked, or null while they are not known yet
+    /// or the engine no longer receives it.
+    /// </summary>
+    IReadOnlyList<ReceiveFile>? GetReceiveFiles(TransferId id) => null;
+    /// <summary>
+    /// Leaves out the files at these positions, now or as soon as the transfer knows its files.
+    /// Its size and progress count only the files it gets from then on.
+    /// </summary>
+    Task SetSkippedFilesAsync(TransferId id, IReadOnlyCollection<int> skipped, CancellationToken ct = default) => Task.CompletedTask;
+    /// <summary>
+    /// Whether the file is shared with others once it has arrived, until the app quits. Turning it
+    /// off for a file shared that way stops sharing it; the file stays where it is.
+    /// </summary>
+    Task SetSharingWhenDoneAsync(TransferId id, bool keep, CancellationToken ct = default) => Task.CompletedTask;
+    /// <summary>True while a file that arrived is shared with others from where it is.</summary>
+    bool IsSharingReceived(TransferId id) => false;
 }
 
 /// <summary>Opens the native file dialog (AD-7). Returns null when the person cancels.</summary>

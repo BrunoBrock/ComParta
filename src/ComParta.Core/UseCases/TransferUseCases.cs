@@ -27,6 +27,8 @@ public sealed class TransferUseCases
     private readonly Dictionary<TransferId, DateTimeOffset> _lastContact = [];
     // When each transfer stopped for lack of room last looked for room.
     private readonly Dictionary<TransferId, DateTimeOffset> _roomCheckedAt = [];
+    // The download file Windows opened ComParta with, read and waiting for "Get the file".
+    private byte[]? _openedFile;
 
     public TransferUseCases(
         ITransferRepository repository,
@@ -65,6 +67,7 @@ public sealed class TransferUseCases
                 {
                     if (transfer.Paused)
                         await _engine.PauseReceivingAsync(transfer.Id, ct);
+                    await ApplyChoicesAsync(transfer, ct);
                     Set(new TransferView(transfer, transfer.Paused ? TransferState.Paused : TransferState.Connecting, 0));
                 }
                 else
@@ -164,12 +167,59 @@ public sealed class TransferUseCases
             return Result<TransferView?>.Fail(ErrorKind.FileUnreadable);
         }
 
+        var started = await ReceiveFileAsync(content, ct);
+        return started.Ok ? Result<TransferView?>.Success(started.Value) : Result<TransferView?>.Fail(started.Error!.Value);
+    }
+
+    /// <summary>
+    /// Reads a download file Windows opened ComParta with, and says what it holds, so the person can
+    /// agree before anything is received (epic 14 story 5). It waits for <see cref="ReceiveOpenedFileAsync"/>.
+    /// </summary>
+    public Result<InvitePreview> PreviewOpenedFile(string path)
+    {
+        if (_files is null)
+            return Result<InvitePreview>.Fail(ErrorKind.Unexpected);
+        byte[] content;
+        try
+        {
+            content = _files.ReadSmallFile(path, MaxDownloadFileBytes);
+        }
+        catch (Exception)
+        {
+            return Result<InvitePreview>.Fail(ErrorKind.FileUnreadable);
+        }
+        if (_engine.DescribeDownloadFile(content) is not { } summary)
+            return Result<InvitePreview>.Fail(ErrorKind.DownloadFileInvalid);
+        lock (_transfers)
+            _openedFile = content;
+        var hints = InviteHints.None with { Name = summary.Name, SizeBytes = summary.SizeBytes };
+        return Result<InvitePreview>.Success(new InvitePreview(hints, false, _storage?.GetReceivedFreeBytes()));
+    }
+
+    /// <summary>Starts receiving the download file Windows opened ComParta with, once.</summary>
+    public async Task<Result<TransferView>> ReceiveOpenedFileAsync(CancellationToken ct = default)
+    {
+        byte[]? content;
+        lock (_transfers)
+        {
+            content = _openedFile;
+            _openedFile = null;
+        }
+        if (content is null)
+            return Result<TransferView>.Fail(ErrorKind.DownloadFileInvalid);
+        if (_engine.DescribeDownloadFile(content) is { SizeBytes: { } size }
+            && _storage?.GetReceivedFreeBytes() is { } free && size > free)
+            return Result<TransferView>.Fail(ErrorKind.DiskFull);
+        return await ReceiveFileAsync(content, ct);
+    }
+
+    private Task<Result<TransferView>> ReceiveFileAsync(byte[] content, CancellationToken ct)
+    {
         var key = _engine.ReadDownloadFileKey(content);
         if (key is null)
-            return Result<TransferView?>.Fail(ErrorKind.DownloadFileInvalid);
-        var started = await StartAsync(
+            return Task.FromResult(Result<TransferView>.Fail(ErrorKind.DownloadFileInvalid));
+        return StartAsync(
             key, id => _engine.ReceiveFromFileAsync(id, content, ct), ErrorKind.DownloadFileInvalid, TransferSource.DownloadFile, ct);
-        return started.Ok ? Result<TransferView?>.Success(started.Value) : Result<TransferView?>.Fail(started.Error!.Value);
     }
 
     private async Task<Result<TransferView>> StartAsync(
@@ -186,6 +236,7 @@ public sealed class TransferUseCases
             var transfer = new Transfer(TransferId.New(), null, null, false, _clock.GetUtcNow(), Source: source);
             if (!await receive(transfer.Id))
                 return Result<TransferView>.Fail(refused);
+            await ApplyChoicesAsync(transfer, ct);
             await _repository.AddAsync(transfer, ct);
             view = Set(new TransferView(transfer, TransferState.Connecting, 0));
         }
@@ -194,6 +245,80 @@ public sealed class TransferUseCases
         Changed?.Invoke();
         return Result<TransferView>.Success(view);
     }
+
+    /// <summary>Hands the engine what the person chose under More options, for a new or continued transfer.</summary>
+    private async Task ApplyChoicesAsync(Transfer transfer, CancellationToken ct)
+    {
+        if (transfer.SkippedFiles is { Count: > 0 } skipped)
+            await _engine.SetSkippedFilesAsync(transfer.Id, skipped, ct);
+        await _engine.SetSharingWhenDoneAsync(transfer.Id, transfer.SharesWhenDone, ct);
+    }
+
+    /// <summary>What More options shows for a download (epic 14 story 4).</summary>
+    public Result<TransferOptions> GetOptions(TransferId id)
+    {
+        TransferView? view;
+        lock (_transfers)
+        {
+            if (!_transfers.TryGetValue(id, out view))
+                return Result<TransferOptions>.Fail(ErrorKind.TransferNotFound);
+        }
+        var files = view.State == TransferState.Done ? null : _engine.GetReceiveFiles(id);
+        return Result<TransferOptions>.Success(new TransferOptions(
+            files, view.Transfer.SharesWhenDone, view.State == TransferState.Done && _engine.IsSharingReceived(id)));
+    }
+
+    /// <summary>
+    /// Changes the choices under More options: which files of a download to get, while it is on its
+    /// way, and whether a public download is shared once it has arrived. Both are kept after a
+    /// restart. A null choice stays as it was.
+    /// </summary>
+    public async Task<Result> SetOptionsAsync(
+        TransferId id, IReadOnlyCollection<int>? skipped, bool? keepSharing, CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            TransferView? view;
+            lock (_transfers)
+            {
+                if (!_transfers.TryGetValue(id, out view))
+                    return Result.Fail(ErrorKind.TransferNotFound);
+            }
+            var transfer = view.Transfer;
+            if (skipped is not null)
+            {
+                if (view.State is TransferState.Done or TransferState.Failed or TransferState.Blocked)
+                    return Result.Fail(ErrorKind.TransferFinished);
+                var files = _engine.GetReceiveFiles(id);
+                var chosen = skipped.Distinct().Where(i => i >= 0 && (files is null || i < files.Count)).Order().ToArray();
+                if (files is not null && chosen.Length >= files.Count)
+                    return Result.Fail(ErrorKind.NoFilesChosen);
+                await _engine.SetSkippedFilesAsync(id, chosen, ct);
+                transfer = transfer with { SkippedFiles = chosen.Length == 0 ? null : chosen };
+            }
+            if (keepSharing is { } keep && transfer.Source != TransferSource.Invite)
+            {
+                await _engine.SetSharingWhenDoneAsync(id, keep, ct);
+                transfer = transfer with { KeepSharing = keep };
+            }
+            if (transfer == view.Transfer)
+                return Result.Success;
+            lock (_transfers)
+            {
+                if (_transfers.TryGetValue(id, out var current))
+                    _transfers[id] = current with { Transfer = transfer };
+            }
+            await _repository.UpdateAsync(transfer, ct);
+        }
+        finally { _gate.Release(); }
+
+        Changed?.Invoke();
+        return Result.Success;
+    }
+
+    /// <summary>Stops sharing a file that arrived, for example before it is deleted. The file stays.</summary>
+    public Task StopSharingAsync(TransferId id, CancellationToken ct = default) => _engine.SetSharingWhenDoneAsync(id, false, ct);
 
     /// <summary>Stops moving bytes for a running transfer; it stays paused after a restart.</summary>
     public Task<Result> PauseAsync(TransferId id, CancellationToken ct = default) => SetPausedAsync(id, true, ct);
@@ -255,6 +380,8 @@ public sealed class TransferUseCases
             }
             if (view.State != TransferState.Done)
                 await _engine.StopReceivingAsync(id, ct);
+            else
+                await _engine.SetSharingWhenDoneAsync(id, false, ct);
             await _repository.RemoveAsync(id, ct);
         }
         finally { _gate.Release(); }

@@ -7,8 +7,11 @@ import Dialog from './ui/Dialog.tsx'
 
 interface ReceiveDialogProps {
   bridge: Bridge
-  /** Text pasted elsewhere in the window: the dialog opens straight on the confirmation. */
-  pasted?: { text: string; preview: InvitePreviewDto }
+  /**
+   * Text pasted elsewhere in the window, or a download file opened in Windows: the dialog opens
+   * straight on the confirmation.
+   */
+  pasted?: { text: string; preview: InvitePreviewDto; openedFile?: boolean }
   /** The transfer started; the dialog closes. */
   onStarted: () => void
   onCancel: () => void
@@ -63,7 +66,9 @@ export default function ReceiveDialog({ bridge, pasted, onStarted, onCancel }: R
 
   async function receive() {
     await run(async () => {
-      const result = await bridge.invoke('transfers.receive', { invite })
+      const result = pasted?.openedFile
+        ? await bridge.invoke('transfers.receiveOpenedFile')
+        : await bridge.invoke('transfers.receive', { invite })
       if (result.ok) onStarted()
       else setProblem(errorMessage(result.error.code))
     })

@@ -254,6 +254,9 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
             catch (Exception) { /* shutting down anyway */ }
             engine.Dispose();
         }
+        // Files shared after they arrived stop with the app; what is left in their own folders is not needed again.
+        foreach (var sharing in _incoming.Values.Where(i => i.Sharing))
+            DeleteFolderQuietly(sharing.Folder);
         if (_portMapper is { } portMapper)
         {
             // Takes the router mapping away again, so nothing stays open after the app quits.
@@ -396,5 +399,13 @@ public sealed partial class MonoTorrentTransferEngine : ITransferEngine, IAsyncD
         public volatile bool Finishing;
         public volatile bool Rejected;
         public volatile bool Paused;
+        /// <summary>Positions of the files the person left out (epic 14 story 4).</summary>
+        public volatile IReadOnlySet<int> Skipped = new HashSet<int>();
+        /// <summary>The engine has the choice of files; false while it does not know the files yet.</summary>
+        public volatile bool SkippedApplied;
+        /// <summary>Share it from the Received folder once it has arrived.</summary>
+        public volatile bool KeepSharing;
+        /// <summary>It has arrived and is shared from the Received folder now.</summary>
+        public volatile bool Sharing;
     }
 }

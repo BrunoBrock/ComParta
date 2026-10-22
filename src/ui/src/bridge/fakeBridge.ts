@@ -17,6 +17,7 @@ import type {
   SetActivityArgs,
   QuitArgs,
   SetSettingsArgs,
+  SetTransferOptionsArgs,
   SettingsDto,
   ShareDetailsDto,
   ShareDto,
@@ -25,6 +26,8 @@ import type {
   ThumbnailArgs,
   TransferDetailsDto,
   TransferDto,
+  TransferFileDto,
+  TransferOptionsDto,
   TransferSourceDto,
 } from './contract.generated.ts'
 import { isPicture, playableKind } from '../fileNames.ts'
@@ -34,6 +37,8 @@ import { readPublicServers } from '../publicServers.ts'
 export interface PickedFile {
   name: string
   sizeBytes: number
+  /** For a download file: the files it holds, each with its place inside it; one file named as the download when left out. */
+  files?: PickedFile[]
 }
 
 /** A folder in the fake's folder dialog or dropped on the window: its name, size and how many files it holds. */
@@ -112,6 +117,10 @@ export interface FakeBridge extends Bridge {
   quitFromIcon(): void
   /** An invite link clicked outside the app, as the app reports it. */
   openInvite(text: string): void
+  /** A download file opened in Windows, as the app reports it; 'invalid' is a file that is not one. */
+  openDownloadFile(file: PickedFile | 'invalid'): void
+  /** Ids of downloads that arrived and are no longer shared, as the app tells under More options. */
+  notSharing: Set<string>
   /** Change state from outside, as the app does when something happens on its own. */
   setShares(shares: ShareDto[]): void
   /** The person clicked a system notification about this item. */
@@ -214,6 +223,16 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   // What the app knows about each item beyond the list: when it was added and where it came from.
   const addedAt = new Map<string, string>()
   const sources = new Map<string, TransferSourceDto>()
+  // More options (epic 14 story 4): the files of each download, the ones left out, and whether it is shared once it arrives.
+  const filesOf = new Map<string, PickedFile[]>()
+  const skippedOf = new Map<string, Set<number>>()
+  const keepSharingOf = new Map<string, boolean>()
+  const wantedSize = (id: string, total: number) => {
+    const files = filesOf.get(id)
+    const skipped = skippedOf.get(id)
+    if (!files || !skipped || skipped.size === 0) return total
+    return files.reduce((sum, file, index) => (skipped.has(index) ? sum : sum + file.sizeBytes), 0)
+  }
 
   // In the moving fake every ready share that is not paused sends a little; files that do not move are left out.
   const itemSpeeds = (): ItemSpeedDto[] => [
@@ -272,11 +291,14 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
           return
         }
         if (current.state === 'paused' || stopped.receivingStopped) return
-        received = Math.min(total, received + step)
-        if (received >= total) {
+        // Files left out under More options no longer count, as in the app.
+        const wanted = wantedSize(id, total)
+        received = Math.min(wanted, received + step)
+        if (received >= wanted) {
           clearInterval(timer)
           updateTransfer(id, {
-            receivedBytes: total,
+            sizeBytes: wanted,
+            receivedBytes: wanted,
             state: 'done',
             bytesPerSecond: 0,
             secondsLeft: null,
@@ -284,10 +306,11 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
           })
         } else {
           updateTransfer(id, {
+            sizeBytes: wanted,
             receivedBytes: Math.round(received),
             state: 'receiving',
             bytesPerSecond,
-            secondsLeft: Math.ceil((total - received) / bytesPerSecond),
+            secondsLeft: Math.ceil((wanted - received) / bytesPerSecond),
             neededBytes: null,
           })
         }
@@ -301,10 +324,15 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     total: number,
     source: TransferSourceDto,
     known: Partial<TransferDto> = {},
+    files: PickedFile[] = [{ name, sizeBytes: total }],
   ) => {
     if (transfers.some((t) => t.id === id && t.state !== 'done')) return fail('transfer.duplicate')
     addedAt.set(id, new Date().toISOString())
     sources.set(id, source)
+    filesOf.set(id, files)
+    skippedOf.delete(id)
+    keepSharingOf.set(id, source !== 'invite')
+    fake.notSharing.delete(id)
     const transfer: TransferDto = {
       id,
       name: null,
@@ -349,6 +377,18 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   }
 
   let openedInvite: string | null = null
+  let openedFile: PickedFile | 'invalid' | null = null
+  // The download file read for "Get this file?", waiting for the person to agree.
+  let heldFile: PickedFile | null = null
+  const receiveFile = (file: PickedFile) =>
+    startTransfer(
+      `file-${file.name}`,
+      file.name,
+      file.sizeBytes,
+      'downloadFile',
+      { name: file.name, sizeBytes: file.sizeBytes },
+      file.files ?? [{ name: file.name, sizeBytes: file.sizeBytes }],
+    )
   let problems: { at: Date; code: ErrorCode }[] = []
   let settings: SettingsDto = {
     language: options.language ?? null,
@@ -555,13 +595,17 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       const { name, sizeBytes, isInvite } = found.preview
       if (sizeBytes !== null && freeBytes !== null && sizeBytes > freeBytes) return fail('disk.full')
       // Names from an invite are hints only; the name appears once the file's details arrive.
-      return startTransfer(
-        found.key,
-        name ?? 'File',
-        sizeBytes ?? 250_000_000,
-        isInvite ? 'invite' : 'downloadLink',
-        isInvite ? {} : { name },
-      )
+      const total = sizeBytes ?? 250_000_000
+      // A download link whose name has no ending stands for a folder of files, so More options has a choice.
+      const files =
+        isInvite || !name || /\.[a-z0-9]+$/i.test(name)
+          ? [{ name: name ?? 'File', sizeBytes: total }]
+          : [
+              { name: `${name}.mkv`, sizeBytes: Math.round(total * 0.8) },
+              { name: `Extras/Making of.mkv`, sizeBytes: Math.round(total * 0.18) },
+              { name: `Subtitles.srt`, sizeBytes: total - Math.round(total * 0.8) - Math.round(total * 0.18) },
+            ]
+      return startTransfer(found.key, name ?? 'File', total, isInvite ? 'invite' : 'downloadLink', isInvite ? {} : { name }, files)
     },
 
     'clipboard.findInvite': () => {
@@ -574,10 +618,73 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       const file = fake.nextDownloadFile
       if (file === null) return ok(null)
       if (file === 'invalid') return fail('download.invalidFile')
-      return startTransfer(`file-${file.name}`, file.name, file.sizeBytes, 'downloadFile', {
+      return receiveFile(file)
+    },
+
+    'transfers.takeOpenedFile': () => {
+      const file = openedFile
+      openedFile = null
+      if (file === null) return ok(null)
+      if (file === 'invalid') return fail('download.invalidFile')
+      heldFile = file
+      const preview: InvitePreviewDto = {
+        senderName: null,
         name: file.name,
         sizeBytes: file.sizeBytes,
-      })
+        itemCount: null,
+        isInvite: false,
+        freeBytes,
+      }
+      return ok(preview)
+    },
+
+    'transfers.receiveOpenedFile': () => {
+      const file = heldFile
+      heldFile = null
+      if (file === null) return fail('download.invalidFile')
+      if (freeBytes !== null && file.sizeBytes > freeBytes) return fail('disk.full')
+      return receiveFile(file)
+    },
+
+    'transfers.options': (args) => {
+      const { id } = args as IdArgs
+      const transfer = transfers.find((t) => t.id === id)
+      if (!transfer) return fail('transfer.notFound')
+      const done = transfer.state === 'done'
+      const skipped = skippedOf.get(id) ?? new Set<number>()
+      // As the app: the files show once the download's details arrived, and not after it arrived.
+      const files: TransferFileDto[] | null =
+        done || transfer.sizeBytes === null
+          ? null
+          : (filesOf.get(id) ?? []).map((file, index) => ({
+              index,
+              path: file.name,
+              sizeBytes: file.sizeBytes,
+              wanted: !skipped.has(index),
+            }))
+      const keepSharing = (sources.get(id) ?? 'invite') !== 'invite' && (keepSharingOf.get(id) ?? true)
+      const options: TransferOptionsDto = { files, keepSharing, sharing: done && keepSharing && !fake.notSharing.has(id) }
+      return ok(options)
+    },
+
+    'transfers.setOptions': (args) => {
+      const { id, skipped, keepSharing } = args as SetTransferOptionsArgs
+      const transfer = transfers.find((t) => t.id === id)
+      if (!transfer) return fail('transfer.notFound')
+      if (skipped !== null) {
+        if (['done', 'failed', 'blocked'].includes(transfer.state)) return fail('transfer.finished')
+        const count = filesOf.get(id)?.length ?? 0
+        const chosen = new Set(skipped.filter((index) => index >= 0 && index < count))
+        if (count > 0 && chosen.size >= count) return fail('transfer.noFiles')
+        skippedOf.set(id, chosen)
+        if (transfer.sizeBytes !== null) updateTransfer(id, { sizeBytes: wantedSize(id, transfer.sizeBytes) })
+      }
+      if (keepSharing !== null && (sources.get(id) ?? 'invite') !== 'invite') {
+        keepSharingOf.set(id, keepSharing)
+        // Turning it off for a file that arrived stops sharing it; it is not shared again in this run.
+        if (!keepSharing && transfer.state === 'done') fake.notSharing.add(id)
+      }
+      return ok(null)
     },
 
     'transfers.pause': (args) => setPaused((args as IdArgs).id, true),
@@ -588,6 +695,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       const { id } = args as IdArgs
       if (!transfers.some((t) => t.id === id)) return fail('transfer.notFound')
       transfers = transfers.filter((t) => t.id !== id)
+      fake.notSharing.add(id)
       emitTransfers()
       return ok(null)
     },
@@ -796,6 +904,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     'received.delete': (args) =>
       withArrived((args as IdArgs).id, (id) => {
         transfers = transfers.filter((t) => t.id !== id)
+        fake.notSharing.add(id)
         emitTransfers()
       }),
   }
@@ -819,8 +928,17 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
 
     openInvite(text: string) {
       openedInvite = text
+      openedFile = null
       emit({ event: 'invites.changed', payload: true })
     },
+
+    openDownloadFile(file: PickedFile | 'invalid') {
+      openedFile = file
+      openedInvite = null
+      emit({ event: 'invites.changed', payload: true })
+    },
+
+    notSharing: new Set<string>(),
 
     async invoke(command: string, args?: unknown) {
       let result: CommandResult<unknown>
