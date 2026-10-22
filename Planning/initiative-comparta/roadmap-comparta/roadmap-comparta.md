@@ -164,7 +164,7 @@ can be built and checked on their own, and every story's blocker is named.
 
 | Check | Result |
 | --- | --- |
-| Ticket tree is consistent | `python3 _bmad/method/scripts/tickets.py status Planning/initiative-comparta` reports 18 epics and 129 tickets (68 done, 3 built and waiting on a person, 1 in progress, 1 dropped), and no undeclared dependency. Known: epic 15 is listed before epic 6, which it waits on; both are built. |
+| Ticket tree is consistent | `python3 _bmad/method/scripts/tickets.py status Planning/initiative-comparta` reports 18 epics and 129 tickets (68 done, 4 built and waiting on a person, 1 in progress, 1 dropped), and no undeclared dependency. Known: epic 15 is listed before epic 6, which it waits on; both are built. |
 | Every CAP is covered by an epic | Yes; see the `covers` field in [tickets.toml](../tickets.toml). CAP-24 and CAP-31 (friends) are covered by epic 13 and CAP-32 (folders) by epic 17; their stories after the spikes carry `refine = true`. CAP-33 is epic 18. |
 | Every AD is cited by at least one epic | Yes. |
 | Every epic in R1 and R2 has stories with a `verify` | Yes. |
