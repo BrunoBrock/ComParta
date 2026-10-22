@@ -16,6 +16,7 @@ const arrived: TransferDto = {
   bytesPerSecond: 0,
   secondsLeft: null,
   neededBytes: null,
+  risky: false,
 }
 
 describe('using the files with the keyboard', () => {

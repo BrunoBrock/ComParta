@@ -234,9 +234,12 @@ public sealed class BridgeRouter
                 return CommandResult.Success(null);
 
             case Commands.ReceivedOpen:
-                return TransferId.TryParse(Args<IdArgs>(argsJson)?.Id, out var openId)
-                    ? ToResult(await _received.OpenAsync(openId))
+            {
+                var open = Args<OpenReceivedArgs>(argsJson);
+                return TransferId.TryParse(open?.Id, out var openId)
+                    ? ToResult(await _received.OpenAsync(openId, open?.Confirmed ?? false))
                     : CommandResult.Failure(ErrorCodes.TransferNotFound);
+            }
 
             case Commands.ReceivedReveal:
                 return TransferId.TryParse(Args<IdArgs>(argsJson)?.Id, out var revealId)
@@ -444,7 +447,8 @@ public sealed class BridgeRouter
         },
         view.BytesPerSecond,
         view.SecondsLeft,
-        view.NeededBytes);
+        view.NeededBytes,
+        view.Transfer.Name is { } name && ReceivedNames.IsRisky(name));
 
     public static SettingsDto ToDto(Settings settings) =>
         new(settings.Language, settings.SystemLanguage, settings.View, settings.Sort, settings.SendStepsSeen, settings.StartWithWindows,
@@ -513,6 +517,7 @@ public sealed class BridgeRouter
         ErrorKind.SettingsInvalid => ErrorCodes.SettingsInvalid,
         ErrorKind.ReceivedNotFound => ErrorCodes.ReceivedNotFound,
         ErrorKind.ReceivedOpenFailed => ErrorCodes.ReceivedOpenFailed,
+        ErrorKind.ReceivedConfirmRisky => ErrorCodes.ReceivedConfirmRisky,
         ErrorKind.ShareDropFailed => ErrorCodes.ShareDropFailed,
         ErrorKind.SaveFailed => ErrorCodes.FileSaveFailed,
         ErrorKind.NotPlayable => ErrorCodes.MediaNotPlayable,

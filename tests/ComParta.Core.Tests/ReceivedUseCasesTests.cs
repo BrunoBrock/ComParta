@@ -55,13 +55,31 @@ public sealed class ReceivedUseCasesTests
     }
 
     [Fact]
-    public async Task Programs_are_never_opened()
+    public async Task A_program_opens_only_after_the_person_confirms_again()
     {
         var id = await ArrivedAsync("setup.EXE");
 
-        Assert.Equal(ErrorKind.ReceivedOpenFailed, (await _received.OpenAsync(id)).Error);
+        Assert.Equal(ErrorKind.ReceivedConfirmRisky, (await _received.OpenAsync(id)).Error);
         Assert.Empty(_opener.Opened);
+
+        Assert.True((await _received.OpenAsync(id, confirmed: true)).Ok);
+        Assert.Single(_opener.Opened);
         Assert.True((await _received.RevealAsync(id)).Ok);
+    }
+
+    [Theory]
+    [InlineData("photo.jpg", false)]
+    [InlineData("report.pdf", false)]
+    [InlineData("macro.XLSM", true)]
+    [InlineData("shortcut.lnk", true)]
+    [InlineData("photo\u202Egpj.exe", true)]
+    public async Task Only_risky_names_ask_again(string name, bool risky)
+    {
+        var id = await ArrivedAsync(name);
+
+        var result = await _received.OpenAsync(id);
+
+        Assert.Equal(risky ? ErrorKind.ReceivedConfirmRisky : null, result.Error);
     }
 
     [Fact]

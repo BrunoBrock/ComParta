@@ -14,6 +14,7 @@ describe('using what was received', () => {
     bytesPerSecond: 0,
     secondsLeft: null,
     neededBytes: null,
+    risky: false,
   }
   const onTheWay: TransferDto = {
     id: 't2',
@@ -24,6 +25,7 @@ describe('using what was received', () => {
     bytesPerSecond: 0,
     secondsLeft: null,
     neededBytes: null,
+    risky: false,
   }
 
   const button = (label: string) => within(transfersSection()).findByRole('button', { name: label })
@@ -107,6 +109,43 @@ describe('using what was received', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(en['error.received.openFailed'])
   })
+
+  it('asks again before opening a file that can run a program, and opens it only after the second yes', async () => {
+    const program: TransferDto = { ...arrived, id: 't3', name: 'Setup.exe', risky: true }
+    const { user, bridge } = setup({ transfers: [program] })
+    await goToReceived(user)
+
+    await user.click(await button('Open Setup.exe with another app'))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Open “Setup.exe”?' })
+    expect(bridge.openedReceived).toEqual([])
+    await user.click(within(dialog).getByRole('button', { name: en['riskyOpen.confirm'] }))
+
+    expect(bridge.openedReceived).toEqual(['t3'])
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('keeps a program closed when the person cancels the second question', async () => {
+    const program: TransferDto = { ...arrived, id: 't3', name: 'Setup.exe', risky: true }
+    const { user, bridge } = setup({ transfers: [program] })
+    await goToReceived(user)
+
+    await user.click(await button('Open Setup.exe with another app'))
+    const dialog = await screen.findByRole('dialog', { name: 'Open “Setup.exe”?' })
+    await user.click(within(dialog).getByRole('button', { name: en['riskyOpen.cancel'] }))
+
+    expect(bridge.openedReceived).toEqual([])
+  })
+
+  it('opens an ordinary received file without asking again', async () => {
+    const { user, bridge } = setup({ transfers: [arrived] })
+    await goToReceived(user)
+
+    await user.click(await button('Open Recipe.pdf with another app'))
+
+    expect(bridge.openedReceived).toEqual(['t1'])
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
 })
 
 describe('pictures of received files', () => {
@@ -120,6 +159,7 @@ describe('pictures of received files', () => {
       bytesPerSecond: 0,
       secondsLeft: null,
       neededBytes: null,
+      risky: false,
     }
     const zip: TransferDto = { ...video, id: 't4', name: 'Photos.zip' }
     const { user } = setup({ transfers: [video, zip] })

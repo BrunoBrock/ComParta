@@ -16,6 +16,7 @@ const moving: TransferDto = {
   bytesPerSecond: 2 * 1024 * 1024,
   secondsLeft: 250,
   neededBytes: null,
+  risky: false,
 }
 
 const card = (name: string) => screen.getByText(name, { selector: '.visually-hidden, .name-start' }).closest('li')!

@@ -9,21 +9,19 @@ namespace ComParta.Core.UseCases;
 /// </summary>
 public sealed class ReceivedUseCases(TransferUseCases transfers, IAppPaths paths, IContentOpener opener, IFileSystem files)
 {
-    // Opening these would run a program. ComParta never does that; the person can still find the
-    // file with Show in folder, where Windows asks before running anything (AD-6).
-    private static readonly HashSet<string> Programs = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".exe", ".msi", ".msix", ".appx", ".bat", ".cmd", ".com", ".scr", ".pif", ".cpl", ".ps1", ".psm1",
-        ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".hta", ".lnk", ".url", ".reg", ".jar", ".dll", ".sys",
-    };
-
-    public async Task<Result> OpenAsync(TransferId id, CancellationToken ct = default)
+    /// <summary>
+    /// Opens a received file in the program that goes with it. A file that can run something (see
+    /// <see cref="ReceivedNames.IsRisky"/>) is refused until the person confirms a second time, so
+    /// nothing risky opens by accident (AD-13). Opening never runs a file by itself: it is always
+    /// the person's own request.
+    /// </summary>
+    public async Task<Result> OpenAsync(TransferId id, bool confirmed = false, CancellationToken ct = default)
     {
         var (path, error) = Find(id, mustExist: true);
         if (error is { } kind)
             return Result.Fail(kind);
-        if (Programs.Contains(Path.GetExtension(path!)))
-            return Result.Fail(ErrorKind.ReceivedOpenFailed);
+        if (!confirmed && ReceivedNames.IsRisky(Path.GetFileName(path!)))
+            return Result.Fail(ErrorKind.ReceivedConfirmRisky);
         return await opener.OpenAsync(path!, ct) ? Result.Success : Result.Fail(ErrorKind.ReceivedOpenFailed);
     }
 

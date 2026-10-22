@@ -295,6 +295,10 @@ export const ptBR: Catalog = {
     'O arquivo sai da sua pasta do ComParta neste computador. Se quiser de novo depois, peça um novo convite a quem enviou.',
   'deleteReceived.confirm': 'Apagar arquivo',
   'deleteReceived.cancel': 'Manter o arquivo',
+  'riskyOpen.title': 'Abrir “{name}”?',
+  'riskyOpen.body': 'Este arquivo pode executar um programa ou mudar o seu computador. Abra-o somente se confia no lugar de onde ele veio.',
+  'riskyOpen.confirm': 'Abrir mesmo assim',
+  'riskyOpen.cancel': 'Cancelar',
 
   'connection.good': 'Outros conseguem chegar a este computador',
   'connection.limited': 'Conexão limitada',
@@ -377,6 +381,7 @@ export const ptBR: Catalog = {
   'error.transfer.notFound': 'Esse arquivo não está mais na sua lista.',
   'error.received.notFound': 'Este arquivo não está mais na sua pasta do ComParta. Ele pode ter sido movido ou apagado.',
   'error.received.openFailed': 'O ComParta não conseguiu abrir este arquivo. Escolha Mostrar na pasta para vê-lo.',
+  'error.received.confirmRisky': 'Este arquivo pode executar um programa ou mudar o seu computador, então o ComParta pede que você confirme antes de abri-lo.',
   'error.share.dropFailed': 'O ComParta não conseguiu pegar esses arquivos. Escolha “Compartilhar um arquivo” para escolhê-los.',
   'error.file.saveFailed': 'O ComParta não conseguiu salvar o arquivo de download. Veja se há espaço na sua pasta Downloads e tente de novo.',
   'error.share.folderEmpty': 'Esta pasta não tem arquivos para compartilhar.',

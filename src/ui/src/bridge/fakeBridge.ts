@@ -11,6 +11,7 @@ import type {
   CopyInviteArgs,
   IdArgs,
   InvitePreviewDto,
+  OpenReceivedArgs,
   ItemSpeedDto,
   ReceiveArgs,
   SetActivityArgs,
@@ -170,6 +171,24 @@ const maxSpeedLimit = 1_000_000_000
 const ok = <T>(value: T): CommandResult<T> => ({ ok: true, value })
 const fail = (code: ErrorCode): CommandResult<never> => ({ ok: false, error: { code } })
 
+// The same list as the app's ReceivedNames: files that can run a program or change the computer.
+const riskyExtensions = new Set([
+  '.exe', '.com', '.scr', '.pif', '.cpl', '.msi', '.msix', '.msixbundle', '.appx', '.appxbundle', '.msp', '.mst',
+  '.appref-ms', '.application', '.gadget', '.dll', '.sys', '.drv', '.ocx', '.jar', '.msc',
+  '.bat', '.cmd', '.ps1', '.psm1', '.psd1', '.ps1xml', '.vbs', '.vbe', '.js', '.jse', '.wsf', '.wsh', '.wsc',
+  '.hta', '.sct', '.py', '.pyw', '.reg', '.inf', '.scf', '.chm', '.htm', '.html', '.mht', '.mhtml', '.svg', '.xht',
+  '.lnk', '.url', '.website', '.library-ms', '.settingcontent-ms', '.search-ms', '.searchconnector-ms',
+  '.iso', '.img', '.vhd', '.vhdx',
+  '.docm', '.dotm', '.xlsm', '.xltm', '.xlam', '.xla', '.pptm', '.potm', '.ppam', '.ppsm', '.sldm', '.xll',
+])
+const isRiskyName = (name: string | null): boolean => {
+  if (!name) return false
+  const dot = name.lastIndexOf('.')
+  return dot > 0 && riskyExtensions.has(name.slice(dot).toLowerCase())
+}
+// The app computes the risk flag from the name; the fake does the same so both screens agree.
+const withRisk = (transfer: TransferDto): TransferDto => ({ ...transfer, risky: isRiskyName(transfer.name) })
+
 const samplePicks: PickedFile[] = [
   { name: 'Birthday party.mp4', sizeBytes: 1_288_490_188 },
   { name: 'Holiday photos.zip', sizeBytes: 734_003_200 },
@@ -182,7 +201,7 @@ const samplePicks: PickedFile[] = [
  */
 export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   let shares = [...(options.shares ?? [])]
-  let transfers = [...(options.transfers ?? [])]
+  let transfers = (options.transfers ?? []).map(withRisk)
   let connection: ConnectionHealthDto | null = options.connection === undefined ? 'good' : options.connection
   let nextId = 1
   let nextSample = 0
@@ -234,7 +253,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   const newId = () => `fake-${nextId++}`
 
   const updateTransfer = (id: string, change: Partial<TransferDto>) => {
-    transfers = transfers.map((t) => (t.id === id ? { ...t, ...change } : t))
+    transfers = transfers.map((t) => (t.id === id ? withRisk({ ...t, ...change }) : t))
     emitTransfers()
   }
 
@@ -295,9 +314,10 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       bytesPerSecond: 0,
       secondsLeft: null,
       neededBytes: null,
+      risky: false,
       ...known,
     }
-    transfers = [...transfers.filter((t) => t.id !== id), transfer]
+    transfers = [...transfers.filter((t) => t.id !== id), withRisk(transfer)]
     emitTransfers()
     simulateTransfer(id, name, total)
     return ok(transfer)
@@ -764,7 +784,12 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       return ok(null)
     },
 
-    'received.open': (args) => withArrived((args as IdArgs).id, (id) => fake.openedReceived.push(id)),
+    'received.open': (args) => {
+      const { id, confirmed } = args as OpenReceivedArgs
+      // As the app: a file that can run a program opens only after the person confirms a second time.
+      if (transfers.some((t) => t.id === id && t.state === 'done' && t.risky) && !confirmed) return fail('received.confirmRisky')
+      return withArrived(id, (opened) => fake.openedReceived.push(opened))
+    },
 
     'received.reveal': (args) => withArrived((args as IdArgs).id, (id) => fake.revealedReceived.push(id)),
 
@@ -859,7 +884,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     },
 
     setTransfers(next: TransferDto[]) {
-      transfers = [...next]
+      transfers = next.map(withRisk)
       emitTransfers()
     },
 

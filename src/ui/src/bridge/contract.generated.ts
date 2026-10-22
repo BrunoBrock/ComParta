@@ -60,6 +60,7 @@ export interface TransferDto {
   bytesPerSecond: number;
   secondsLeft: number | null;
   neededBytes: number | null;
+  risky: boolean;
 }
 
 export interface ReceiveArgs {
@@ -73,6 +74,11 @@ export interface InvitePreviewDto {
   itemCount: number | null;
   isInvite: boolean;
   freeBytes: number | null;
+}
+
+export interface OpenReceivedArgs {
+  id: string;
+  confirmed: boolean | null;
 }
 
 export interface SettingsDto {
@@ -218,6 +224,7 @@ export const errorCodes = [
   "settings.invalid",
   "received.notFound",
   "received.openFailed",
+  "received.confirmRisky",
   "share.dropFailed",
   "file.saveFailed",
   "media.notPlayable",
@@ -249,7 +256,7 @@ export interface Commands {
   "transfers.pause": { args: IdArgs; result: null };
   "transfers.resume": { args: IdArgs; result: null };
   "received.openFolder": { args: undefined; result: null };
-  "received.open": { args: IdArgs; result: null };
+  "received.open": { args: OpenReceivedArgs; result: null };
   "received.reveal": { args: IdArgs; result: null };
   "received.delete": { args: IdArgs; result: null };
   "settings.get": { args: undefined; result: SettingsDto };

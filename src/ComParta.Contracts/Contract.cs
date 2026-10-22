@@ -77,6 +77,7 @@ public static class ErrorCodes
     public const string SettingsInvalid = "settings.invalid";
     public const string ReceivedNotFound = "received.notFound";
     public const string ReceivedOpenFailed = "received.openFailed";
+    public const string ReceivedConfirmRisky = "received.confirmRisky";
     public const string ShareDropFailed = "share.dropFailed";
     public const string FileSaveFailed = "file.saveFailed";
     public const string MediaNotPlayable = "media.notPlayable";
@@ -89,7 +90,7 @@ public static class ErrorCodes
     [
         ShareDuplicate, ShareNotFound, ShareNotReady, FileUnreadable,
         InviteInvalid, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, DiskFull, SettingsInvalid,
-        ReceivedNotFound, ReceivedOpenFailed, ShareDropFailed, FileSaveFailed, MediaNotPlayable,
+        ReceivedNotFound, ReceivedOpenFailed, ReceivedConfirmRisky, ShareDropFailed, FileSaveFailed, MediaNotPlayable,
         ShareFolderEmpty, ShareFolderTooLarge, ShareNameInvalid, Unexpected,
     ];
 }
@@ -160,9 +161,12 @@ public enum ShareActivityDto { Idle, Sending, Sent }
 /// <param name="SecondsLeft">Roughly how long is left, or null when it cannot be told.</param>
 public sealed record TransferDto(
     string Id, string? Name, long? SizeBytes, long ReceivedBytes, TransferStateDto State, long BytesPerSecond, long? SecondsLeft,
-    long? NeededBytes);
+    long? NeededBytes, bool Risky = false);
 
 public sealed record IdArgs(string Id);
+
+/// <param name="Confirmed">True once the person confirmed opening a file that can run something (AD-13).</param>
+public sealed record OpenReceivedArgs(string Id, bool? Confirmed = null);
 
 public sealed record ReceiveArgs(string Invite);
 
@@ -304,7 +308,7 @@ public static class Contract
         new(Commands.TransfersPause, typeof(IdArgs), null),
         new(Commands.TransfersResume, typeof(IdArgs), null),
         new(Commands.ReceivedOpenFolder, null, null),
-        new(Commands.ReceivedOpen, typeof(IdArgs), null),
+        new(Commands.ReceivedOpen, typeof(OpenReceivedArgs), null),
         new(Commands.ReceivedReveal, typeof(IdArgs), null),
         new(Commands.ReceivedDelete, typeof(IdArgs), null),
         new(Commands.SettingsGet, null, typeof(SettingsDto)),

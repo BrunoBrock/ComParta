@@ -262,6 +262,46 @@ public sealed class ButtonsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_received_program_opens_only_after_the_person_confirms_a_second_time()
+    {
+        // Another device on this computer shares a program.
+        var originals = Path.Combine(_folder, "originals");
+        Directory.CreateDirectory(originals);
+        var program = Path.Combine(originals, "setup.exe");
+        File.WriteAllBytes(program, [0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00]);
+        await using var sender = new MonoTorrentTransferEngine(new FakePaths(Path.Combine(_folder, "sender-program")));
+        await sender.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var offered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shareId = ShareId.New();
+        sender.OfferChanged += (changed, state) =>
+        {
+            if (changed == shareId && state == OfferState.Ready)
+                offered.TrySetResult();
+        };
+        await sender.OfferAsync(shareId, program);
+        await offered.Task.WaitAsync(Timeout);
+        var invite = (await sender.GetInviteAsync(shareId))!;
+
+        var id = (await ClickAsync(Commands.TransfersReceive, new ReceiveArgs(invite))).GetProperty("id").GetString()!;
+        Assert.True(TransferId.TryParse(id, out var transferId));
+        await _engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        var shown = await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+        var row = shown.EnumerateArray().Single(t => t.GetProperty("id").GetString() == id);
+        Assert.True(row.GetProperty("risky").GetBoolean());
+
+        // The first ask is refused and nothing runs; the second ask, after the person confirms, opens it.
+        var first = JsonDocument.Parse(await _router.InvokeAsync(
+            Commands.ReceivedOpen, JsonSerializer.Serialize(new OpenReceivedArgs(id), Contract.Json)).WaitAsync(Quick)).RootElement;
+        Assert.Equal(ErrorCodes.ReceivedConfirmRisky, first.GetProperty("error").GetProperty("code").GetString());
+        Assert.Empty(_opener.Opened);
+
+        await ClickAsync(Commands.ReceivedOpen, new OpenReceivedArgs(id, true));
+        Assert.Single(_opener.Opened);
+        Assert.EndsWith("setup.exe", _opener.Opened[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_received_photo_opens_in_the_viewer_from_the_Received_folder()
     {
         // Another device on this computer shares a photo.

@@ -289,6 +289,10 @@ export const en = {
     'The file is removed from your ComParta folder on this computer. If you still want it later, ask the person who sent it for a new invite.',
   'deleteReceived.confirm': 'Delete file',
   'deleteReceived.cancel': 'Keep the file',
+  'riskyOpen.title': 'Open “{name}”?',
+  'riskyOpen.body': 'This file can run a program or change your computer. Open it only if you trust where it came from.',
+  'riskyOpen.confirm': 'Open anyway',
+  'riskyOpen.cancel': 'Cancel',
 
   'connection.good': 'Others can reach this computer',
   'connection.limited': 'Limited connection',
@@ -371,6 +375,7 @@ export const en = {
   'error.transfer.notFound': 'That file is no longer in your list.',
   'error.received.notFound': 'This file is no longer in your ComParta folder. It may have been moved or deleted.',
   'error.received.openFailed': 'ComParta could not open this file. Choose Show in folder to see it.',
+  'error.received.confirmRisky': 'This file can run a program or change your computer, so ComParta asks you to confirm before opening it.',
   'error.share.dropFailed': 'ComParta could not take those files. Choose “Share a file” to pick them instead.',
   'error.file.saveFailed': 'ComParta could not save the download file. Check that your Downloads folder has room, then try again.',
   'error.share.folderEmpty': 'This folder has no files to share.',

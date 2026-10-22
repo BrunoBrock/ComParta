@@ -5,6 +5,8 @@ import { formatSize, formatTimeLeft, percentOf, t } from '../i18n/index.ts'
 import { inOrder, type SortOrder } from '../order.ts'
 import { matches } from '../search.ts'
 import DeleteReceivedDialog from './DeleteReceivedDialog.tsx'
+import RiskyOpenDialog from './RiskyOpenDialog.tsx'
+import { openReceived } from './openReceived.ts'
 import type { DetailsOf } from './DetailsWindow.tsx'
 import Thumbnail from './ui/Thumbnail.tsx'
 import { moveBetweenItems } from './itemKeys.ts'
@@ -110,6 +112,7 @@ export default function TransfersSection(props: TransfersSectionProps) {
 
   // The received file waiting for the person to confirm its deletion.
   const [deleting, setDeleting] = useState<{ id: string; name: string } | null>(null)
+  const [opening, setOpening] = useState<{ id: string; name: string } | null>(null)
 
   async function remove(transfer: TransferDto) {
     onStart()
@@ -118,8 +121,21 @@ export default function TransfersSection(props: TransfersSectionProps) {
   }
 
   async function runOnReceived(command: 'received.open' | 'received.reveal', transfer: TransferDto) {
+    if (command === 'received.open') {
+      const code = await openReceived(bridge, transfer.id)
+      if (code === 'received.confirmRisky') setOpening({ id: transfer.id, name: transfer.name ?? '' })
+      else if (code) onError(code)
+      return
+    }
     const result = await bridge.invoke(command, { id: transfer.id })
     if (!result.ok) onError(result.error.code)
+  }
+
+  async function confirmOpen() {
+    const target = opening!
+    setOpening(null)
+    const code = await openReceived(bridge, target.id, true)
+    if (code) onError(code)
   }
 
   async function confirmDelete() {
@@ -311,6 +327,9 @@ export default function TransfersSection(props: TransfersSectionProps) {
 
       {deleting && (
         <DeleteReceivedDialog name={deleting.name} onConfirm={confirmDelete} onCancel={() => setDeleting(null)} />
+      )}
+      {opening && (
+        <RiskyOpenDialog name={opening.name} onConfirm={confirmOpen} onCancel={() => setOpening(null)} />
       )}
     </section>
   )

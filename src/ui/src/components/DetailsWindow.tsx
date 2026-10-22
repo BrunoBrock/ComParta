@@ -4,6 +4,8 @@ import type { Bridge, ErrorCode, ShareDetailsDto, TransferDetailsDto } from '../
 import { formatDateTime, formatRate, formatSize, formatTimeLeft, type MessageKey, percentOf, t } from '../i18n/index.ts'
 import { inviteMessage } from '../invite.ts'
 import type { ItemToggle } from './ItemView.tsx'
+import { openReceived } from './openReceived.ts'
+import RiskyOpenDialog from './RiskyOpenDialog.tsx'
 import Dialog from './ui/Dialog.tsx'
 
 export type DetailsOf = { kind: 'share' | 'transfer'; id: string; name: string }
@@ -77,6 +79,7 @@ function transferRows(transfer: TransferDetailsDto, stopped: boolean): [MessageK
 export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, onError, onInfo, onView }: DetailsWindowProps) {
   const [details, setDetails] = useState<Details | null>(null)
   const [gone, setGone] = useState(false)
+  const [opening, setOpening] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -119,8 +122,20 @@ export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, 
   }
 
   async function runOnReceived(command: 'received.open' | 'received.reveal') {
+    if (command === 'received.open') {
+      const code = await openReceived(bridge, item.id)
+      if (code === 'received.confirmRisky') setOpening(true)
+      else if (code) onError(code)
+      return
+    }
     const result = await bridge.invoke(command, { id: item.id })
     if (!result.ok) onError(result.error.code)
+  }
+
+  async function confirmOpen() {
+    setOpening(false)
+    const code = await openReceived(bridge, item.id, true)
+    if (code) onError(code)
   }
 
   const rows =
@@ -192,6 +207,9 @@ export default function DetailsWindow({ bridge, item, stopped, toggle, onClose, 
           </>
         )}
       </div>
+      {opening && (
+        <RiskyOpenDialog name={item.name} onConfirm={confirmOpen} onCancel={() => setOpening(false)} />
+      )}
     </Dialog>
   )
 }

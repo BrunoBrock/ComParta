@@ -22,6 +22,7 @@ const arrived: TransferDto = {
   bytesPerSecond: 0,
   secondsLeft: null,
   neededBytes: null,
+  risky: false,
 }
 
 async function openDetails(user: User, name: string, words: Record<string, string> = en) {

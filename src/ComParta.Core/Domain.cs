@@ -283,6 +283,8 @@ public enum ErrorKind
     SettingsInvalid,
     ReceivedNotFound,
     ReceivedOpenFailed,
+    /// <summary>The received file can run something; it opens only once the person confirms again.</summary>
+    ReceivedConfirmRisky,
     ShareDropFailed,
     /// <summary>A file the person asked to save could not be written.</summary>
     SaveFailed,
