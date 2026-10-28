@@ -88,7 +88,8 @@ try {
       break
     }
     case 'quit': {
-      const answer = await invoke(page, 'app.quit', { force: true })
+      // The app may close its screen before the answer gets back; check-zip.ps1 then waits for it to exit.
+      const answer = await invoke(page, 'app.quit', { force: true }).catch((error) => `closed before answering (${error.message.split('\n')[0]})`)
       console.log(`quit: ${JSON.stringify(answer)}`)
       break
     }
