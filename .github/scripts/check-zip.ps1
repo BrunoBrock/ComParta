@@ -81,6 +81,11 @@ foreach ($name in $environment.Keys) {
     $saved[$name] = [Environment]::GetEnvironmentVariable($name)
     [Environment]::SetEnvironmentVariable($name, $environment[$name])
 }
+# The web view also takes its extra arguments from this policy, named after the app's exe; the
+# environment variable alone is not always read.
+$policy = 'HKCU:\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+New-Item -Force $policy | Out-Null
+New-ItemProperty -Force -Path $policy -Name 'ComParta.exe' -Value "--remote-debugging-port=$port" | Out-Null
 
 $app = $null
 try {
@@ -139,4 +144,5 @@ catch {
 finally {
     if ($app -and -not $app.HasExited) { $app | Stop-Process -Force }
     foreach ($name in $saved.Keys) { [Environment]::SetEnvironmentVariable($name, $saved[$name]) }
+    Remove-ItemProperty -Path $policy -Name 'ComParta.exe' -ErrorAction SilentlyContinue
 }
