@@ -113,6 +113,7 @@ public static class CheckFileDialog
     [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr lParam);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
     [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr hwnd, uint command);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hwnd, StringBuilder name, int size);
     [DllImport("user32.dll")] static extern int GetDlgCtrlID(IntPtr hwnd);
     [DllImport("user32.dll")] static extern IntPtr GetDlgItem(IntPtr dialog, int id);
@@ -122,17 +123,32 @@ public static class CheckFileDialog
 
     static string ClassOf(IntPtr hwnd) { var name = new StringBuilder(256); GetClassName(hwnd, name, 256); return name.ToString(); }
 
+    static uint ProcessOf(IntPtr hwnd) { uint pid; GetWindowThreadProcessId(hwnd, out pid); return pid; }
+
+    // The dialog belongs to the app, or (when Windows shows it from a helper process) to a window of it.
     public static IntPtr Find(int processId)
     {
         var found = IntPtr.Zero;
         EnumWindows((hwnd, _) =>
         {
-            uint pid;
-            GetWindowThreadProcessId(hwnd, out pid);
-            if (pid == processId && IsWindowVisible(hwnd) && ClassOf(hwnd) == "#32770") { found = hwnd; return false; }
+            if (!IsWindowVisible(hwnd) || ClassOf(hwnd) != "#32770") return true;
+            var owner = GetWindow(hwnd, 4 /* GW_OWNER */);
+            if (ProcessOf(hwnd) == processId || (owner != IntPtr.Zero && ProcessOf(owner) == processId)) { found = hwnd; return false; }
             return true;
         }, IntPtr.Zero);
         return found;
+    }
+
+    public static string DescribeAll()
+    {
+        var text = new StringBuilder();
+        EnumWindows((hwnd, _) =>
+        {
+            if (IsWindowVisible(hwnd))
+                text.AppendLine("  window " + ClassOf(hwnd) + " process " + ProcessOf(hwnd) + " owner process " + ProcessOf(GetWindow(hwnd, 4)));
+            return true;
+        }, IntPtr.Zero);
+        return text.ToString();
     }
 
     static List<IntPtr> Children(IntPtr parent)
@@ -182,7 +198,11 @@ public static class CheckFileDialog
         $dialog = [CheckFileDialog]::Find($app.Id)
         if ($dialog -ne [IntPtr]::Zero) { $nameBox = [CheckFileDialog]::NameBox($dialog) }
     }
-    if ($dialog -eq [IntPtr]::Zero) { throw 'The file dialog did not open.' }
+    if ($dialog -eq [IntPtr]::Zero) {
+        Write-Host "ComParta is process $($app.Id); the windows showing:"
+        Write-Host ([CheckFileDialog]::DescribeAll())
+        throw 'The file dialog did not open.'
+    }
     if ($nameBox -eq [IntPtr]::Zero) {
         Write-Host ([CheckFileDialog]::Describe($dialog))
         throw 'The file dialog has no file name box.'
