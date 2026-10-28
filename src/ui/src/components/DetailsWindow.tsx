@@ -39,7 +39,8 @@ function shareRows(share: ShareDetailsDto, stopped: boolean): [MessageKey, strin
     ['details.size', formatSize(share.sizeBytes)],
     ...(share.kind === 'file' ? [] : [['details.files', String(share.itemCount)] as [MessageKey, string]]),
     ['details.state', stopped && share.status === 'ready' ? t('stopped.chip') : t(`shares.chip.${share.status}`)],
-    ['details.where', share.folder],
+    // A phone's picked item has no folder a person would know (AD-20), so the line is left out.
+    ...(share.folder ? [['details.where', share.folder] as [MessageKey, string]] : []),
     ['details.added', formatDateTime(share.addedAt)],
     ['details.sendingNow', formatRate(share.sendingBytesPerSecond)],
     ['details.connections', String(share.connections)],
