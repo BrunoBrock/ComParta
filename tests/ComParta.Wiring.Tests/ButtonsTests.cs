@@ -44,6 +44,41 @@ public sealed class ButtonsTests : IAsyncLifetime
     private readonly OpenedInvites _opened = new(MonoTorrentTransferEngine.FindLinkIn, MonoTorrentTransferEngine.DownloadFileExtensions);
     private readonly FakePresence _presence = new();
     private BackgroundUseCases _background = null!;
+    // The window is not in front, so a file that arrives is announced as in the app.
+    private readonly FakeNotifier _notifier = new();
+    private readonly FakeWindow _window = new();
+    private readonly SwitchGuard _guard = new(PlatformGuard());
+
+    /// <summary>
+    /// Windows' own protection, as the app hands each received file to it (AD-13), or one that refuses
+    /// every file as an antivirus does with a harmful one, when a test says so.
+    /// </summary>
+    private sealed class SwitchGuard(IReceivedFileGuard inner) : IReceivedFileGuard
+    {
+        private readonly ConcurrentQueue<(string Path, bool ShownAsReceived)> _checked = new();
+
+        public bool Blocks { get; set; }
+        /// <summary>Whether the screen already showed a file as received when it was checked.</summary>
+        public Func<bool> ShownAsReceived { get; set; } = () => false;
+        public IReadOnlyList<(string Path, bool ShownAsReceived)> Checked => [.. _checked];
+
+        public ReceivedFileVerdict Check(string fullPath)
+        {
+            _checked.Enqueue((fullPath, ShownAsReceived()));
+            var verdict = inner.Check(fullPath);
+            return Blocks ? ReceivedFileVerdict.Blocked : verdict;
+        }
+    }
+
+    /// <summary>The app's own guard: Windows' attachment services on Windows, none elsewhere.</summary>
+    private static IReceivedFileGuard PlatformGuard()
+    {
+        if (!OperatingSystem.IsWindows())
+            return NoReceivedFileCheck.Instance;
+        var type = typeof(LocalFileSystem).Assembly.GetType("ComParta.Shell.AttachmentGuard");
+        Assert.NotNull(type);
+        return (IReceivedFileGuard)Activator.CreateInstance(type)!;
+    }
 
     private sealed class SlowRouter : INatGateway
     {
@@ -80,7 +115,8 @@ public sealed class ButtonsTests : IAsyncLifetime
         var shares = new ShareUseCases(store, _engine, _picker, _files, paths: paths);
         // The folder dialog is a stand-in; whether a folder can be written is checked on the real disk.
         var receivedFolder = new ReceivedFolder(store, paths, _picker, new LocalFileSystem());
-        var transfers = new TransferUseCases(store, _engine, picker: _picker, files: _files, storage: new FakeStorage(), received: receivedFolder);
+        var transfers = new TransferUseCases(
+            store, _engine, picker: _picker, files: _files, storage: new FakeStorage(), received: receivedFolder, guard: _guard);
         var settings = new SettingsUseCases(store, new FakeSystem("en"), _engine, receivedFolder);
         var connection = new ConnectionUseCases(_engine, new FakeFirewall());
         var activity = new ActivityUseCases(_engine, store);
@@ -90,7 +126,7 @@ public sealed class ButtonsTests : IAsyncLifetime
         var received = new ReceivedUseCases(transfers, paths, opener, disk);
         var thumbnails = new ThumbnailUseCases(shares, received, new FakeThumbnails());
         var sending = new SendingUseCases(_engine, shares);
-        var notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, new FakeNotifier(), new FakeWindow());
+        var notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, _notifier, _window);
         var background = _background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, _presence);
         _router = new BridgeRouter(
             shares, transfers, settings, connection, _opened, activity, received, _clipboard, opener, thumbnails,
@@ -306,6 +342,81 @@ public sealed class ButtonsTests : IAsyncLifetime
         await ClickAsync(Commands.ReceivedOpen, new OpenReceivedArgs(id, true));
         Assert.Single(_opener.Opened);
         Assert.EndsWith("setup.exe", _opener.Opened[0], StringComparison.Ordinal);
+    }
+
+    /// <summary>Another device on this computer offers a file and the screen's Receive starts getting it; the sender stays for the caller to stop.</summary>
+    private async Task<(MonoTorrentTransferEngine Sender, string Id)> StartReceivingFromAnotherDeviceAsync(string name)
+    {
+        var originals = Path.Combine(_folder, "originals");
+        Directory.CreateDirectory(originals);
+        var file = Path.Combine(originals, name);
+        File.WriteAllBytes(file, RandomNumberGenerator.GetBytes(150_000));
+        var sender = new MonoTorrentTransferEngine(new FakePaths(Path.Combine(_folder, "sender-" + Guid.NewGuid().ToString("N"))));
+        await sender.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var offered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shareId = ShareId.New();
+        sender.OfferChanged += (changed, state) =>
+        {
+            if (changed == shareId && state == OfferState.Ready)
+                offered.TrySetResult();
+        };
+        await sender.OfferAsync(shareId, file);
+        await offered.Task.WaitAsync(Timeout);
+        var invite = (await sender.GetInviteAsync(shareId))!;
+
+        var id = (await ClickAsync(Commands.TransfersReceive, new ReceiveArgs(invite))).GetProperty("id").GetString()!;
+        Assert.True(TransferId.TryParse(id, out var transferId));
+        await _engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, sender.ListenEndPoint!.Port));
+        return (sender, id);
+    }
+
+    private bool ShownAs(string id, string state) =>
+        _events.Any(e => e.GetProperty("event").GetString() == Events.TransfersChanged
+            && e.GetProperty("payload").EnumerateArray().Any(t => t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == state));
+
+    [Fact]
+    public async Task A_received_file_is_handed_to_Windows_protection_once_and_marked_before_it_shows_as_received()
+    {
+        _guard.ShownAsReceived = () => _events.Any(e => e.GetProperty("event").GetString() == Events.TransfersChanged
+            && e.GetProperty("payload").EnumerateArray().Any(t => t.GetProperty("state").GetString() == "done"));
+        var (sender, id) = await StartReceivingFromAnotherDeviceAsync("letter.pdf");
+        await using var _ = sender;
+
+        await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+
+        var received = Path.GetFullPath(Path.Combine(_paths.ReceivedRoot, "letter.pdf"));
+        var check = Assert.Single(_guard.Checked);
+        Assert.Equal(received, check.Path);
+        Assert.False(check.ShownAsReceived);
+        Assert.Contains(_notifier.Shown, n => n.Id == id);
+        // Windows' "came from another computer" mark, which Properties shows with Unblock.
+        if (OperatingSystem.IsWindows())
+            Assert.Contains("ZoneId=3", File.ReadAllText(received + ":Zone.Identifier"), StringComparison.Ordinal);
+        await ClickAsync(Commands.ReceivedOpen, new OpenReceivedArgs(id));
+        Assert.Single(_opener.Opened);
+    }
+
+    [Fact]
+    public async Task A_received_file_the_antivirus_refuses_shows_as_blocked_cannot_be_opened_and_is_not_announced()
+    {
+        _guard.Blocks = true;
+        var (sender, id) = await StartReceivingFromAnotherDeviceAsync("invoice.exe");
+        await using var _ = sender;
+
+        var shown = await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "blocked"));
+
+        Assert.Single(_guard.Checked);
+        Assert.False(ShownAs(id, "done"));
+        Assert.DoesNotContain(_notifier.Shown, n => n.Id == id);
+        var open = JsonDocument.Parse(await _router.InvokeAsync(
+            Commands.ReceivedOpen, JsonSerializer.Serialize(new OpenReceivedArgs(id, true), Contract.Json)).WaitAsync(Quick)).RootElement;
+        Assert.Equal(ErrorCodes.ReceivedNotFound, open.GetProperty("error").GetProperty("code").GetString());
+        Assert.Empty(_opener.Opened);
+        // Removing it from the list still works, as the card offers.
+        await ClickAsync(Commands.TransfersRemove, new IdArgs(id));
+        await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().All(t => t.GetProperty("id").GetString() != id));
     }
 
     [Fact]
