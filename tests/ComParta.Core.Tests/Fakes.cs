@@ -489,3 +489,28 @@ internal sealed class FakePhoneStorage : IFileSystem, IContentSource
     public void DeleteFile(string path) => throw new UnauthorizedAccessException();
     public void WriteNewFile(string path, byte[] content) => throw new UnauthorizedAccessException();
 }
+
+/// <summary>The system's protection, as the test decides: it passes everything unless told which files to block.</summary>
+internal sealed class FakeReceivedFileGuard : IReceivedFileGuard
+{
+    private readonly List<string> _checked = [];
+
+    public HashSet<string> Blocks { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public bool BlocksAll { get; set; }
+
+    /// <summary>When set, a check waits for it, like an antivirus looking at a large file.</summary>
+    public TaskCompletionSource? Hold { get; set; }
+
+    public IReadOnlyList<string> Checked
+    {
+        get { lock (_checked) return [.. _checked]; }
+    }
+
+    public ReceivedFileVerdict Check(string fullPath)
+    {
+        lock (_checked)
+            _checked.Add(fullPath);
+        Hold?.Task.Wait();
+        return BlocksAll || Blocks.Contains(fullPath) ? ReceivedFileVerdict.Blocked : ReceivedFileVerdict.Passed;
+    }
+}

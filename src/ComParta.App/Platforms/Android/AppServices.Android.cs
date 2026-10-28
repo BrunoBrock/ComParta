@@ -18,7 +18,8 @@ public sealed partial class AppServices
 		var storage = new AndroidStorage();
 		return new(
 			new AndroidFirewall(), new AndroidOpener(), new NoThumbnails(), new NoNotifications(), new AndroidPresence(Stop),
-			new AndroidPicker(), storage, storage);
+			// The phone keeps received files in its own sandbox; there is no protection to hand them to.
+			new AndroidPicker(), storage, storage, Ports.NoReceivedFileCheck.Instance);
 	}
 
 	partial void AfterStart(NotificationUseCases notifications, BackgroundUseCases background) =>

@@ -10,7 +10,7 @@ namespace ComParta.Storage.Sqlite;
 /// </summary>
 public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettingsRepository
 {
-    private const int SchemaVersion = 8;
+    private const int SchemaVersion = 9;
     private readonly string _connectionString;
 
     private SqliteStore(string databasePath)
@@ -116,6 +116,12 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
                 ALTER TABLE transfers ADD COLUMN keep_sharing INTEGER NOT NULL DEFAULT 1;
                 """, transaction).ExecuteNonQueryAsync(ct);
         }
+        if (version < 9)
+        {
+            // What Windows' protection said about a received file (epic 3 story 3). Files that arrived
+            // before count as passed: they are never checked again, since one moved since would read as blocked.
+            await Command(connection, "ALTER TABLE transfers ADD COLUMN check_result INTEGER NOT NULL DEFAULT 1", transaction).ExecuteNonQueryAsync(ct);
+        }
         await Command(connection, $"PRAGMA user_version = {SchemaVersion}", transaction).ExecuteNonQueryAsync(ct);
         await transaction.CommitAsync(ct);
     }
@@ -199,7 +205,7 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
     async Task<IReadOnlyList<Transfer>> ITransferRepository.GetAllAsync(CancellationToken ct)
     {
         await using var connection = await ConnectAsync(ct);
-        await using var reader = await Command(connection, "SELECT id, name, size_bytes, done, added_at, paused, source, skipped_files, keep_sharing, folder FROM transfers ORDER BY added_at").ExecuteReaderAsync(ct);
+        await using var reader = await Command(connection, "SELECT id, name, size_bytes, done, added_at, paused, source, skipped_files, keep_sharing, folder, check_result FROM transfers ORDER BY added_at").ExecuteReaderAsync(ct);
         var transfers = new List<Transfer>();
         while (await reader.ReadAsync(ct))
         {
@@ -213,7 +219,8 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
                 Enum.IsDefined((TransferSource)reader.GetInt64(6)) ? (TransferSource)reader.GetInt64(6) : TransferSource.Invite,
                 reader.IsDBNull(7) ? null : ParsePositions(reader.GetString(7)),
                 reader.GetInt64(8) != 0,
-                reader.IsDBNull(9) ? null : reader.GetString(9)));
+                reader.IsDBNull(9) ? null : reader.GetString(9),
+                Enum.IsDefined((ReceivedCheck)reader.GetInt64(10)) ? (ReceivedCheck)reader.GetInt64(10) : ReceivedCheck.Passed));
         }
         return transfers;
     }
@@ -221,7 +228,7 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
     public async Task AddAsync(Transfer transfer, CancellationToken ct = default)
     {
         await using var connection = await ConnectAsync(ct);
-        var command = Command(connection, "INSERT INTO transfers (id, name, size_bytes, done, added_at, paused, source, skipped_files, keep_sharing, folder) VALUES ($id, $name, $size, $done, $added, $paused, $source, $skipped, $keep, $folder)");
+        var command = Command(connection, "INSERT INTO transfers (id, name, size_bytes, done, added_at, paused, source, skipped_files, keep_sharing, folder, check_result) VALUES ($id, $name, $size, $done, $added, $paused, $source, $skipped, $keep, $folder, $check)");
         Bind(command, transfer);
         await command.ExecuteNonQueryAsync(ct);
     }
@@ -229,7 +236,7 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
     public async Task UpdateAsync(Transfer transfer, CancellationToken ct = default)
     {
         await using var connection = await ConnectAsync(ct);
-        var command = Command(connection, "UPDATE transfers SET name = $name, size_bytes = $size, done = $done, added_at = $added, paused = $paused, source = $source, skipped_files = $skipped, keep_sharing = $keep, folder = $folder WHERE id = $id");
+        var command = Command(connection, "UPDATE transfers SET name = $name, size_bytes = $size, done = $done, added_at = $added, paused = $paused, source = $source, skipped_files = $skipped, keep_sharing = $keep, folder = $folder, check_result = $check WHERE id = $id");
         Bind(command, transfer);
         await command.ExecuteNonQueryAsync(ct);
     }
@@ -276,6 +283,7 @@ public sealed class SqliteStore : IShareRepository, ITransferRepository, ISettin
             : DBNull.Value);
         command.Parameters.AddWithValue("$keep", transfer.KeepSharing ? 1 : 0);
         command.Parameters.AddWithValue("$folder", (object?)transfer.Folder ?? DBNull.Value);
+        command.Parameters.AddWithValue("$check", (int)transfer.Check);
     }
 
     /// <summary>File positions kept as "0,3,7"; anything unreadable is left out.</summary>
