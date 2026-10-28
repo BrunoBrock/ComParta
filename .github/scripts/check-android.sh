@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Installs the APK on the emulator, starts ComParta and checks what epic 7 story 1 asks of a first
 # Android build: the app starts its engine, the screen loads and the bridge answers it, and the
-# app is still running afterwards. Leaves a screenshot and the app's log next to the APK.
+# app is still running afterwards; and that received files have their place in Downloads (story 3).
+# Leaves a screenshot and the app's log next to the APK.
 set -euo pipefail
 
 folder="$1"
@@ -34,6 +35,11 @@ sleep 5
 starts=$(adb logcat -d -s ComParta:I | grep -c "ComParta started" || true)
 if [ "$starts" -ne 1 ]; then
   echo "ComParta started $starts times."
+  status=1
+fi
+# What arrives goes to Downloads/ComParta, which the app makes when it starts (story 3).
+if ! adb shell ls -d /sdcard/Download/ComParta > /dev/null 2>&1; then
+  echo "Downloads/ComParta was not made."
   status=1
 fi
 if ! adb shell pidof "$package" > /dev/null; then
