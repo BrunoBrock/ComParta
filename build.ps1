@@ -150,6 +150,12 @@ function Package-App {
     Assert-Version
     $certificate = Get-TestCertificate
     if (Test-Path $packageDir) { Remove-Item $packageDir -Recurse -Force }
+    # A build before this one (Check, Publish) leaves a package manifest with its own version, which
+    # the packaging reuses as it is; start from a clean one so the package carries $Version.
+    foreach ($folder in 'obj', 'bin') {
+        $old = Join-Path $root "src\ComParta.App\$folder\Release\$framework"
+        if (Test-Path $old) { Remove-Item $old -Recurse -Force }
+    }
     Invoke-VersionedStep 'Package' {
         dotnet publish src\ComParta.App\ComParta.App.csproj -c Release -f $framework -r win-x64 --self-contained true `
             -p:WindowsPackageType=MSIX -p:WindowsAppSDKSelfContained=true -p:GenerateAppxPackageOnBuild=true `
