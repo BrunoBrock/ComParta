@@ -54,7 +54,18 @@ function Invoke-Drive([string[]]$Arguments) {
     return $output
 }
 
-$port = Get-Random -Minimum 20000 -Maximum 40000
+# A port free on this machine; Windows reserves some ranges, so try a few.
+$port = $null
+foreach ($candidate in Get-Random -Minimum 20000 -Maximum 40000 -Count 20) {
+    try {
+        $probe = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, $candidate)
+        $probe.Start(); $probe.Stop()
+        $port = $candidate
+        break
+    }
+    catch { }
+}
+if (-not $port) { throw 'No free port to reach the screen.' }
 $saved = @{}
 $environment = @{
     # Data under a test folder, never the runner's own (and side by side with any other copy).
@@ -115,7 +126,14 @@ try {
     Write-Host 'ok: ComParta quit'
 }
 catch {
-    Get-ChildItem (Join-Path $home_ 'logs') -ErrorAction SilentlyContinue | Get-Content | Write-Host
+    Write-Host "== What was running" -ForegroundColor Yellow
+    if ($app) { Write-Host "ComParta exited: $($app.HasExited)" }
+    Get-CimInstance Win32_Process -Filter "Name = 'msedgewebview2.exe' OR Name = 'ComParta.exe'" |
+        ForEach-Object { Write-Host "$($_.ProcessId) $($_.ParentProcessId) $($_.CommandLine)" }
+    Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object LocalPort -eq $port |
+        ForEach-Object { Write-Host "listening on ${port}: process $($_.OwningProcess)" }
+    Get-ChildItem -Recurse $home_ -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+    Get-ChildItem (Join-Path $home_ 'logs') -File -ErrorAction SilentlyContinue | Get-Content | Write-Host
     throw
 }
 finally {
