@@ -106,9 +106,10 @@ try {
     while (-not $dialog -and (Get-Date) -lt $until) {
         Start-Sleep -Seconds 1
         # The dialog shows in the tree under the app's window, which owns it.
-        $isDialog = [Windows.Automation.AndCondition]::new($byProcess,
-            [Windows.Automation.PropertyCondition]::new($automation::ClassNameProperty, '#32770'))
-        $dialog = $automation::RootElement.FindFirst([Windows.Automation.TreeScope]::Descendants, $isDialog)
+        $isDialog = [Windows.Automation.PropertyCondition]::new($automation::ClassNameProperty, '#32770')
+        $dialog = $automation::RootElement.FindAll([Windows.Automation.TreeScope]::Children, $byProcess) |
+            ForEach-Object { $_.FindFirst([Windows.Automation.TreeScope]::Children, $isDialog) } |
+            Where-Object { $_ } | Select-Object -First 1
     }
     if (-not $dialog) {
         $automation::RootElement.FindAll([Windows.Automation.TreeScope]::Children, $byProcess) | ForEach-Object {
