@@ -109,7 +109,7 @@ function Publish-App {
     Invoke-Step 'Publish' '.' {
         dotnet publish src\ComParta.App\ComParta.App.csproj -c Release -f $framework -r win-x64 `
             --self-contained true -p:WindowsAppSDKSelfContained=true -o $publishDir `
-            -p:ApplicationDisplayVersion=$Version -p:ApplicationVersion=0 -p:Version=$Version --nologo -v minimal
+            "-p:ApplicationDisplayVersion=$Version" -p:ApplicationVersion=0 "-p:Version=$Version" --nologo -v minimal
     }
     Write-Host "Ready: $publishDir\ComParta.exe" -ForegroundColor Green
     if ($Run) {
@@ -138,7 +138,7 @@ function Package-App {
         dotnet publish src\ComParta.App\ComParta.App.csproj -c Release -f $framework -r win-x64 --self-contained true `
             -p:WindowsPackageType=MSIX -p:WindowsAppSDKSelfContained=true -p:GenerateAppxPackageOnBuild=true `
             -p:AppxPackageSigningEnabled=true -p:PackageCertificateThumbprint=$($certificate.Thumbprint) `
-            -p:ApplicationDisplayVersion=$Version -p:ApplicationVersion=0 `
+            "-p:ApplicationDisplayVersion=$Version" -p:ApplicationVersion=0 `
             "-p:AppxPackageDir=$packageDir\\" --nologo -v minimal
     }
     $package = Get-ChildItem $packageDir -Recurse -Filter *_x64.msix | Select-Object -First 1
