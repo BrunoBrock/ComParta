@@ -98,51 +98,97 @@ try {
     $file = Join-Path $work 'family photos.bin'
     [IO.File]::WriteAllBytes($file, [byte[]]((1..255) * 400))
     Invoke-Drive @('start-share') | Out-Null
-    Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
-    $automation = [Windows.Automation.AutomationElement]
-    $byProcess = [Windows.Automation.PropertyCondition]::new($automation::ProcessIdProperty, $app.Id)
+    # The file dialog is a plain Windows dialog: fill its file name box and press Open with window
+    # messages, which do not depend on the desktop having focus as typing would.
+    Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class CheckFileDialog
+{
+    delegate bool EnumProc(IntPtr hwnd, IntPtr lParam);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc proc, IntPtr lParam);
+    [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumProc proc, IntPtr lParam);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hwnd, StringBuilder name, int size);
+    [DllImport("user32.dll")] static extern int GetDlgCtrlID(IntPtr hwnd);
+    [DllImport("user32.dll")] static extern IntPtr GetDlgItem(IntPtr dialog, int id);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr wParam, string lParam, uint flags, uint timeout, out IntPtr result);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint msg, IntPtr wParam, StringBuilder lParam, uint flags, uint timeout, out IntPtr result);
+    [DllImport("user32.dll")] static extern bool PostMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    static string ClassOf(IntPtr hwnd) { var name = new StringBuilder(256); GetClassName(hwnd, name, 256); return name.ToString(); }
+
+    public static IntPtr Find(int processId)
+    {
+        var found = IntPtr.Zero;
+        EnumWindows((hwnd, _) =>
+        {
+            uint pid;
+            GetWindowThreadProcessId(hwnd, out pid);
+            if (pid == processId && IsWindowVisible(hwnd) && ClassOf(hwnd) == "#32770") { found = hwnd; return false; }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
+
+    static List<IntPtr> Children(IntPtr parent)
+    {
+        var all = new List<IntPtr>();
+        EnumChildWindows(parent, (hwnd, _) => { all.Add(hwnd); return true; }, IntPtr.Zero);
+        return all;
+    }
+
+    // The file name box: an Edit with id 1148, or the Edit inside the combo box with that id.
+    public static IntPtr NameBox(IntPtr dialog)
+    {
+        foreach (var hwnd in Children(dialog))
+        {
+            if (GetDlgCtrlID(hwnd) != 1148) continue;
+            if (ClassOf(hwnd) == "Edit") return hwnd;
+            foreach (var inner in Children(hwnd)) if (ClassOf(inner) == "Edit") return inner;
+        }
+        return IntPtr.Zero;
+    }
+
+    public static string Describe(IntPtr dialog)
+    {
+        var text = new StringBuilder();
+        foreach (var hwnd in Children(dialog)) text.AppendLine("  " + ClassOf(hwnd) + " " + GetDlgCtrlID(hwnd));
+        return text.ToString();
+    }
+
+    public static string Choose(IntPtr dialog, IntPtr nameBox, string path)
+    {
+        IntPtr result;
+        if (SendMessageTimeout(nameBox, 0x000C /* WM_SETTEXT */, IntPtr.Zero, path, 0x0002, 10000, out result) == IntPtr.Zero)
+            throw new TimeoutException("The file name box did not answer.");
+        var shown = new StringBuilder(1024);
+        SendMessageTimeout(nameBox, 0x000D /* WM_GETTEXT */, (IntPtr)1024, shown, 0x0002, 10000, out result);
+        // Open is the dialog's OK command (id 1).
+        PostMessage(dialog, 0x0111 /* WM_COMMAND */, (IntPtr)1, GetDlgItem(dialog, 1));
+        return shown.ToString();
+    }
+}
+'@
     $until = (Get-Date).AddSeconds(60)
-    $dialog = $null
-    while (-not $dialog -and (Get-Date) -lt $until) {
+    $dialog = [IntPtr]::Zero
+    $nameBox = [IntPtr]::Zero
+    while ($nameBox -eq [IntPtr]::Zero -and (Get-Date) -lt $until) {
         Start-Sleep -Seconds 1
-        # The dialog shows in the tree under the app's window, which owns it.
-        $isDialog = [Windows.Automation.PropertyCondition]::new($automation::ClassNameProperty, '#32770')
-        $dialog = $automation::RootElement.FindAll([Windows.Automation.TreeScope]::Children, $byProcess) |
-            ForEach-Object { $_.FindFirst([Windows.Automation.TreeScope]::Children, $isDialog) } |
-            Where-Object { $_ } | Select-Object -First 1
+        $dialog = [CheckFileDialog]::Find($app.Id)
+        if ($dialog -ne [IntPtr]::Zero) { $nameBox = [CheckFileDialog]::NameBox($dialog) }
     }
-    if (-not $dialog) {
-        $automation::RootElement.FindAll([Windows.Automation.TreeScope]::Children, $byProcess) | ForEach-Object {
-            Write-Host "window: '$($_.Current.Name)' $($_.Current.ClassName)"
-            $_.FindAll([Windows.Automation.TreeScope]::Children, [Windows.Automation.Condition]::TrueCondition) |
-                ForEach-Object { Write-Host "  child: '$($_.Current.Name)' $($_.Current.ClassName) $($_.Current.ControlType.ProgrammaticName)" }
-        }
-        throw 'The file dialog did not open.'
-    }
-    $byId = { param($id) [Windows.Automation.PropertyCondition]::new($automation::AutomationIdProperty, $id) }
-    $isEdit = [Windows.Automation.PropertyCondition]::new($automation::ControlTypeProperty, [Windows.Automation.ControlType]::Edit)
-    # The dialog fills in its controls a moment after it shows. The file name box is an Edit with
-    # id 1148, or inside the combo box with that id; any Edit in the dialog will do as a last resort.
-    $nameBox = $null
-    $until = (Get-Date).AddSeconds(30)
-    while (-not $nameBox -and (Get-Date) -lt $until) {
-        $nameBox = $dialog.FindFirst([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.AndCondition]::new((& $byId '1148'), $isEdit))
-        if (-not $nameBox) {
-            $combo = $dialog.FindFirst([Windows.Automation.TreeScope]::Descendants, (& $byId '1148'))
-            if ($combo) { $nameBox = $combo.FindFirst([Windows.Automation.TreeScope]::Descendants, $isEdit) }
-        }
-        if (-not $nameBox) { Start-Sleep -Milliseconds 500 }
-    }
-    if (-not $nameBox) { $nameBox = $dialog.FindFirst([Windows.Automation.TreeScope]::Descendants, $isEdit) }
-    if (-not $nameBox) {
-        $dialog.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition) |
-            ForEach-Object { Write-Host "  in dialog: '$($_.Current.Name)' $($_.Current.AutomationId) $($_.Current.ClassName) $($_.Current.ControlType.ProgrammaticName)" }
+    if ($dialog -eq [IntPtr]::Zero) { throw 'The file dialog did not open.' }
+    if ($nameBox -eq [IntPtr]::Zero) {
+        Write-Host ([CheckFileDialog]::Describe($dialog))
         throw 'The file dialog has no file name box.'
     }
-    $nameBox.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($file)
-    $open = $dialog.FindFirst([Windows.Automation.TreeScope]::Descendants, (& $byId '1'))
-    if (-not $open) { throw 'The file dialog has no Open button.' }
-    $open.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
+    $typed = [CheckFileDialog]::Choose($dialog, $nameBox, $file)
+    Write-Host "picked: $typed"
     Invoke-Drive @('shared', (Split-Path -Leaf $file)) | Out-Null
     Write-Host 'ok: the file is shared and the screen heard about it'
 
