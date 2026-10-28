@@ -158,7 +158,7 @@ jobs:
         with:
           name: ComParta-release
 
-      - uses: microsoft/microsoft-store-apppublisher@v1.1
+      - uses: microsoft/microsoft-store-apppublisher@cc9910a8d59f2eb55cbb83df0a3800cf3b5300e0  # v1.4
         if: steps.secrets.outputs.ready == 'True'
 
       - name: Send the package to the Store
