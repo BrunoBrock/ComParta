@@ -121,10 +121,26 @@ try {
     }
     $byId = { param($id) [Windows.Automation.PropertyCondition]::new($automation::AutomationIdProperty, $id) }
     $isEdit = [Windows.Automation.PropertyCondition]::new($automation::ControlTypeProperty, [Windows.Automation.ControlType]::Edit)
-    $nameBox = $dialog.FindFirst([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.AndCondition]::new((& $byId '1148'), $isEdit))
-    if (-not $nameBox) { throw 'The file dialog has no file name box.' }
+    # The dialog fills in its controls a moment after it shows. The file name box is an Edit with
+    # id 1148, or inside the combo box with that id; any Edit in the dialog will do as a last resort.
+    $nameBox = $null
+    $until = (Get-Date).AddSeconds(30)
+    while (-not $nameBox -and (Get-Date) -lt $until) {
+        $nameBox = $dialog.FindFirst([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.AndCondition]::new((& $byId '1148'), $isEdit))
+        if (-not $nameBox) {
+            $combo = $dialog.FindFirst([Windows.Automation.TreeScope]::Descendants, (& $byId '1148'))
+            if ($combo) { $nameBox = $combo.FindFirst([Windows.Automation.TreeScope]::Descendants, $isEdit) }
+        }
+        if (-not $nameBox) { Start-Sleep -Milliseconds 500 }
+    }
+    if (-not $nameBox) { $nameBox = $dialog.FindFirst([Windows.Automation.TreeScope]::Descendants, $isEdit) }
+    if (-not $nameBox) {
+        $dialog.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition) |
+            ForEach-Object { Write-Host "  in dialog: '$($_.Current.Name)' $($_.Current.AutomationId) $($_.Current.ClassName) $($_.Current.ControlType.ProgrammaticName)" }
+        throw 'The file dialog has no file name box.'
+    }
     $nameBox.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern).SetValue($file)
-    $open = $dialog.FindFirst([Windows.Automation.TreeScope]::Children, (& $byId '1'))
+    $open = $dialog.FindFirst([Windows.Automation.TreeScope]::Descendants, (& $byId '1'))
     if (-not $open) { throw 'The file dialog has no Open button.' }
     $open.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
     Invoke-Drive @('shared', (Split-Path -Leaf $file)) | Out-Null
