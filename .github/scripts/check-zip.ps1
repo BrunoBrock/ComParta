@@ -96,7 +96,7 @@ try {
 
     Write-Host "== The version About shows" -ForegroundColor Cyan
     $shown = "$(Invoke-Drive @('version'))".Trim()
-    if (-not ($shown -eq $Version -or $shown.StartsWith("$Version."))) { throw "About shows version $shown, not $Version." }
+    if ($shown -notmatch "^$([regex]::Escape($Version))([.+]|$)") { throw "About shows version $shown, not $Version." }
     Write-Host "ok: version $shown"
 
     Write-Host "== Share a file picked in the file dialog" -ForegroundColor Cyan

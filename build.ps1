@@ -102,14 +102,20 @@ function Assert-Version {
     if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "The version must look like 1.2.3, not $Version." }
 }
 
+# Publishes the app with $Version, which its csproj reads from COMPARTA_VERSION (see the comment there).
+function Invoke-VersionedStep([string]$Name, [scriptblock]$Step) {
+    $env:COMPARTA_VERSION = $Version
+    try { Invoke-Step $Name '.' $Step }
+    finally { Remove-Item Env:COMPARTA_VERSION -ErrorAction SilentlyContinue }
+}
+
 function Publish-App {
     Assert-Version
     Assert-PublishFolderFree
     if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
-    Invoke-Step 'Publish' '.' {
+    Invoke-VersionedStep 'Publish' {
         dotnet publish src\ComParta.App\ComParta.App.csproj -c Release -f $framework -r win-x64 `
-            --self-contained true -p:WindowsAppSDKSelfContained=true -o $publishDir `
-            "-p:ApplicationDisplayVersion=$Version" -p:ApplicationVersion=0 "-p:Version=$Version" --nologo -v minimal
+            --self-contained true -p:WindowsAppSDKSelfContained=true -o $publishDir --nologo -v minimal
     }
     Write-Host "Ready: $publishDir\ComParta.exe" -ForegroundColor Green
     if ($Run) {
@@ -134,11 +140,10 @@ function Package-App {
     Assert-Version
     $certificate = Get-TestCertificate
     if (Test-Path $packageDir) { Remove-Item $packageDir -Recurse -Force }
-    Invoke-Step 'Package' '.' {
+    Invoke-VersionedStep 'Package' {
         dotnet publish src\ComParta.App\ComParta.App.csproj -c Release -f $framework -r win-x64 --self-contained true `
             -p:WindowsPackageType=MSIX -p:WindowsAppSDKSelfContained=true -p:GenerateAppxPackageOnBuild=true `
             -p:AppxPackageSigningEnabled=true -p:PackageCertificateThumbprint=$($certificate.Thumbprint) `
-            "-p:ApplicationDisplayVersion=$Version" -p:ApplicationVersion=0 `
             "-p:AppxPackageDir=$packageDir\\" --nologo -v minimal
     }
     $package = Get-ChildItem $packageDir -Recurse -Filter *_x64.msix | Select-Object -First 1
