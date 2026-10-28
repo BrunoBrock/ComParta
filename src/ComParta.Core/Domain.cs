@@ -86,13 +86,27 @@ public sealed record ShareView(Share Share, ShareStatus Status);
 /// The Received folder it goes to, as chosen in Settings when it started, or null for the usual one
 /// (<see cref="Ports.IAppPaths.ReceivedRoot"/>). Choosing another folder later never moves it (epic 12 story 2).
 /// </param>
+/// <param name="Check">Once it has arrived: what the system's protection said about it (AD-13).</param>
 public sealed record Transfer(
     TransferId Id, string? Name, long? SizeBytes, bool Done, DateTimeOffset AddedAt, bool Paused = false,
     TransferSource Source = TransferSource.Invite, IReadOnlyList<int>? SkippedFiles = null, bool KeepSharing = true,
-    string? Folder = null)
+    string? Folder = null, ReceivedCheck Check = ReceivedCheck.Pending)
 {
     /// <summary>Public downloads share back what they received, unless the person said not to (epic 14 story 4).</summary>
     public bool SharesWhenDone => Source != TransferSource.Invite && KeepSharing;
+}
+
+/// <summary>
+/// What became of handing an arrived transfer's files to the system's protection (AD-13). Kept, so a
+/// restart neither checks nor announces it again.
+/// </summary>
+public enum ReceivedCheck
+{
+    /// <summary>Not arrived yet, or arrived and not checked yet.</summary>
+    Pending = 0,
+    Passed = 1,
+    /// <summary>The protection removed or refused a file; it shows as <see cref="TransferState.Blocked"/>.</summary>
+    Blocked = 2,
 }
 
 /// <summary>Where a transfer came from, for the details window (CAP-26).</summary>
