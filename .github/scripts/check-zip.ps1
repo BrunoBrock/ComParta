@@ -105,10 +105,19 @@ try {
     $dialog = $null
     while (-not $dialog -and (Get-Date) -lt $until) {
         Start-Sleep -Seconds 1
-        $dialog = $automation::RootElement.FindAll([Windows.Automation.TreeScope]::Children, $byProcess) |
-            Where-Object { $_.Current.ClassName -eq '#32770' } | Select-Object -First 1
+        # The dialog shows in the tree under the app's window, which owns it.
+        $isDialog = [Windows.Automation.AndCondition]::new($byProcess,
+            [Windows.Automation.PropertyCondition]::new($automation::ClassNameProperty, '#32770'))
+        $dialog = $automation::RootElement.FindFirst([Windows.Automation.TreeScope]::Descendants, $isDialog)
     }
-    if (-not $dialog) { throw 'The file dialog did not open.' }
+    if (-not $dialog) {
+        $automation::RootElement.FindAll([Windows.Automation.TreeScope]::Children, $byProcess) | ForEach-Object {
+            Write-Host "window: '$($_.Current.Name)' $($_.Current.ClassName)"
+            $_.FindAll([Windows.Automation.TreeScope]::Children, [Windows.Automation.Condition]::TrueCondition) |
+                ForEach-Object { Write-Host "  child: '$($_.Current.Name)' $($_.Current.ClassName) $($_.Current.ControlType.ProgrammaticName)" }
+        }
+        throw 'The file dialog did not open.'
+    }
     $byId = { param($id) [Windows.Automation.PropertyCondition]::new($automation::AutomationIdProperty, $id) }
     $isEdit = [Windows.Automation.PropertyCondition]::new($automation::ControlTypeProperty, [Windows.Automation.ControlType]::Edit)
     $nameBox = $dialog.FindFirst([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.AndCondition]::new((& $byId '1148'), $isEdit))
