@@ -371,7 +371,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   const setPaused = (id: string, paused: boolean) => {
     const transfer = transfers.find((t) => t.id === id)
     if (!transfer) return fail('transfer.notFound')
-    if (transfer.state === 'done' || transfer.state === 'failed') return fail('transfer.finished')
+    if (['done', 'failed', 'blocked'].includes(transfer.state)) return fail('transfer.finished')
     if (paused) updateTransfer(id, { state: 'paused', bytesPerSecond: 0, secondsLeft: null, neededBytes: null })
     else if (transfer.state === 'paused') updateTransfer(id, { state: transfer.sizeBytes ? 'receiving' : 'connecting' })
     return ok(null)

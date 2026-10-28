@@ -69,7 +69,7 @@ public sealed partial class AppServices
 			var receivedFolder = new ReceivedFolder(store, _paths, new NativeFilePicker(), new LocalFileSystem());
 			var transfers = new TransferUseCases(
 				store, _engine, picker: new NativeFilePicker(), files: new LocalFileSystem(), storage: new LocalStorageInfo(_paths),
-				received: receivedFolder);
+				received: receivedFolder, guard: platform.ReceivedGuard);
 			var settings = new SettingsUseCases(store, new SystemInfo(), _engine, receivedFolder);
 			var connection = new ConnectionUseCases(_engine, platform.Firewall);
 			var activity = new ActivityUseCases(_engine, store);
@@ -172,4 +172,5 @@ internal sealed record PlatformParts(
 	Ports.IBackgroundPresence Presence,
 	Ports.IFilePicker SharePicker,
 	Ports.IFileSystem SharedFiles,
-	Ports.IContentSource? SharedContent);
+	Ports.IContentSource? SharedContent,
+	Ports.IReceivedFileGuard ReceivedGuard);
