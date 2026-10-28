@@ -838,6 +838,42 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       return ok(report)
     },
 
+    // As the app: the shipped notices file, each part as its name and version, then its license.
+    'about.notices': () =>
+      ok(
+        [
+          'ComParta third-party notices',
+          '============================',
+          '',
+          'Parts in the app and the helper (NuGet)',
+          '---------------------------------------',
+          '',
+          'MonoTorrent 3.0.2',
+          'License: MIT',
+          'Copyright: not stated by the package',
+          'Project: https://github.com/alanmcgovern/monotorrent',
+          '',
+          'Parts in the screen (npm)',
+          '-------------------------',
+          '',
+          'lucide-react 0.500.0',
+          'License: ISC',
+          'Copyright: not stated by the package',
+          'Project: https://lucide.dev',
+          '',
+          'react 19.0.0',
+          'License: MIT',
+          'Copyright: Meta Platforms, Inc. and affiliates.',
+          'Project: https://react.dev',
+          '',
+          'react-dom 19.0.0',
+          'License: MIT',
+          'Copyright: Meta Platforms, Inc. and affiliates.',
+          'Project: https://react.dev',
+          '',
+        ].join('\n'),
+      ),
+
     'app.leave': () => {
       fake.leaves++
       return ok(null)

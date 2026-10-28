@@ -82,7 +82,8 @@ public sealed partial class AppServices
 			var router = new BridgeRouter(
 				shares, transfers, settings, connection, Opened, activity, received, new NativeClipboard(), opener, thumbnails, Dropped,
 				sending, notifications, background, new MediaUseCases(shares, received, platform.SharedFiles),
-				new SupportUseCases(store, new SystemInfo(), settings, shares, transfers, connection));
+				new SupportUseCases(store, new SystemInfo(), settings, shares, transfers, connection),
+				new AboutUseCases(new AppPackageNotices()));
 			router.CommandFailed += (_, e) => Log(e);
 
 			await _engine.StartAsync(SharingPolicy.Default);

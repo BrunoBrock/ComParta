@@ -40,6 +40,12 @@ public sealed class PhonePickerTests : IAsyncLifetime
         public Task<string?> GetTextAsync(CancellationToken ct = default) => Task.FromResult<string?>(null);
     }
 
+    /// <summary>These tests never open About; the notices are checked in ButtonsTests.</summary>
+    private sealed class NoNotices : IThirdPartyNotices
+    {
+        public Task<string?> ReadAsync(CancellationToken ct = default) => Task.FromResult<string?>(null);
+    }
+
     /// <summary>The app on the phone: its router and what it showed the screen.</summary>
     private sealed record Phone(BridgeRouter Router, MonoTorrentTransferEngine Engine, ConcurrentQueue<JsonElement> Events);
 
@@ -80,7 +86,8 @@ public sealed class PhonePickerTests : IAsyncLifetime
         var router = new BridgeRouter(
             shares, transfers, settings, connection, new OpenedInvites(), activity, received, _clipboard, opener, thumbnails,
             new DroppedFiles(), sending, notifications, background, new MediaUseCases(shares, received, _phone),
-            new SupportUseCases(store, new FakeSystem("pt-BR"), settings, shares, transfers, connection));
+            new SupportUseCases(store, new FakeSystem("pt-BR"), settings, shares, transfers, connection),
+            new AboutUseCases(new NoNotices()));
         var events = new ConcurrentQueue<JsonElement>();
         router.EventRaised += json => events.Enqueue(JsonDocument.Parse(json).RootElement.Clone());
 
