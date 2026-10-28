@@ -26,6 +26,24 @@ public sealed class AttachmentGuardTests : IDisposable
     }
 
     [Fact]
+    public void Every_file_of_a_received_folder_is_marked()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        var folder = Path.Combine(_folder, "Family trip");
+        Directory.CreateDirectory(Path.Combine(folder, "Day 2"));
+        var first = Path.Combine(folder, "map.txt");
+        var second = Path.Combine(folder, "Day 2", "notes.txt");
+        File.WriteAllText(first, "Where we went.");
+        File.WriteAllText(second, "What we saw.");
+
+        Assert.Equal(ReceivedFileVerdict.Passed, new AttachmentGuard().Check(folder));
+
+        Assert.Contains("ZoneId=3", File.ReadAllText(first + ":Zone.Identifier"));
+        Assert.Contains("ZoneId=3", File.ReadAllText(second + ":Zone.Identifier"));
+    }
+
+    [Fact]
     public void A_file_that_is_gone_afterwards_is_blocked()
     {
         if (!OperatingSystem.IsWindows())

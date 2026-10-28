@@ -28,7 +28,22 @@ public sealed class AttachmentGuard : IReceivedFileGuard
     {
         if (!OperatingSystem.IsWindows())
             return ReceivedFileVerdict.Passed;
+        // Handed a whole folder: each file inside it is looked at, and all of them carry the mark.
+        if (Directory.Exists(fullPath))
+        {
+            var folder = ReceivedFileVerdict.Passed;
+            foreach (var file in Directory.EnumerateFiles(fullPath, "*", SearchOption.AllDirectories))
+            {
+                if (CheckFile(file) == ReceivedFileVerdict.Blocked)
+                    folder = ReceivedFileVerdict.Blocked;
+            }
+            return folder;
+        }
+        return CheckFile(fullPath);
+    }
 
+    private static ReceivedFileVerdict CheckFile(string fullPath)
+    {
         var verdict = ReceivedFileVerdict.Passed;
         // The attachment services want a single-threaded apartment; core calls from a pool thread.
         var thread = new Thread(() => verdict = CheckHere(fullPath)) { IsBackground = true, Name = "Received file check" };
