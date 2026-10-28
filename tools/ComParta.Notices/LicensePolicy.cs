@@ -32,6 +32,11 @@ public static class LicensePolicy
             ["Microsoft.WindowsAppSDK*"] = (
                 "LicenseRef-Microsoft-WindowsAppSDK (Microsoft software license terms for the Windows App SDK)",
                 "Microsoft's terms in the package's license.txt let an app ship the Windows App SDK runtime with it."),
+            // Brought in by MAUI on Windows (Microsoft.Maui.Graphics.Win2D); the app cannot ship without it.
+            // The nuspec points only to the Win2D license terms page; the maintainer still reads those terms.
+            ["Microsoft.Graphics.Win2D"] = (
+                "LicenseRef-Microsoft-Win2D (Microsoft software license terms for Win2D)",
+                "MAUI's Windows drawing needs it; Microsoft publishes it for apps to ship, under its Win2D terms."),
             ["Microsoft.Windows.SDK.BuildTools*"] = (
                 "LicenseRef-Microsoft-Windows-SDK (Microsoft Windows SDK license terms)",
                 "Tools that build and package the app; only the parts the Windows SDK terms let apps ship end up in it."),
