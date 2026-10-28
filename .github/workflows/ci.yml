@@ -38,6 +38,18 @@ jobs:
           path: publish/THIRD-PARTY-NOTICES.txt
           if-no-files-found: ignore
 
+      # The same file in the log, for whoever can read the log but not download the artifact.
+      - name: Fresh third-party notices (base64)
+        if: failure()
+        shell: pwsh
+        run: |
+          $fresh = 'publish/THIRD-PARTY-NOTICES.txt'
+          if (Test-Path $fresh) {
+            Write-Host '-----BEGIN NOTICES-----'
+            [Convert]::ToBase64String([IO.File]::ReadAllBytes($fresh), 'InsertLineBreaks')
+            Write-Host '-----END NOTICES-----'
+          }
+
   # The MSIX package (epic 5 story 2), signed with a test certificate, installed and started on the runner.
   package:
     runs-on: windows-latest
