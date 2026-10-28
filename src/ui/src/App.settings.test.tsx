@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import App from './App.tsx'
 import type { FakeBridge } from './bridge/fakeBridge.ts'
@@ -199,6 +199,60 @@ describe('the Settings page', () => {
     expect(within(dialog).getByRole('textbox', { name: ptBR['settings.name'] })).toBeInTheDocument()
     expect(within(dialog).getByRole('radio', { name: ptBR['settings.theme.light'] })).toBeInTheDocument()
     expect(within(dialog).getByText('Versão 1.2.0')).toBeInTheDocument()
+  })
+
+  it('opens the licenses of the parts ComParta uses from About and passes the accessibility check', async () => {
+    const { user } = setup()
+    const dialog = await openSettings(user)
+
+    await user.click(within(dialog).getByRole('button', { name: en['settings.notices'] }))
+
+    const notices = screen.getByRole('dialog', { name: en['notices.title'] })
+    expect(within(notices).getByText(en['notices.intro'])).toBeInTheDocument()
+    const text = within(notices).getByRole('region', { name: en['notices.title'] })
+    await waitFor(() => expect(text).toHaveTextContent(/lucide-react \S+ License: ISC/))
+    expect(text).toHaveTextContent(/MonoTorrent \S+ License: MIT/)
+    expect(await accessibilityProblems(notices)).toEqual([])
+  })
+
+  it('closes the licenses with Close and with Escape, leaving Settings open', async () => {
+    const { user } = setup()
+    const dialog = await openSettings(user)
+    const open = async () => {
+      await user.click(within(dialog).getByRole('button', { name: en['settings.notices'] }))
+      return screen.getByRole('dialog', { name: en['notices.title'] })
+    }
+
+    await user.click(within(await open()).getByRole('button', { name: en['settings.close'] }))
+    expect(screen.queryByRole('dialog', { name: en['notices.title'] })).not.toBeInTheDocument()
+    expect(settings()).toBeInTheDocument()
+
+    fireEvent(await open(), new Event('cancel', { cancelable: true }))
+    expect(screen.queryByRole('dialog', { name: en['notices.title'] })).not.toBeInTheDocument()
+    expect(settings()).toBeInTheDocument()
+  })
+
+  it('says when the licenses cannot be shown, and goes back to Settings', async () => {
+    const { bridge, user } = setup()
+    const dialog = await openSettings(user)
+    bridge.failNextWith = 'unexpected'
+
+    await user.click(within(dialog).getByRole('button', { name: en['settings.notices'] }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: en['notices.title'] })).not.toBeInTheDocument())
+    expect(settings()).toBeInTheDocument()
+  })
+
+  it('names the licenses button in Brazilian Portuguese', async () => {
+    const { user } = setup({ language: 'pt-BR' })
+    await screen.findByText(ptBR['shares.empty'])
+    const dialog = await openSettings(user, ptBR)
+
+    await user.click(within(dialog).getByRole('button', { name: ptBR['settings.notices'] }))
+
+    const notices = screen.getByRole('dialog', { name: ptBR['notices.title'] })
+    expect(within(notices).getByText(ptBR['notices.intro'])).toBeInTheDocument()
+    expect(within(notices).getByRole('button', { name: ptBR['settings.close'] })).toBeInTheDocument()
   })
 
   it('refuses in the fake bridge what core refuses', async () => {

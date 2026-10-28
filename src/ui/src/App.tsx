@@ -771,6 +771,8 @@ export default function App({ bridge }: AppProps) {
           onChooseReceivedFolder={chooseReceivedFolder}
           onUsualReceivedFolder={useUsualReceivedFolder}
           version={version}
+          bridge={bridge}
+          onError={showError}
           onClose={() => setOpened(null)}
         />
       )}

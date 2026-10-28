@@ -65,6 +65,9 @@ try {
         Write-Host "ok: $($item.Key)"
     }
     if (-not (Test-Path (Join-Path $installed.InstallLocation 'ComParta.exe'))) { throw 'ComParta.exe is not at the top of the package.' }
+    # Settings, About reads it from the package (epic 5 story 1).
+    if (-not (Test-Path (Join-Path $installed.InstallLocation 'THIRD-PARTY-NOTICES.txt'))) { throw 'THIRD-PARTY-NOTICES.txt is not in the package.' }
+    Write-Host 'ok: the third-party notices'
 
     Write-Host "== Start it" -ForegroundColor Cyan
     Start-Process "shell:AppsFolder\$($installed.PackageFamilyName)!App"

@@ -27,6 +27,7 @@ public sealed class BridgeRouter
     private readonly BackgroundUseCases _background;
     private readonly MediaUseCases _media;
     private readonly SupportUseCases _support;
+    private readonly AboutUseCases _about;
 
     public BridgeRouter(
         ShareUseCases shares,
@@ -44,10 +45,12 @@ public sealed class BridgeRouter
         NotificationUseCases notifications,
         BackgroundUseCases background,
         MediaUseCases media,
-        SupportUseCases support)
+        SupportUseCases support,
+        AboutUseCases about)
     {
         _media = media;
         _support = support;
+        _about = about;
         _background = background;
         _background.QuitAsked += answer => Raise(Events.QuitChanged, ToDto(answer));
         _background.BackAsked += () => Raise(Events.BackChanged, true);
@@ -302,6 +305,11 @@ public sealed class BridgeRouter
                 await _clipboard.SetTextAsync(report);
                 return CommandResult.Success(report);
             }
+
+            case Commands.AboutNotices:
+                return await _about.NoticesAsync() is { } notices
+                    ? CommandResult.Success(notices)
+                    : CommandResult.Failure(ErrorCodes.Unexpected);
 
             case Commands.AppLeave:
                 _background.Leave();

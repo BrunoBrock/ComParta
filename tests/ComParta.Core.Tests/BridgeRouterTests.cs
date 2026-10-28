@@ -28,6 +28,7 @@ public sealed class BridgeRouterTests
     private readonly FakePresence _presence = new();
     private readonly BackgroundUseCases _background;
     private readonly FakePaths _paths = new(Path.Combine(Path.GetTempPath(), "home"));
+    private readonly Notices _notices = new();
 
     public BridgeRouterTests()
     {
@@ -44,7 +45,8 @@ public sealed class BridgeRouterTests
             sending, _notifications,
             _background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, _settings, _notifications, _presence, _clock),
             new MediaUseCases(shares, received, _files),
-            new SupportUseCases(_settings, new FakeSystem("pt-BR", "1.4.2"), settings, shares, transfers, connection, _clock));
+            new SupportUseCases(_settings, new FakeSystem("pt-BR", "1.4.2"), settings, shares, transfers, connection, _clock),
+            new AboutUseCases(_notices));
         _router.EventRaised += json => _events.Add(JsonDocument.Parse(json).RootElement);
         _files.Files[Video] = 5_000;
         _picker.NextPick = Video;
@@ -61,6 +63,12 @@ public sealed class BridgeRouterTests
         public Task<bool> OpenAsync(string path, CancellationToken ct = default) => Task.FromResult(true);
         public List<string> Revealed { get; } = [];
         public Task RevealAsync(string path, CancellationToken ct = default) { Revealed.Add(path); return Task.CompletedTask; }
+    }
+
+    private sealed class Notices : IThirdPartyNotices
+    {
+        public string? Text { get; set; } = "ComParta third-party notices\r\n\r\nMonoTorrent 3.0.2\r\nLicense: MIT\r\n";
+        public Task<string?> ReadAsync(CancellationToken ct = default) => Task.FromResult(Text);
     }
 
     private async Task<JsonElement> InvokeAsync(string command, object? args = null) =>
@@ -84,6 +92,23 @@ public sealed class BridgeRouterTests
         Assert.Equal(report, _shell.Copied);
         Assert.Contains("Version: 1.4.2\n", report);
         Assert.EndsWith("2026-10-12 10:00 UTC  share.notFound\n2026-10-12 10:00 UTC  unexpected\n", report);
+    }
+
+    [Fact]
+    public async Task About_notices_answers_with_the_text()
+    {
+        var result = await InvokeAsync(Commands.AboutNotices);
+
+        Assert.True(result.GetProperty("ok").GetBoolean());
+        Assert.Equal("ComParta third-party notices\n\nMonoTorrent 3.0.2\nLicense: MIT\n", result.GetProperty("value").GetString());
+    }
+
+    [Fact]
+    public async Task About_notices_without_the_file_answers_unexpected()
+    {
+        _notices.Text = null;
+
+        Assert.Equal("unexpected", ErrorCode(await InvokeAsync(Commands.AboutNotices)));
     }
 
     [Fact]

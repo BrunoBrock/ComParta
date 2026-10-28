@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using ComParta.Contracts;
 using ComParta.Core;
 using ComParta.Core.Ports;
@@ -98,6 +99,22 @@ public sealed class ButtonsTests : IAsyncLifetime
         public Task<string?> GetTextAsync(CancellationToken ct = default) => Task.FromResult(Holds);
     }
 
+    /// <summary>
+    /// The notices file at the root of the repository: the same file the app ships as a MauiAsset
+    /// (read there by AppPackageNotices). check-package.ps1 checks the copy inside the installed package.
+    /// </summary>
+    private sealed class NoticesInTheRepository : IThirdPartyNotices
+    {
+        public async Task<string?> ReadAsync(CancellationToken ct = default)
+        {
+            var folder = new DirectoryInfo(AppContext.BaseDirectory);
+            while (folder is not null && !File.Exists(Path.Combine(folder.FullName, "ComParta.sln")))
+                folder = folder.Parent;
+            var file = folder is null ? null : Path.Combine(folder.FullName, NoticesFile.Name);
+            return file is not null && File.Exists(file) ? await File.ReadAllTextAsync(file, ct) : null;
+        }
+    }
+
     public async Task InitializeAsync()
     {
         var paths = _paths = new FakePaths(_folder);
@@ -125,7 +142,8 @@ public sealed class ButtonsTests : IAsyncLifetime
         _router = new BridgeRouter(
             shares, transfers, settings, connection, _opened, activity, received, _clipboard, opener, thumbnails,
             new DroppedFiles(), sending, notifications, background, new MediaUseCases(shares, received, disk),
-            new SupportUseCases(store, new FakeSystem("en"), settings, shares, transfers, connection));
+            new SupportUseCases(store, new FakeSystem("en"), settings, shares, transfers, connection),
+            new AboutUseCases(new NoticesInTheRepository()));
         _router.EventRaised += json => _events.Enqueue(JsonDocument.Parse(json).RootElement.Clone());
         _router.CommandFailed += (_, e) => _failure = e;
 
@@ -800,6 +818,17 @@ public sealed class ButtonsTests : IAsyncLifetime
             store, new FakeSystem("en"), settings, new ShareUseCases(store, _engine, _picker, _files),
             new TransferUseCases(store, _engine), new ConnectionUseCases(_engine)).ReportAsync();
         Assert.Contains("UTC  share.notFound\n", again);
+    }
+
+    [Fact]
+    public async Task About_shows_the_licenses_of_the_parts_ComParta_uses()
+    {
+        var text = (await ClickAsync(Commands.AboutNotices)).GetString()!;
+
+        Assert.Matches(new Regex(@"^MonoTorrent \S+\nLicense: MIT$", RegexOptions.Multiline), text);
+        Assert.Matches(new Regex(@"^react \S+\nLicense: MIT$", RegexOptions.Multiline), text);
+        Assert.Matches(new Regex(@"^lucide-react \S+\nLicense: ISC$", RegexOptions.Multiline), text);
+        Assert.DoesNotContain(_folder, text);
     }
 
     [Fact]

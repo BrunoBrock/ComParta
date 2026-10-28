@@ -53,6 +53,8 @@ public static class Commands
     public const string AppLeave = "app.leave";
     public const string MediaOpen = "media.open";
     public const string SupportReport = "support.report";
+    /// <summary>The licenses of the parts ComParta uses, as plain text (epic 5 story 1).</summary>
+    public const string AboutNotices = "about.notices";
 }
 
 public static class Events
@@ -375,6 +377,8 @@ public static class Contract
         new(Commands.MediaOpen, typeof(MediaArgs), typeof(MediaDto)),
         // Puts the report for whoever helps the person on the clipboard and returns it, so the Help page shows what was copied.
         new(Commands.SupportReport, null, typeof(string)),
+        // The licenses of the parts ComParta uses, as plain text (epic 5 story 1). Fails with unexpected when the file is missing.
+        new(Commands.AboutNotices, null, typeof(string)),
     ];
 
     public static IReadOnlyList<EventSpec> EventSpecs { get; } =
