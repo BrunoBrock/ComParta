@@ -71,14 +71,8 @@ public sealed class ButtonsTests : IAsyncLifetime
     }
 
     /// <summary>The app's own guard: Windows' attachment services on Windows, none elsewhere.</summary>
-    private static IReceivedFileGuard PlatformGuard()
-    {
-        if (!OperatingSystem.IsWindows())
-            return NoReceivedFileCheck.Instance;
-        var type = typeof(LocalFileSystem).Assembly.GetType("ComParta.Shell.AttachmentGuard");
-        Assert.NotNull(type);
-        return (IReceivedFileGuard)Activator.CreateInstance(type)!;
-    }
+    private static IReceivedFileGuard PlatformGuard() =>
+        OperatingSystem.IsWindows() ? new AttachmentGuard() : NoReceivedFileCheck.Instance;
 
     private sealed class SlowRouter : INatGateway
     {

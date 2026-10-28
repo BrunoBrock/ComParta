@@ -553,12 +553,14 @@ public sealed class TransferUseCases
             IEnumerable<string> paths = _files!.FolderExists(top)
                 ? _files.ListFiles(top).Select(relative => _files.Inside(top, relative)).OfType<string>()
                 : [top];
+            // Every file is looked at, even after one is blocked, so the rest carry the mark too.
+            var verdict = ReceivedFileVerdict.Passed;
             foreach (var path in paths)
             {
                 if (_guard!.Check(path) == ReceivedFileVerdict.Blocked)
-                    return ReceivedFileVerdict.Blocked;
+                    verdict = ReceivedFileVerdict.Blocked;
             }
-            return ReceivedFileVerdict.Passed;
+            return verdict;
         }
         catch (Exception)
         {
