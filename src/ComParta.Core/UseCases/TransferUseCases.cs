@@ -20,6 +20,7 @@ public sealed class TransferUseCases
     private readonly IFileSystem? _files;
     private readonly IStorageInfo? _storage;
     private readonly ReceivedFolder? _received;
+    private readonly IReceivedFileGuard? _guard;
     private readonly TimeProvider _clock;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Dictionary<TransferId, TransferView> _transfers = [];
@@ -28,6 +29,8 @@ public sealed class TransferUseCases
     private readonly Dictionary<TransferId, DateTimeOffset> _lastContact = [];
     // When each transfer stopped for lack of room last looked for room.
     private readonly Dictionary<TransferId, DateTimeOffset> _roomCheckedAt = [];
+    // Arrived and with the system's protection now; they show as receiving until it answers (AD-13).
+    private readonly HashSet<TransferId> _checking = [];
     // The download file Windows opened ComParta with, read and waiting for "Get the file".
     private byte[]? _openedFile;
 
@@ -38,7 +41,8 @@ public sealed class TransferUseCases
         IFilePicker? picker = null,
         IFileSystem? files = null,
         IStorageInfo? storage = null,
-        ReceivedFolder? received = null)
+        ReceivedFolder? received = null,
+        IReceivedFileGuard? guard = null)
     {
         _repository = repository;
         _engine = engine;
@@ -46,6 +50,7 @@ public sealed class TransferUseCases
         _files = files;
         _storage = storage;
         _received = received;
+        _guard = guard;
         _clock = clock ?? TimeProvider.System;
         _engine.ReceiveProgressed += OnReceiveProgressed;
         _engine.ActivityChanged += OnActivityChanged;
@@ -57,12 +62,26 @@ public sealed class TransferUseCases
     /// <summary>Loads the saved transfers and continues the unfinished ones.</summary>
     public async Task StartAsync(CancellationToken ct = default)
     {
+        var toCheck = new List<Transfer>();
         await _gate.WaitAsync(ct);
         try
         {
             foreach (var transfer in await _repository.GetAllAsync(ct))
             {
-                if (transfer.Done)
+                if (transfer.Done && transfer.Check == ReceivedCheck.Blocked)
+                {
+                    await _engine.SetSharingWhenDoneAsync(transfer.Id, false, ct);
+                    Set(new TransferView(transfer, TransferState.Blocked, transfer.SizeBytes ?? 0));
+                }
+                else if (transfer.Done && transfer.Check == ReceivedCheck.Pending && Checks)
+                {
+                    // It arrived just before ComParta closed; the check finishes now, and only then is it received.
+                    Set(new TransferView(transfer, TransferState.Receiving, transfer.SizeBytes ?? 0));
+                    lock (_transfers)
+                        _checking.Add(transfer.Id);
+                    toCheck.Add(transfer);
+                }
+                else if (transfer.Done)
                 {
                     Set(new TransferView(transfer, TransferState.Done, transfer.SizeBytes ?? 0));
                 }
@@ -81,6 +100,8 @@ public sealed class TransferUseCases
             }
         }
         finally { _gate.Release(); }
+        foreach (var transfer in toCheck)
+            _ = CheckReceivedAsync(transfer);
         Changed?.Invoke();
     }
 
@@ -295,7 +316,7 @@ public sealed class TransferUseCases
             var transfer = view.Transfer;
             if (skipped is not null)
             {
-                if (view.State is TransferState.Done or TransferState.Failed or TransferState.Blocked)
+                if (view.Transfer.Done || view.State is TransferState.Done or TransferState.Failed or TransferState.Blocked)
                     return Result.Fail(ErrorKind.TransferFinished);
                 var files = _engine.GetReceiveFiles(id);
                 var chosen = skipped.Distinct().Where(i => i >= 0 && (files is null || i < files.Count)).Order().ToArray();
@@ -344,7 +365,7 @@ public sealed class TransferUseCases
                 if (!_transfers.TryGetValue(id, out view))
                     return Result.Fail(ErrorKind.TransferNotFound);
             }
-            if (view.State is TransferState.Done or TransferState.Failed or TransferState.Blocked)
+            if (view.Transfer.Done || view.State is TransferState.Done or TransferState.Failed or TransferState.Blocked)
                 return Result.Fail(ErrorKind.TransferFinished);
             if (view.Transfer.Paused == paused)
                 return Result.Success;
@@ -384,8 +405,10 @@ public sealed class TransferUseCases
                 _timeLeft.Remove(id);
                 _lastContact.Remove(id);
                 _roomCheckedAt.Remove(id);
+                _checking.Remove(id);
             }
-            if (view.State != TransferState.Done)
+            // An arrived file stays, whatever the check said; only unfinished data is deleted.
+            if (!view.Transfer.Done)
                 await _engine.StopReceivingAsync(id, ct);
             else
                 await _engine.SetSharingWhenDoneAsync(id, false, ct);
@@ -402,9 +425,11 @@ public sealed class TransferUseCases
         TransferView updated;
         bool persist;
         var outOfRoom = false;
+        var check = false;
         lock (_transfers)
         {
-            if (!_transfers.TryGetValue(progress.Id, out var view) || view.State is TransferState.Done or TransferState.Blocked)
+            if (!_transfers.TryGetValue(progress.Id, out var view) || view.State is TransferState.Done or TransferState.Blocked
+                || _checking.Contains(progress.Id))
                 return;
             // A paused transfer moves nothing; a late report from before the pause is not news.
             if (view.State == TransferState.Paused && !progress.Done)
@@ -420,6 +445,10 @@ public sealed class TransferUseCases
                 SizeBytes = progress.SizeBytes ?? view.Transfer.SizeBytes,
                 Done = progress.Done,
             };
+            // What has arrived is not shown as received until the system's protection has looked at it (AD-13).
+            check = progress.Done && Checks;
+            if (progress.Done)
+                transfer = transfer with { Check = check ? ReceivedCheck.Pending : ReceivedCheck.Passed };
             var received = progress.Done ? transfer.SizeBytes ?? progress.ReceivedBytes
                 : progress.Failed ? view.ReceivedBytes
                 : progress.ReceivedBytes;
@@ -429,18 +458,19 @@ public sealed class TransferUseCases
             var free = _storage?.GetReceivedFreeBytes(transfer.Folder);
             outOfRoom = !progress.Done && !progress.Failed && !progress.NoSpace && left is > 0 && free is { } room && room < left;
 
-            var state = progress.Done ? TransferState.Done
+            var state = check ? TransferState.Receiving
+                : progress.Done ? TransferState.Done
                 : progress.Failed ? TransferState.Failed
                 : progress.NoSpace || outOfRoom ? TransferState.NoSpace
                 : transfer.SizeBytes is null ? TransferState.Connecting
                 : received > 0 ? TransferState.Receiving
                 : view.State == TransferState.Waiting ? TransferState.Connecting
                 : view.State;
-            if (state is TransferState.Connecting or TransferState.Receiving && OutOfContact(progress.Id, now))
+            if (!check && state is TransferState.Connecting or TransferState.Receiving && OutOfContact(progress.Id, now))
                 state = TransferState.Waiting;
 
             long? secondsLeft = null;
-            if (state == TransferState.Receiving)
+            if (state == TransferState.Receiving && !check)
             {
                 if (!_timeLeft.TryGetValue(progress.Id, out var timeLeft))
                     _timeLeft[progress.Id] = timeLeft = new TimeLeft(_clock);
@@ -452,11 +482,13 @@ public sealed class TransferUseCases
                 _roomCheckedAt.TryAdd(progress.Id, now);
             long? needed = state == TransferState.NoSpace && left is { } l && free is { } f ? Math.Max(l - f, 1) : null;
             updated = new TransferView(
-                transfer, state, received, state == TransferState.Receiving ? progress.BytesPerSecond : 0, secondsLeft, needed);
+                transfer, state, received, state == TransferState.Receiving && !check ? progress.BytesPerSecond : 0, secondsLeft, needed);
             if (updated == view)
                 return;
             persist = transfer != view.Transfer;
             _transfers[progress.Id] = updated;
+            if (check)
+                _checking.Add(progress.Id);
         }
 
         // Stopped here, before the disk fills, so nothing half-written is lost (UX States table).
@@ -464,7 +496,75 @@ public sealed class TransferUseCases
             _ = PauseQuietlyAsync(progress.Id);
         if (persist)
             _ = PersistAsync(updated.Transfer);
+        if (check)
+            _ = CheckReceivedAsync(updated.Transfer);
         Changed?.Invoke();
+    }
+
+    /// <summary>True when arrived files go to the system's protection before they show as received.</summary>
+    private bool Checks => _guard is not null && _files is not null && _received is not null;
+
+    /// <summary>
+    /// Hands every arrived file of a transfer to the system's protection, off the screen's thread, then
+    /// shows it as received, or as blocked when the protection removed or refused one (AD-13).
+    /// </summary>
+    private async Task CheckReceivedAsync(Transfer transfer)
+    {
+        var verdict = await Task.Run(() => CheckFiles(transfer));
+        var id = transfer.Id;
+        Transfer checkedOne;
+        await _gate.WaitAsync();
+        try
+        {
+            lock (_transfers)
+            {
+                _checking.Remove(id);
+                // Taken off the list while it was being checked: nothing more to show.
+                if (!_transfers.TryGetValue(id, out var view))
+                    return;
+                checkedOne = view.Transfer with { Check = verdict == ReceivedFileVerdict.Blocked ? ReceivedCheck.Blocked : ReceivedCheck.Passed };
+                _transfers[id] = new TransferView(
+                    checkedOne, checkedOne.Check == ReceivedCheck.Blocked ? TransferState.Blocked : TransferState.Done, view.ReceivedBytes);
+            }
+            if (checkedOne.Check == ReceivedCheck.Blocked)
+            {
+                // Nobody gets a blocked file from this computer.
+                try { await _engine.SetSharingWhenDoneAsync(id, false); }
+                catch (Exception) { /* a restart does not offer it either */ }
+            }
+            await PersistAsync(checkedOne);
+        }
+        finally { _gate.Release(); }
+        Changed?.Invoke();
+    }
+
+    private ReceivedFileVerdict CheckFiles(Transfer transfer)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(transfer.Name))
+                return ReceivedFileVerdict.Passed;
+            var root = Path.GetFullPath(transfer.Folder ?? _received!.Usual);
+            var top = Path.GetFullPath(Path.Combine(root, transfer.Name));
+            // Never the case for a name the engine made safe; such an item cannot be opened anyway.
+            if (!ReceivedNames.IsInside(root, top))
+                return ReceivedFileVerdict.Passed;
+            // A folder that arrived (epic 11): every file inside it.
+            IEnumerable<string> paths = _files!.FolderExists(top)
+                ? _files.ListFiles(top).Select(relative => _files.Inside(top, relative)).OfType<string>()
+                : [top];
+            foreach (var path in paths)
+            {
+                if (_guard!.Check(path) == ReceivedFileVerdict.Blocked)
+                    return ReceivedFileVerdict.Blocked;
+            }
+            return ReceivedFileVerdict.Passed;
+        }
+        catch (Exception)
+        {
+            // The check could not run; the files stay as they were before Windows' protection was asked.
+            return ReceivedFileVerdict.Passed;
+        }
     }
 
     private bool OutOfContact(TransferId id, DateTimeOffset now) =>
@@ -487,6 +587,8 @@ public sealed class TransferUseCases
             foreach (var view in _transfers.Values.ToList())
             {
                 var id = view.Transfer.Id;
+                if (_checking.Contains(id))
+                    continue;
                 if (activity.Transfers.GetValueOrDefault(id) is { Connections: > 0 })
                     _lastContact[id] = now;
                 var next = view.State switch

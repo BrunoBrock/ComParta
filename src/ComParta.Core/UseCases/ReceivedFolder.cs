@@ -16,7 +16,10 @@ public sealed class ReceivedFolder(ISettingsRepository repository, IAppPaths pat
     public string? Chosen => Volatile.Read(ref _chosen);
 
     /// <summary>Where a new transfer goes now.</summary>
-    public string Current => Chosen ?? Path.GetFullPath(paths.ReceivedRoot);
+    public string Current => Chosen ?? Usual;
+
+    /// <summary>The usual Received root, where a transfer without a folder of its own goes.</summary>
+    public string Usual => Path.GetFullPath(paths.ReceivedRoot);
 
     /// <summary>Reads the stored choice; call once at start, before any transfer starts.</summary>
     public async Task LoadAsync(CancellationToken ct = default) =>

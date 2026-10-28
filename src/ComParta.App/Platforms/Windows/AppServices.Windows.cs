@@ -5,7 +5,10 @@ using Ports = ComParta.Core.Ports;
 
 namespace ComParta.App;
 
-/// <summary>The Windows adapters: the notification-area icon, the firewall, Explorer and Windows' thumbnails.</summary>
+/// <summary>
+/// The Windows adapters: the notification-area icon, the firewall, Explorer, Windows' thumbnails and
+/// the protection every received file is handed to.
+/// </summary>
 public sealed partial class AppServices
 {
 	private static readonly string Executable = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "ComParta.exe");
@@ -30,7 +33,7 @@ public sealed partial class AppServices
 		_presence = new WindowsPresence(Executable, () => QuitRequested?.Invoke(), () => HideWindowRequested?.Invoke(), Log);
 		return new PlatformParts(
 			new WindowsFirewall(Executable), new ReceivedFolderOpener(_paths), new WindowsThumbnails(), _notifier, _presence,
-			new NativeFilePicker(), new LocalFileSystem(), SharedContent: null);
+			new NativeFilePicker(), new LocalFileSystem(), SharedContent: null, ReceivedGuard: new AttachmentGuard());
 	}
 
 	partial void AfterStart(NotificationUseCases notifications, BackgroundUseCases background)
