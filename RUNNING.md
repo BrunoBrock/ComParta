@@ -107,8 +107,42 @@ To start from scratch, close the app and delete `%LOCALAPPDATA%\ComParta` (or th
 ## Make a folder to copy to another PC
 
 ```powershell
-.\build.ps1 -Publish
+.\build.ps1 Publish
 ```
 
 This creates `publish\ComParta`. Copy the whole folder and run `ComParta.exe` in it; nothing else
 needs installing there. The app is not code-signed yet, so Windows SmartScreen warns on first run.
+`.\build.ps1 Zip` makes the same folder as `publish\ComParta-<version>-win-x64.zip`, with the
+license and third-party notices inside, as the releases carry it.
+
+## Make a release
+
+Push a version tag from `main`:
+
+```powershell
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+The **App release** workflow (`.github/workflows/app-release.yml`) runs every test, makes the MSIX
+(`.\build.ps1 Package`) and the zip (`.\build.ps1 Zip`), installs and starts the MSIX, unpacks the
+zip and uses the app inside it, then creates a **draft** release with both, the test certificate,
+`SHA256SUMS.txt` and notes listing the pull requests merged since the previous `v*` tag. Nothing is
+public until you open the draft on the Releases page and publish it. If any test fails, there is
+no release. A tag such as `v1.2.3-test` makes a pre-release, for trying the workflow out. Running the
+workflow by hand only keeps the files as downloads of that run.
+
+**The Microsoft Store step** stays off until these repository secrets exist (Settings, Secrets and
+variables, Actions), from Partner Center once the Store listing is made (epic 5 story 3):
+
+| Secret | What it is |
+| --- | --- |
+| `STORE_TENANT_ID` | The Microsoft Entra tenant linked to Partner Center |
+| `STORE_SELLER_ID` | The seller ID in Partner Center's account settings |
+| `STORE_CLIENT_ID` | The ID of the Entra app given access to Partner Center |
+| `STORE_CLIENT_SECRET` | A secret (key) of that Entra app |
+| `STORE_PRODUCT_ID` | The Store ID of ComParta's listing |
+
+With all five set, a tag also sends the MSIX to the Store as a submission left unsubmitted, to
+finish in Partner Center. The package's publisher must then match the Store's (see
+`Package.appxmanifest`).

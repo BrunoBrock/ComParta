@@ -1,7 +1,11 @@
 # Installs the test MSIX on this Windows machine, checks what it declares, starts it once and
 # removes it again (epic 5 story 2). Needs an administrator, to trust the test certificate.
-#   .github\scripts\check-package.ps1 publish\package
-param([Parameter(Mandatory)][string]$PackageDir)
+#   .github\scripts\check-package.ps1 publish\package [-Version 1.2.3]
+# With -Version, the installed package must carry that version (the release tag's).
+param(
+    [Parameter(Mandatory)][string]$PackageDir,
+    [string]$Version
+)
 
 $ErrorActionPreference = 'Stop'
 $package = Get-ChildItem $PackageDir -Filter *.msix | Select-Object -First 1
@@ -39,6 +43,10 @@ Add-AppxPackage -Path $package.FullName
 $installed = Get-AppxPackage | Where-Object { $_.Publisher -eq 'CN=ComParta' } | Select-Object -First 1
 if (-not $installed) { throw 'The package did not install.' }
 Write-Host "Installed $($installed.PackageFullName), version $($installed.Version)"
+if ($Version -and "$($installed.Version)" -ne "$Version.0") {
+    Remove-AppxPackage -Package $installed.PackageFullName
+    throw "The package's version is $($installed.Version), not $Version."
+}
 
 try {
     Write-Host "== Check what the package declares" -ForegroundColor Cyan

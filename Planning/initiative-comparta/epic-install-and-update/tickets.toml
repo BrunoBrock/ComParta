@@ -41,12 +41,11 @@ id = 4
 type = "story"
 title = "Release workflow from a tag"
 description = "Adds a GitHub Actions workflow that, on a version tag, builds and tests, produces the MSIX and the zip, writes release notes from the commits, attaches both to a GitHub Release, and submits the MSIX to the Store with the Store's submission tool using secrets the maintainer adds."
-verify = "Pushing a test tag creates a draft GitHub Release with both files; a Store submission appears in Partner Center."
+verify = "Pushing a test tag creates a draft GitHub Release with both files; a Store submission appears in Partner Center once the Store secrets exist."
 covers = ["CAP-11"]
-after = [2, 3]
-hitl = true                 # The maintainer adds the Store secrets
+after = [2]                 # Built before the Store listing (3): the Store step is present but off until its secrets exist
+hitl = false
 risk = "medium"
-unknown = "Decision D-2."
 
 [[entry]]
 id = 5

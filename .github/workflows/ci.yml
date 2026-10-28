@@ -50,15 +50,30 @@ jobs:
         run: dotnet workload install maui-windows
 
       - name: Make the package
+        id: package
         shell: pwsh
         # A tag like v1.2.3 names the version; anything else is 0.1.<run number>.
         run: |
-          $version = if ('${{ github.ref }}' -match '^refs/tags/v(\d+\.\d+\.\d+)$') { $Matches[1] } else { '0.1.${{ github.run_number }}' }
+          $version = if ('${{ github.ref }}' -match '^refs/tags/v(\d+\.\d+\.\d+)') { $Matches[1] } else { '0.1.${{ github.run_number }}' }
+          "version=$version" >> $env:GITHUB_OUTPUT
           ./build.ps1 Package -SkipTests -Version $version
 
       - name: Install, check and start it
         shell: pwsh
-        run: ./.github/scripts/check-package.ps1 publish/package
+        run: ./.github/scripts/check-package.ps1 publish/package -Version ${{ steps.package.outputs.version }}
+
+      # The zip for people without the Store (epic 5 stories 4 and 6): unpacked, started with no .NET
+      # to lean on, and used through its own screen (share a file from the file dialog, then quit).
+      - name: Make the zip
+        shell: pwsh
+        run: ./build.ps1 Zip -SkipTests -Version ${{ steps.package.outputs.version }}
+
+      - name: Unpack, start and use the zip
+        shell: pwsh
+        run: ./.github/scripts/check-zip.ps1 publish/ComParta-${{ steps.package.outputs.version }}-win-x64.zip -Version ${{ steps.package.outputs.version }}
+
+      - name: Test the release notes
+        run: python -m unittest discover -s .github/scripts -p "test_*.py" -v
 
       - uses: actions/upload-artifact@v7
         with:
@@ -66,6 +81,11 @@ jobs:
           path: |
             publish/package/*.msix
             publish/package/*.cer
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ComParta-zip
+          path: publish/ComParta-*-win-x64.zip
 
 
   # The Android app (epic 7): built on Linux, kept as a download, then installed and started on an

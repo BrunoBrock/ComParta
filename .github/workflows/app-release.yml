@@ -1,0 +1,173 @@
+name: App release
+
+# Turns a version tag into a draft GitHub Release (epic 5 story 4). A tag such as v1.2.3 (or
+# v1.2.3-test) runs every test, makes the MSIX and the zip for people without the Store, checks both
+# on this Windows runner, writes the release notes from the pull requests since the previous v* tag,
+# and creates a draft release with the files and their SHA256SUMS.txt. Nothing is published: the
+# maintainer opens the draft and publishes it. Running the workflow by hand, or a pull request that
+# changes it, only keeps the files as downloads of that run.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/app-release.yml
+      - .github/scripts/check-zip.ps1
+      - .github/scripts/drive-app.mjs
+      - .github/scripts/release_notes.py
+      - build.ps1
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      name: ${{ steps.version.outputs.name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Every tag and commit, for the release notes.
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/ui/package-lock.json
+
+      - name: Install the MAUI Windows workload
+        run: dotnet workload install maui-windows
+
+      # The tag names the release; Windows takes only its numbers (v1.2.3-test is 1.2.3 inside).
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          if ('${{ github.ref }}' -match '^refs/tags/v((\d+\.\d+\.\d+)(-[0-9A-Za-z.-]+)?)$') {
+            $name = $Matches[1]; $number = $Matches[2]
+          } elseif ('${{ github.ref }}' -like 'refs/tags/*') {
+            throw 'A release tag looks like v1.2.3 or v1.2.3-test.'
+          } else {
+            $number = '0.1.${{ github.run_number }}'; $name = $number
+          }
+          "name=$name" >> $env:GITHUB_OUTPUT
+          "number=$number" >> $env:GITHUB_OUTPUT
+          Write-Host "Release $name, version $number"
+
+      - name: Test the release notes
+        run: python -m unittest discover -s .github/scripts -p "test_*.py" -v
+
+      # No release without every test passing.
+      - name: Build and test
+        shell: pwsh
+        run: ./build.ps1 Check
+
+      - name: Make the package
+        shell: pwsh
+        run: ./build.ps1 Package -SkipTests -Version ${{ steps.version.outputs.number }}
+
+      - name: Install, check and start the package
+        shell: pwsh
+        run: ./.github/scripts/check-package.ps1 publish/package -Version ${{ steps.version.outputs.number }}
+
+      - name: Make the zip
+        shell: pwsh
+        run: ./build.ps1 Zip -SkipTests -Version ${{ steps.version.outputs.number }}
+
+      - name: Unpack, start and use the zip
+        shell: pwsh
+        run: ./.github/scripts/check-zip.ps1 publish/ComParta-${{ steps.version.outputs.number }}-win-x64.zip -Version ${{ steps.version.outputs.number }}
+
+      - name: Gather the release files
+        shell: pwsh
+        run: |
+          $name = '${{ steps.version.outputs.name }}'
+          $number = '${{ steps.version.outputs.number }}'
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item "publish/package/ComParta_$($number)_x64.msix" "release/ComParta_$($name)_x64.msix"
+          Copy-Item publish/package/ComParta-test.cer release/ComParta-test.cer
+          Copy-Item "publish/ComParta-$number-win-x64.zip" "release/ComParta-$name-win-x64.zip"
+          Push-Location release
+          Get-ChildItem -File | Sort-Object Name | ForEach-Object {
+            "$((Get-FileHash $_.Name -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)"
+          } | Set-Content -Encoding ascii SHA256SUMS.txt
+          Pop-Location
+          python .github/scripts/release_notes.py HEAD release-notes.md
+          if ($LASTEXITCODE -ne 0) { throw 'Could not write the release notes.' }
+          Get-Content release-notes.md
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ComParta-release
+          path: |
+            release/*
+            release-notes.md
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: ComParta-release
+
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NAME: ${{ needs.build.outputs.name }}
+        run: |
+          prerelease=()
+          if [[ "$NAME" == *-* ]]; then prerelease=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY" --draft "${prerelease[@]}" \
+            --title "ComParta $NAME" --notes-file release-notes.md
+
+  # Sends the MSIX to the Microsoft Store (epic 5 story 3) as a submission left for the maintainer
+  # to finish in Partner Center. Skipped until the Store secrets exist; RUNNING.md names them.
+  store:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: windows-latest
+    env:
+      STORE_TENANT_ID: ${{ secrets.STORE_TENANT_ID }}
+      STORE_SELLER_ID: ${{ secrets.STORE_SELLER_ID }}
+      STORE_CLIENT_ID: ${{ secrets.STORE_CLIENT_ID }}
+      STORE_CLIENT_SECRET: ${{ secrets.STORE_CLIENT_SECRET }}
+      STORE_PRODUCT_ID: ${{ secrets.STORE_PRODUCT_ID }}
+    steps:
+      - name: Are the Store secrets there?
+        id: secrets
+        shell: pwsh
+        run: |
+          $missing = @('STORE_TENANT_ID', 'STORE_SELLER_ID', 'STORE_CLIENT_ID', 'STORE_CLIENT_SECRET', 'STORE_PRODUCT_ID') |
+            Where-Object { -not [Environment]::GetEnvironmentVariable($_) }
+          if ($missing) { Write-Host "Skipping the Store: no $($missing -join ', ') yet." }
+          "ready=$(-not $missing)" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/download-artifact@v7
+        if: steps.secrets.outputs.ready == 'True'
+        with:
+          name: ComParta-release
+
+      - uses: microsoft/microsoft-store-apppublisher@v1.1
+        if: steps.secrets.outputs.ready == 'True'
+
+      - name: Send the package to the Store
+        if: steps.secrets.outputs.ready == 'True'
+        shell: pwsh
+        run: |
+          msstore reconfigure --tenantId $env:STORE_TENANT_ID --sellerId $env:STORE_SELLER_ID --clientId $env:STORE_CLIENT_ID --clientSecret $env:STORE_CLIENT_SECRET
+          if ($LASTEXITCODE -ne 0) { throw 'The Store did not accept the keys.' }
+          $package = Get-ChildItem release -Filter *.msix | Select-Object -First 1
+          # --noCommit leaves the submission as a draft in Partner Center for the maintainer.
+          msstore publish $package.FullName --appId $env:STORE_PRODUCT_ID --noCommit
+          if ($LASTEXITCODE -ne 0) { throw 'The Store submission failed.' }
