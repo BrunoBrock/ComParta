@@ -38,6 +38,26 @@ person's computer".
   file's fingerprint is announced on a public lookup network so the two computers can find each
   other. See AD-8 in the architecture.
 
+## Installing without the Store
+
+Each release on the [Releases page](../../releases) has a zip, `ComParta-<version>-win-x64.zip`,
+for computers without the Microsoft Store. Nothing else needs installing.
+
+1. Download the zip and open your **Downloads** folder.
+2. Right-click the zip and choose **Extract All**, then **Extract**.
+3. Open the new folder and double-click **ComParta**.
+
+The first time, Windows shows a blue window that says **Windows protected your PC**. This is
+because the app is not signed by a known publisher yet, not because something is wrong with it.
+Choose **More info**, check that it says **ComParta.exe**, then choose **Run anyway**. Windows asks
+only once for each copy.
+
+To check the download is complete, `SHA256SUMS.txt` on the same page lists each file's fingerprint;
+in PowerShell, `Get-FileHash <file>` shows the fingerprint of the file you have.
+
+To update, close ComParta (also from its icon next to the clock), extract the new zip and use the
+new folder. Your shares and received files are kept: they are not stored in the app's folder.
+
 ## Building
 
 You need Windows 10 or 11, the [.NET 10 SDK](https://dotnet.microsoft.com/download) with the MAUI

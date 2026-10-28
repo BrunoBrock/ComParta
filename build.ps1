@@ -4,15 +4,17 @@
 #                                 or copy to another PC
 #   .\build.ps1 Package           builds and tests, then creates publish\package\ComParta_<version>_x64.msix,
 #                                 signed with a test certificate made on this PC
+#   .\build.ps1 Zip               builds and tests, then creates publish\ComParta-<version>-win-x64.zip: the
+#                                 Publish folder for people without the Store
 #   .\build.ps1 Build|Test|Check  see $actions below
 #   -SkipTests                    leaves the tests out of Publish and Check (never the license check)
 # Check, Publish and Package also check THIRD-PARTY-NOTICES.txt: every shipped package must have a
 # license ComParta can ship, and the committed file must match what ships (tools\ComParta.Notices).
 #   -Run                          starts the published ComParta.exe once Publish succeeds
-#   -Version 1.2.3                the package's version; CI passes the git tag's
+#   -Version 1.2.3                the version of the package, zip and About; CI passes the git tag's
 # Without a person at the keyboard (CI, piped input) it does Check instead of asking.
 param(
-    [ValidateSet('Publish', 'Package', 'Build', 'Test', 'Check')]
+    [ValidateSet('Publish', 'Package', 'Zip', 'Build', 'Test', 'Check')]
     [string]$Action,
     [string]$Version = '0.1.0',
     [switch]$SkipTests,
@@ -32,6 +34,7 @@ $packagePublisher = 'CN=ComParta'
 $actions = [ordered]@{
     Publish = 'Build and test, then create publish\ComParta, a folder to run here or copy to another PC'
     Package = 'Build and test, then create an MSIX package in publish\package, signed for testing'
+    Zip     = 'Build and test, then zip the publish\ComParta folder for people without the Store'
     Build   = 'Build the screen and the app, without running any tests'
     Test    = 'Run every test'
     Check   = 'Build and run every test (what CI does)'
@@ -105,10 +108,22 @@ function Assert-PublishFolderFree {
     if ($running) { throw "ComParta is running from $publishDir. Close it, then publish again." }
 }
 
+function Assert-Version {
+    if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "The version must look like 1.2.3, not $Version." }
+}
+
+# Publishes the app with $Version, which its csproj reads from COMPARTA_VERSION (see the comment there).
+function Invoke-VersionedStep([string]$Name, [scriptblock]$Step) {
+    $env:COMPARTA_VERSION = $Version
+    try { Invoke-Step $Name '.' $Step }
+    finally { Remove-Item Env:COMPARTA_VERSION -ErrorAction SilentlyContinue }
+}
+
 function Publish-App {
+    Assert-Version
     Assert-PublishFolderFree
     if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
-    Invoke-Step 'Publish' '.' {
+    Invoke-VersionedStep 'Publish' {
         dotnet publish src\ComParta.App\ComParta.App.csproj -c Release -f $framework -r win-x64 `
             --self-contained true -p:WindowsAppSDKSelfContained=true -o $publishDir --nologo -v minimal
     }
@@ -132,14 +147,19 @@ function Get-TestCertificate {
 }
 
 function Package-App {
-    if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "The version must look like 1.2.3, not $Version." }
+    Assert-Version
     $certificate = Get-TestCertificate
     if (Test-Path $packageDir) { Remove-Item $packageDir -Recurse -Force }
-    Invoke-Step 'Package' '.' {
+    # A build before this one (Check, Publish) leaves a package manifest with its own version, which
+    # the packaging reuses as it is; start from a clean one so the package carries $Version.
+    foreach ($folder in 'obj', 'bin') {
+        $old = Join-Path $root "src\ComParta.App\$folder\Release\$framework"
+        if (Test-Path $old) { Remove-Item $old -Recurse -Force }
+    }
+    Invoke-VersionedStep 'Package' {
         dotnet publish src\ComParta.App\ComParta.App.csproj -c Release -f $framework -r win-x64 --self-contained true `
             -p:WindowsPackageType=MSIX -p:WindowsAppSDKSelfContained=true -p:GenerateAppxPackageOnBuild=true `
             -p:AppxPackageSigningEnabled=true -p:PackageCertificateThumbprint=$($certificate.Thumbprint) `
-            -p:ApplicationDisplayVersion=$Version -p:ApplicationVersion=0 `
             "-p:AppxPackageDir=$packageDir\\" --nologo -v minimal
     }
     $package = Get-ChildItem $packageDir -Recurse -Filter *_x64.msix | Select-Object -First 1
@@ -148,6 +168,17 @@ function Package-App {
     Move-Item $package.FullName $target -Force
     Export-Certificate -Cert $certificate -FilePath (Join-Path $packageDir 'ComParta-test.cer') | Out-Null
     Write-Host "Ready: $target" -ForegroundColor Green
+}
+
+# The Publish folder as one zip, with the license and the third-party notices beside ComParta.exe.
+function Zip-App {
+    Copy-Item (Join-Path $root 'LICENSE') (Join-Path $publishDir 'LICENSE.txt')
+    $notices = Join-Path $root 'THIRD-PARTY-NOTICES.txt'
+    if (Test-Path $notices) { Copy-Item $notices $publishDir -Force }
+    $zip = Join-Path $root "publish\ComParta-$Version-win-x64.zip"
+    if (Test-Path $zip) { Remove-Item $zip -Force }
+    Compress-Archive -Path (Join-Path $publishDir '*') -DestinationPath $zip
+    Write-Host "Ready: $zip" -ForegroundColor Green
 }
 
 function Select-Action {
@@ -189,6 +220,14 @@ switch ($Action) {
         Test-Notices
         if (-not $SkipTests) { Test-App }
         Package-App
+    }
+    'Zip' {
+        Assert-PublishFolderFree
+        if (-not $SkipTests) { Test-Ui }
+        Build-Ui
+        if (-not $SkipTests) { Test-App }
+        Publish-App
+        Zip-App
     }
     'Build' { Build-Ui; Build-App }
     'Test' { Test-Ui; Test-App }
