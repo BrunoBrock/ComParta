@@ -70,8 +70,8 @@ $saved = @{}
 $environment = @{
     # Data under a test folder, never the runner's own (and side by side with any other copy).
     COMPARTA_HOME                         = $home_
-    # Lets this script reach the screen inside the app's web view.
-    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$port"
+    # Lets this script reach the screen inside the app's web view (MainPage.OpenScreenForChecks).
+    COMPARTA_SCREEN_CHECK_PORT            = "$port"
     # Points away from the .NET installed on the runner, as on a PC without it.
     DOTNET_ROOT                           = (Join-Path $work 'no-dotnet')
     DOTNET_ROOT_X64                       = (Join-Path $work 'no-dotnet')
@@ -81,11 +81,6 @@ foreach ($name in $environment.Keys) {
     $saved[$name] = [Environment]::GetEnvironmentVariable($name)
     [Environment]::SetEnvironmentVariable($name, $environment[$name])
 }
-# The web view also takes its extra arguments from this policy, named after the app's exe; the
-# environment variable alone is not always read.
-$policy = 'HKCU:\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
-New-Item -Force $policy | Out-Null
-New-ItemProperty -Force -Path $policy -Name 'ComParta.exe' -Value "--remote-debugging-port=$port" | Out-Null
 
 $app = $null
 try {
@@ -144,5 +139,4 @@ catch {
 finally {
     if ($app -and -not $app.HasExited) { $app | Stop-Process -Force }
     foreach ($name in $saved.Keys) { [Environment]::SetEnvironmentVariable($name, $saved[$name]) }
-    Remove-ItemProperty -Path $policy -Name 'ComParta.exe' -ErrorAction SilentlyContinue
 }
