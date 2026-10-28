@@ -18,6 +18,181 @@ License: MIT
 Copyright: © Microsoft Corporation. All rights reserved.
 Project: https://docs.microsoft.com/dotnet/standard/data/sqlite/
 
+Microsoft.Extensions.Configuration 10.0.0
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://dot.net/
+
+Microsoft.Extensions.Configuration.Abstractions 10.0.0
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://dot.net/
+
+Microsoft.Extensions.DependencyInjection 10.0.0
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://dot.net/
+
+Microsoft.Extensions.DependencyInjection.Abstractions 10.0.0
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://dot.net/
+
+Microsoft.Extensions.Diagnostics.Abstractions 10.0.0
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://dot.net/
+
+Microsoft.Extensions.FileProviders.Abstractions 10.0.0
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://dot.net/
+
+Microsoft.Extensions.Hosting.Abstractions 10.0.0
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://dot.net/
+
+Microsoft.Extensions.Logging 10.0.0
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://dot.net/
+
+Microsoft.Extensions.Logging.Abstractions 10.0.0
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://dot.net/
+
+Microsoft.Extensions.Options 10.0.0
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://dot.net/
+
+Microsoft.Extensions.Primitives 10.0.0
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://dot.net/
+
+Microsoft.Graphics.Win2D 1.4.0
+License: LicenseRef-Microsoft-Win2D (Microsoft software license terms for Win2D)
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: http://go.microsoft.com/fwlink/?LinkID=519078
+
+Microsoft.IO.RecyclableMemoryStream 3.0.1
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/Microsoft/Microsoft.IO.RecyclableMemoryStream
+
+Microsoft.Maui.Controls 10.0.110
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/dotnet/maui
+
+Microsoft.Maui.Controls.Build.Tasks 10.0.110
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/dotnet/maui
+
+Microsoft.Maui.Controls.Core 10.0.110
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/dotnet/maui
+
+Microsoft.Maui.Controls.Xaml 10.0.110
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/dotnet/maui
+
+Microsoft.Maui.Core 10.0.110
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/dotnet/maui
+
+Microsoft.Maui.Essentials 10.0.110
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/dotnet/maui
+
+Microsoft.Maui.Graphics 10.0.110
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/dotnet/maui
+
+Microsoft.Maui.Graphics.Win2D.WinUI.Desktop 10.0.110
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/dotnet/maui
+
+Microsoft.Maui.Resizetizer 10.0.110
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/dotnet/maui
+
+Microsoft.Web.WebView2 1.0.3179.45
+License: LicenseRef-Microsoft-WebView2-SDK (BSD-style terms in the package's LICENSE.txt)
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://aka.ms/webview
+
+Microsoft.Windows.SDK.BuildTools 10.0.26100.8249
+License: LicenseRef-Microsoft-Windows-SDK (Microsoft Windows SDK license terms)
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://aka.ms/WinSDKProjectURL
+
+Microsoft.Windows.SDK.BuildTools.MSIX 1.7.20250829.1
+License: LicenseRef-Microsoft-Windows-SDK (Microsoft Windows SDK license terms)
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://aka.ms/WinSDKProjectURL
+
+Microsoft.WindowsAppSDK 1.8.260529003
+License: LicenseRef-Microsoft-WindowsAppSDK (Microsoft software license terms for the Windows App SDK)
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/microsoft/windowsappsdk
+
+Microsoft.WindowsAppSDK.AI 1.8.76
+License: LicenseRef-Microsoft-WindowsAppSDK (Microsoft software license terms for the Windows App SDK)
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/microsoft/windowsappsdk
+
+Microsoft.WindowsAppSDK.Base 1.8.251216001
+License: LicenseRef-Microsoft-WindowsAppSDK (Microsoft software license terms for the Windows App SDK)
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/microsoft/windowsappsdk
+
+Microsoft.WindowsAppSDK.DWrite 1.8.25122902
+License: LicenseRef-Microsoft-WindowsAppSDK (Microsoft software license terms for the Windows App SDK)
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://aka.ms/WindowsAppSDK
+
+Microsoft.WindowsAppSDK.Foundation 1.8.260527000
+License: LicenseRef-Microsoft-WindowsAppSDK (Microsoft software license terms for the Windows App SDK)
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://aka.ms/windowsappsdk
+
+Microsoft.WindowsAppSDK.InteractiveExperiences 1.8.260525001
+License: LicenseRef-Microsoft-WindowsAppSDK (Microsoft software license terms for the Windows App SDK)
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://aka.ms/windowsappsdk
+
+Microsoft.WindowsAppSDK.ML 1.8.2197
+License: LicenseRef-Microsoft-WindowsAppSDK (Microsoft software license terms for the Windows App SDK)
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/microsoft/windowsappsdk
+
+Microsoft.WindowsAppSDK.Runtime 1.8.260529003
+License: LicenseRef-Microsoft-WindowsAppSDK (Microsoft software license terms for the Windows App SDK)
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/microsoft/windowsappsdk
+
+Microsoft.WindowsAppSDK.Widgets 1.8.251231004
+License: LicenseRef-Microsoft-WindowsAppSDK (Microsoft software license terms for the Windows App SDK)
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/microsoft/windowsappsdk
+
+Microsoft.WindowsAppSDK.WinUI 1.8.260528001
+License: LicenseRef-Microsoft-WindowsAppSDK (Microsoft software license terms for the Windows App SDK)
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://github.com/microsoft/windowsappsdk
+
 Mono.Nat 3.0.4
 License: MIT
 Copyright: Alan McGovern, Ben Motmans, Nicholas Terry
@@ -52,6 +227,11 @@ SQLitePCLRaw.provider.e_sqlite3 2.1.13
 License: Apache-2.0
 Copyright: Copyright 2014-2024 SourceGear, LLC
 Project: https://github.com/ericsink/SQLitePCL.raw
+
+System.Numerics.Tensors 9.0.0
+License: MIT
+Copyright: © Microsoft Corporation. All rights reserved.
+Project: https://dot.net/
 
 Parts in the screen (npm)
 -------------------------
