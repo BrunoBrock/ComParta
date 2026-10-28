@@ -311,6 +311,7 @@ export interface Commands {
   "app.leave": { args: undefined; result: null };
   "media.open": { args: MediaArgs; result: MediaDto };
   "support.report": { args: undefined; result: string };
+  "about.notices": { args: undefined; result: string };
 }
 
 export interface Events {

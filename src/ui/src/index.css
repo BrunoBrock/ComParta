@@ -975,6 +975,19 @@ dialog.help {
   white-space: pre-wrap;
 }
 
+/* The licenses of the parts ComParta uses: long legal text that scrolls on its own (epic 5 story 1). */
+.notices-text {
+  max-height: 60vh;
+  margin: 0;
+  padding: var(--space);
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-bg);
+  font-size: var(--text-sm);
+  white-space: pre-wrap;
+}
+
 /* The floating ＋ appears only on narrow windows (UX design, Phone). */
 .fab {
   display: none;

@@ -49,6 +49,8 @@
 		<MauiFont Include="Resources\Fonts\*" />
 		<!-- Resources\Raw\wwwroot is the build output of src/ui (see build.ps1). -->
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+		<!-- The licenses of the parts ComParta uses, shown in Settings, About (made by tools/ComParta.Notices). -->
+		<MauiAsset Include="..\..\THIRD-PARTY-NOTICES.txt" LogicalName="THIRD-PARTY-NOTICES.txt" />
 	</ItemGroup>
 
 	<ItemGroup>

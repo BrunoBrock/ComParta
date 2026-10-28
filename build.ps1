@@ -5,7 +5,9 @@
 #   .\build.ps1 Package           builds and tests, then creates publish\package\ComParta_<version>_x64.msix,
 #                                 signed with a test certificate made on this PC
 #   .\build.ps1 Build|Test|Check  see $actions below
-#   -SkipTests                    leaves the tests out of Publish and Check
+#   -SkipTests                    leaves the tests out of Publish and Check (never the license check)
+# Check, Publish and Package also check THIRD-PARTY-NOTICES.txt: every shipped package must have a
+# license ComParta can ship, and the committed file must match what ships (tools\ComParta.Notices).
 #   -Run                          starts the published ComParta.exe once Publish succeeds
 #   -Version 1.2.3                the package's version; CI passes the git tag's
 # Without a person at the keyboard (CI, piped input) it does Check instead of asking.
@@ -88,6 +90,14 @@ function Build-App { Invoke-Step 'Build app' '.' { dotnet build ComParta.sln -c 
 
 function Test-App { Invoke-Step 'C# tests' '.' { dotnet test ComParta.sln -c Release --nologo -v minimal } }
 
+# Fails when a shipped package has no license or one ComParta cannot ship, or when the committed
+# THIRD-PARTY-NOTICES.txt is out of date; the fresh file is then left in publish\ to commit. Not left
+# out by -SkipTests: it is a license gate, not a test. Needs the screen's packages (Build-Ui) first.
+function Test-Notices {
+    Invoke-Step 'Restore' '.' { dotnet restore ComParta.sln --nologo -v minimal }
+    Invoke-Step 'Third-party notices' '.' { dotnet run --project tools\ComParta.Notices -c Release -- $root --check }
+}
+
 # Windows will not let the publish folder be replaced while the app is running from it.
 function Assert-PublishFolderFree {
     $running = Get-Process ComParta -ErrorAction SilentlyContinue |
@@ -169,12 +179,14 @@ switch ($Action) {
         Assert-PublishFolderFree   # before the tests, so a locked folder does not cost minutes first
         if (-not $SkipTests) { Test-Ui }
         Build-Ui
+        Test-Notices
         if (-not $SkipTests) { Test-App }
         Publish-App   # builds the app itself, so there is no separate Build-App here
     }
     'Package' {
         if (-not $SkipTests) { Test-Ui }
         Build-Ui
+        Test-Notices
         if (-not $SkipTests) { Test-App }
         Package-App
     }
@@ -184,6 +196,7 @@ switch ($Action) {
         if (-not $SkipTests) { Test-Ui }
         Build-Ui
         Build-App
+        Test-Notices
         if (-not $SkipTests) { Test-App }
     }
 }

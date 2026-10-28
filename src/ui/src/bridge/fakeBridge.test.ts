@@ -156,3 +156,15 @@ describe('the fake bridge: opening a file inside the app', () => {
     })
   })
 })
+
+describe('the fake bridge: About', () => {
+  it('about.notices answers with each part and its license, as the app does', async () => {
+    const result = await createFakeBridge().invoke('about.notices')
+
+    if (!result.ok) throw new Error('about.notices failed')
+    // The same two lines per part the wiring test checks in the app's real answer.
+    expect(result.value).toMatch(/^MonoTorrent \S+\nLicense: MIT$/m)
+    expect(result.value).toMatch(/^react \S+\nLicense: MIT$/m)
+    expect(result.value).toMatch(/^lucide-react \S+\nLicense: ISC$/m)
+  })
+})
