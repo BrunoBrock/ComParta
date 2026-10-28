@@ -1,7 +1,7 @@
 ---
 title: "Windows marks and checks every received file"
 ticket: 3
-status: in-progress
+status: done
 ---
 
 # Windows marks and checks every received file
