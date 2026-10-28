@@ -30,6 +30,14 @@ jobs:
         shell: pwsh
         run: ./build.ps1 Check
 
+      # When the committed THIRD-PARTY-NOTICES.txt is out of date, the right one from this Windows build.
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: third-party-notices
+          path: publish/THIRD-PARTY-NOTICES.txt
+          if-no-files-found: ignore
+
   # The MSIX package (epic 5 story 2), signed with a test certificate, installed and started on the runner.
   package:
     runs-on: windows-latest
