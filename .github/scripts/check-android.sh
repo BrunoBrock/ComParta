@@ -63,12 +63,10 @@ link='magnet:?xt=urn:btih:c12fe1c06bba254a9dc9f519b335aa7c1367a88a&dn=Natal.mp4&
 adb shell "am start -W -a android.intent.action.VIEW -d '$link' $package"
 wait_for "Asked: Get this file?" 60 1 || status=1
 adb exec-out screencap -p > "$folder/android-link-tapped.png" || true
-adb shell input keyevent 4
-sleep 2
+# The confirmation stays open: a back press that lands before it shows would leave the app, which
+# ends it when nothing is shared (AD-14). A new link replaces what the confirmation asks.
 adb shell "am start -W -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT 'Oi! Here is the video: $link see you' $package"
 wait_for "Asked: Get this file?" 60 2 || status=1
-adb shell input keyevent 4
-sleep 2
 adb shell "am start -W -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT 'See you on Sunday' $package"
 wait_for "Said: invite.notInMessage" 60 || status=1
 starts=$(seen "ComParta started")
