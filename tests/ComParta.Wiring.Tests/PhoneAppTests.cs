@@ -216,7 +216,12 @@ public sealed class PhoneAppTests : IAsyncLifetime
     {
         var said = _presence.MovingSoFar().TakeLast(5).Select(notice => notice is null ? "nothing" : $"{notice.Title} ({notice.Percent})");
         var transfers = await ClickAsync(Commands.TransfersList);
-        return $"The phone's notification never showed what was expected. It said: {string.Join("; ", said)}. Transfers: {transfers}";
+        var seen = _events.Where(e => e.GetProperty("event").GetString() == Events.TransfersChanged)
+            .SelectMany(e => e.GetProperty("payload").EnumerateArray())
+            .Select(t => $"{t.GetProperty("state").GetString()} {t.GetProperty("receivedBytes").GetInt64()}")
+            .Distinct();
+        return $"The phone's notification never showed what was expected. It said: {string.Join("; ", said)}. "
+            + $"Transfers: {transfers}. The screen showed: {string.Join(", ", seen)}";
     }
 
     private static string Checksum(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
