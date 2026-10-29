@@ -149,6 +149,7 @@ if [ -s "$computer/invite.txt" ]; then
     status=1
   fi
   adb shell input keyevent 224
+  adb shell wm dismiss-keyguard || true
 
   # Nothing moves once the computer stops sharing; a minute later the service is gone.
   kill "$sender" 2> /dev/null || true

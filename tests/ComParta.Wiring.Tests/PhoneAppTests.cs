@@ -186,6 +186,19 @@ public sealed class PhoneAppTests : IAsyncLifetime
         return id;
     }
 
+    /// <summary>Waits until the notification has said this, at any point so far: a fast file may arrive between two looks.</summary>
+    private async Task<MovingNotice> NotificationShowedAsync(Func<MovingNotice, bool> showed)
+    {
+        var until = DateTime.UtcNow + Timeout;
+        while (DateTime.UtcNow < until)
+        {
+            if (_presence.Moving.ToArray().OfType<MovingNotice>().FirstOrDefault(showed) is { } shown)
+                return shown;
+            await Task.Delay(50);
+        }
+        throw new TimeoutException("The phone's notification never showed what was expected.");
+    }
+
     private async Task<MovingNotice?> NotificationShowsAsync(Func<MovingNotice?, bool> shows)
     {
         var until = DateTime.UtcNow + Timeout;
@@ -253,8 +266,8 @@ public sealed class PhoneAppTests : IAsyncLifetime
         var (asked, _) = await ScreenAsksAsync();
         var id = await StartReceivingAsync(asked, computer);
 
-        var moving = await NotificationShowsAsync(notice => notice is { Percent: > 0 and < 100 });
-        Assert.Matches(@"^Recebendo “Natal\.mp4”: \d+ %$", moving!.Title);
+        var moving = await NotificationShowedAsync(notice => notice is { Percent: > 0 and < 100 });
+        Assert.Matches(@"^Recebendo “Natal\.mp4”: \d+ %$", moving.Title);
         Assert.Equal("Parar", moving.Stop);
         await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
             t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
@@ -273,7 +286,7 @@ public sealed class PhoneAppTests : IAsyncLifetime
         _opened.Open([invite]);
         var (asked, _) = await ScreenAsksAsync();
         var id = await StartReceivingAsync(asked, computer);
-        await NotificationShowsAsync(notice => notice is { Percent: > 0 });
+        await NotificationShowedAsync(notice => notice is { Percent: > 0 });
 
         // What the service runs when Stop is pressed on the notification.
         await _background.StopFromNoticeAsync();
@@ -293,11 +306,11 @@ public sealed class PhoneAppTests : IAsyncLifetime
     [Fact]
     public async Task When_the_phone_allows_no_more_time_the_file_pauses_and_continues_when_the_app_opens()
     {
-        var (computer, invite, bytes) = await ComputerSharesAsync("Natal.mp4", 1_500_000, bytesPerSecond: 300_000);
+        var (computer, invite, bytes) = await ComputerSharesAsync("Natal.mp4", 3_000_000, bytesPerSecond: 200_000);
         _opened.Open([invite]);
         var (asked, _) = await ScreenAsksAsync();
         var id = await StartReceivingAsync(asked, computer);
-        await NotificationShowsAsync(notice => notice is { Percent: > 0 });
+        await NotificationShowedAsync(notice => notice is { Percent: > 0 });
 
         // What the service runs when Android says the time is up.
         await _background.TimedOutAsync();

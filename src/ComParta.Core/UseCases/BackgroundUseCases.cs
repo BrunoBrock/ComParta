@@ -33,6 +33,7 @@ public sealed class BackgroundUseCases
     private readonly ActivityUseCases? _activity;
     private readonly TimeProvider _clock;
     private readonly object _lock = new();
+    private readonly object _showing = new();
     private DateTimeOffset? _lastMoved;
     private bool _awake;
     private bool _explained;
@@ -254,19 +255,25 @@ public sealed class BackgroundUseCases
         return new MovingNotice(title, Text("notify.moving.body"), percent, Text("notify.moving.stop"), why, whyOk);
     }
 
+    /// <summary>
+    /// Changes arrive from several threads; one at a time, so an older notice never replaces a newer one.
+    /// </summary>
     private void ShowMoving()
     {
-        MovingNotice? notice;
-        try { notice = Notice(); }
-        catch (Exception) { return; }
-        lock (_lock)
+        lock (_showing)
         {
-            if (notice == _shown)
-                return;
-            _shown = notice;
+            MovingNotice? notice;
+            try { notice = Notice(); }
+            catch (Exception) { return; }
+            lock (_lock)
+            {
+                if (notice == _shown)
+                    return;
+                _shown = notice;
+            }
+            try { _presence.ShowMoving(notice); }
+            catch (Exception) { /* the transfer continues while the screen is on */ }
         }
-        try { _presence.ShowMoving(notice); }
-        catch (Exception) { /* the transfer continues while the screen is on */ }
     }
 
     private void OnActivityChanged()

@@ -94,7 +94,7 @@ public sealed class MovingService : Service
 	}
 
 	/// <summary>Android 15 and later: the six hours a data sync service may run are up.</summary>
-	public override void OnTimeout(int startId, int fgsType) => TimeUp();
+	public override void OnTimeout(int startId, ForegroundService fgsType) => TimeUp();
 
 	private void TimeUp()
 	{
