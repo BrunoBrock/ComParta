@@ -276,7 +276,7 @@ public sealed class PhoneAppTests : IAsyncLifetime
     [Fact]
     public async Task While_a_file_arrives_the_notification_names_it_with_its_progress_and_goes_a_minute_after_it_arrived()
     {
-        var (computer, invite, bytes) = await ComputerSharesAsync("Natal.mp4", 1_500_000, bytesPerSecond: 300_000);
+        var (computer, invite, bytes) = await ComputerSharesAsync("Natal.mp4", 3_000_000, bytesPerSecond: 200_000);
         Assert.Empty(_presence.Moving);
 
         _opened.Open([invite]);
