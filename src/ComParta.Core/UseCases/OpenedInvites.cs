@@ -12,6 +12,7 @@ public sealed class OpenedInvites(Func<string, string?>? findLink = null, IReadO
     private readonly object _lock = new();
     private string? _pending;
     private string? _pendingFile;
+    private bool _noInvite;
 
     /// <summary>Raised when an invite is waiting.</summary>
     public event Action? Opened;
@@ -43,9 +44,40 @@ public sealed class OpenedInvites(Func<string, string?>? findLink = null, IReadO
         {
             _pending = link;
             _pendingFile = file;
+            _noInvite = false;
         }
         Opened?.Invoke();
         return true;
+    }
+
+    /// <summary>
+    /// A whole message another app handed over, such as a chat message shared to ComParta from a
+    /// phone's Share menu (epic 7 story 6). Its invite or download link waits like a clicked one; a
+    /// message with neither waits too, so the screen can say so instead of doing nothing.
+    /// </summary>
+    public bool OpenMessage(string? text)
+    {
+        if (text is not null && Open([text]))
+            return true;
+        lock (_lock)
+        {
+            _pending = null;
+            _pendingFile = null;
+            _noInvite = true;
+        }
+        Opened?.Invoke();
+        return false;
+    }
+
+    /// <summary>True, once, when the last message handed over had no invite in it.</summary>
+    public bool TakeNoInvite()
+    {
+        lock (_lock)
+        {
+            var none = _noInvite;
+            _noInvite = false;
+            return none;
+        }
     }
 
     private string? FindEngineLink(string argument)

@@ -82,6 +82,8 @@ public static class ErrorCodes
     public const string ShareNotReady = "share.notReady";
     public const string FileUnreadable = "file.unreadable";
     public const string InviteInvalid = "invite.invalid";
+    /// <summary>A message shared to the app from another app has no invite or download link in it.</summary>
+    public const string InviteNotInMessage = "invite.notInMessage";
     public const string TransferDuplicate = "transfer.duplicate";
     public const string TransferNotFound = "transfer.notFound";
     public const string TransferFinished = "transfer.finished";
@@ -105,7 +107,7 @@ public static class ErrorCodes
     public static IReadOnlyList<string> All { get; } =
     [
         ShareDuplicate, ShareNotFound, ShareNotReady, FileUnreadable,
-        InviteInvalid, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, DiskFull, SettingsInvalid,
+        InviteInvalid, InviteNotInMessage, TransferDuplicate, TransferNotFound, TransferFinished, DownloadInvalidFile, DiskFull, SettingsInvalid,
         ReceivedNotFound, ReceivedOpenFailed, ReceivedConfirmRisky, ShareDropFailed, FileSaveFailed, MediaNotPlayable,
         ShareFolderEmpty, ShareFolderTooLarge, ShareNameInvalid, TransferNoFiles, ReceivedFolderUnusable, ReceivedFolderMissing,
         Unexpected,
