@@ -132,6 +132,8 @@ export interface FakeBridge extends Bridge {
   quitFromIcon(): void
   /** An invite link clicked outside the app, as the app reports it. */
   openInvite(text: string): void
+  /** A whole message shared to the app from another app's Share menu (epic 7 story 6). */
+  openMessage(text: string): void
   /** A download file opened in Windows, as the app reports it; 'invalid' is a file that is not one. */
   openDownloadFile(file: PickedFile | 'invalid'): void
   /** Ids of downloads that arrived and are no longer shared, as the app tells under More options. */
@@ -394,6 +396,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   }
 
   let openedInvite: string | null = null
+  let openedMessageWithoutInvite = false
   let openedFile: PickedFile | 'invalid' | null = null
   // The download file read for "Get this file?", waiting for the person to agree.
   let heldFile: PickedFile | null = null
@@ -959,6 +962,10 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     },
 
     'invites.takeOpened': () => {
+      if (openedMessageWithoutInvite) {
+        openedMessageWithoutInvite = false
+        return fail('invite.notInMessage')
+      }
       const taken = openedInvite
       openedInvite = null
       return ok(taken)
@@ -1020,6 +1027,16 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
     openInvite(text: string) {
       openedInvite = text
       openedFile = null
+      emit({ event: 'invites.changed', payload: true })
+    },
+
+    // A message shared to the app from another app, as the router reads it: its invite or download
+    // link waits like a clicked one, and a message with neither is answered with invite.notInMessage.
+    openMessage(text: string) {
+      const link = oldInvitePattern.exec(text)?.[0] ?? invitePattern.exec(text)?.[0] ?? null
+      openedInvite = link
+      openedFile = null
+      openedMessageWithoutInvite = link === null
       emit({ event: 'invites.changed', payload: true })
     },
 

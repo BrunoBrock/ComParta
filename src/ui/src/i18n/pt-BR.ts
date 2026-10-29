@@ -397,6 +397,8 @@ export const ptBR: Catalog = {
     'O ComParta não conseguiu ler este arquivo. Veja se ele não está vazio ou aberto em outro programa e tente de novo.',
   'error.invite.invalid':
     'Isso não é um convite ou link de download que o ComParta consiga usar. Copie o texto inteiro da mensagem ou do site e cole de novo.',
+  'error.invite.notInMessage':
+    'Não há convite nesta mensagem. Peça para a outra pessoa enviar o convite de novo e compartilhe essa mensagem com o ComParta.',
   'error.transfer.duplicate': 'Você já está recebendo este arquivo.',
   'error.transfer.finished': 'Este arquivo já chegou, então não há o que pausar.',
   'error.disk.full': 'Não há espaço neste computador para este arquivo. Libere algum espaço e tente de novo.',

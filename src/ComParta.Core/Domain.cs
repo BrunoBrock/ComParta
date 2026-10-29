@@ -310,6 +310,8 @@ public enum ErrorKind
     ShareNotReady,
     FileUnreadable,
     InviteInvalid,
+    /// <summary>A message shared from another app has no invite or download link in it.</summary>
+    InviteNotInMessage,
     TransferDuplicate,
     TransferNotFound,
     DownloadFileInvalid,

@@ -97,4 +97,76 @@ public sealed class OpenedInvitesTests
         Assert.Null(opened.TakeFile());
         Assert.Equal("engine:?other", opened.Take());
     }
+
+    /// <summary>Stands for the engine's own link, which invites are now (AD-16, amended).</summary>
+    private const string EngineLink = "link:?id=0123456789abcdef&dn=Natal.mp4";
+
+    /// <summary>As the app makes it: the engine's own rule for its links.</summary>
+    private static OpenedInvites Phone() =>
+        new(text => System.Text.RegularExpressions.Regex.Match(text, @"link:\?\S+") is { Success: true } found ? found.Value : null);
+
+    [Theory]
+    [InlineData("Oi vó! O vídeo do Natal: {0} beijos")]
+    [InlineData("{0}")]
+    [InlineData("\n\n  >> {0} <<\n— enviado do meu celular")]
+    public void A_shared_message_with_a_ComParta_link_opens_it(string message)
+    {
+        var opened = Phone();
+
+        Assert.True(opened.OpenMessage(string.Format(message, Link)));
+
+        Assert.False(opened.TakeNoInvite());
+        Assert.Equal(Link, opened.Take());
+    }
+
+    [Fact]
+    public void A_shared_message_with_a_standard_link_opens_it()
+    {
+        var opened = Phone();
+
+        Assert.True(opened.OpenMessage($"Here it is: {EngineLink} (tap it)"));
+
+        Assert.Equal(EngineLink, opened.Take());
+    }
+
+    [Fact]
+    public void A_shared_message_with_both_links_opens_the_ComParta_one()
+    {
+        var opened = Phone();
+
+        Assert.True(opened.OpenMessage($"{EngineLink}\n{Link}"));
+
+        Assert.Equal(Link, opened.Take());
+    }
+
+    [Theory]
+    [InlineData("See you on Sunday!")]
+    [InlineData("https://example.com/video.mp4")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void A_shared_message_without_an_invite_says_so_once(string? message)
+    {
+        var opened = Phone();
+        var raised = 0;
+        opened.Opened += () => raised++;
+
+        Assert.False(opened.OpenMessage(message));
+
+        Assert.Equal(1, raised);
+        Assert.Null(opened.Take());
+        Assert.True(opened.TakeNoInvite());
+        Assert.False(opened.TakeNoInvite());
+    }
+
+    [Fact]
+    public void A_link_tapped_after_a_message_without_one_opens_normally()
+    {
+        var opened = Phone();
+        opened.OpenMessage("nothing here");
+
+        Assert.True(opened.Open([Link]));
+
+        Assert.False(opened.TakeNoInvite());
+        Assert.Equal(Link, opened.Take());
+    }
 }

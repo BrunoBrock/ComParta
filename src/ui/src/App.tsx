@@ -301,6 +301,8 @@ export default function App({ bridge }: AppProps) {
     let active = true
     const take = async () => {
       const result = await bridge.invoke('invites.takeOpened')
+      // A message shared from another app with no invite in it says so (epic 7 story 6).
+      if (active && !result.ok) showError(result.error.code)
       if (active && result.ok && result.value) await confirmReceiving(result.value, false)
       // A download file opened in Windows waits in the app; only what it holds comes here (epic 14 story 5).
       const file = await bridge.invoke('transfers.takeOpenedFile')

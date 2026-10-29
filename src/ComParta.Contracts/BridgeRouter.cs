@@ -343,7 +343,10 @@ public sealed class BridgeRouter
                 return CommandResult.Success(null);
 
             case Commands.InvitesTakeOpened:
-                return CommandResult.Success(_opened.Take());
+                // A message shared from another app with no invite in it is said plainly (epic 7 story 6).
+                return _opened.TakeNoInvite()
+                    ? Failure(ErrorKind.InviteNotInMessage)
+                    : CommandResult.Success(_opened.Take());
 
             case Commands.ActivityGet:
                 return CommandResult.Success(ToDto(_activity.Current()));
@@ -581,6 +584,7 @@ public sealed class BridgeRouter
         ErrorKind.ShareNotReady => ErrorCodes.ShareNotReady,
         ErrorKind.FileUnreadable => ErrorCodes.FileUnreadable,
         ErrorKind.InviteInvalid => ErrorCodes.InviteInvalid,
+        ErrorKind.InviteNotInMessage => ErrorCodes.InviteNotInMessage,
         ErrorKind.TransferDuplicate => ErrorCodes.TransferDuplicate,
         ErrorKind.TransferNotFound => ErrorCodes.TransferNotFound,
         ErrorKind.TransferFinished => ErrorCodes.TransferFinished,
