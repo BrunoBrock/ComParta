@@ -69,7 +69,12 @@ public sealed class AndroidOpener : Ports.IContentOpener
 	/// <summary>A phone has no way to point at one file in a folder; the folder it is in is shown.</summary>
 	public Task RevealAsync(string path, CancellationToken ct = default) => ShowFolderAsync();
 
-	/// <summary>The Files app at Downloads/ComParta, or the phone's list of downloads where it cannot go there.</summary>
+	/// <summary>
+	/// The Files app at Downloads/ComParta, or the phone's list of downloads where it cannot go there.
+	/// The folder is handed over without lending a read permission: the app holds none to lend for
+	/// the phone's own storage (the phone refuses the whole request when it is asked to), and the
+	/// Files app needs none.
+	/// </summary>
 	private static Task ShowFolderAsync() => MainThread.InvokeOnMainThreadAsync(() =>
 	{
 		var context = Android.App.Application.Context;
@@ -78,13 +83,14 @@ public sealed class AndroidOpener : Ports.IContentOpener
 			var folder = DocumentsContract.BuildDocumentUri("com.android.externalstorage.documents", "primary:Download/ComParta");
 			var intent = new Intent(Intent.ActionView);
 			intent.SetDataAndType(folder, DocumentsContract.Document.MimeTypeDir);
-			intent.AddFlags(ActivityFlags.NewTask | ActivityFlags.GrantReadUriPermission);
+			intent.AddFlags(ActivityFlags.NewTask);
 			context.StartActivity(intent);
 		}
-		catch (ActivityNotFoundException)
+		catch (Java.Lang.Exception first)
 		{
+			Android.Util.Log.Warn("ComParta", $"The Files app did not open at the folder ({first.GetType().Name}); showing the downloads list.");
 			try { context.StartActivity(new Intent(DownloadManager.ActionViewDownloads).AddFlags(ActivityFlags.NewTask)); }
-			catch (ActivityNotFoundException) { /* nothing on this phone lists files */ }
+			catch (Java.Lang.Exception) { /* nothing on this phone lists files */ }
 		}
 	});
 
