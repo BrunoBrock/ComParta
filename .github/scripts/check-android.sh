@@ -66,24 +66,6 @@ fi
 
 adb exec-out screencap -p > "$folder/android-first-screen.png" || true
 
-# Story 6: an invite tapped in an email, and a chat message shared to ComParta from WhatsApp, open
-# "Get this file?" in the running app; a message without an invite is answered plainly. Nothing
-# starts a second copy of the engine.
-link='magnet:?xt=urn:btih:c12fe1c06bba254a9dc9f519b335aa7c1367a88a&dn=Natal.mp4&xl=1048576'
-adb shell "am start -W -a android.intent.action.VIEW -d '$link' $package"
-wait_for "Asked: Get this file?" 60 1 || status=1
-adb exec-out screencap -p > "$folder/android-link-tapped.png" || true
-# The confirmation stays open: a back press that lands before it shows would leave the app, which
-# ends it when nothing is shared (AD-14). A new link replaces what the confirmation asks.
-adb shell "am start -W -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT 'Oi! Here is the video: $link see you' $package"
-wait_for "Asked: Get this file?" 60 2 || status=1
-adb shell "am start -W -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT 'See you on Sunday' $package"
-wait_for "Said: invite.notInMessage" 60 || status=1
-starts=$(seen "ComParta started")
-if [ "$starts" -ne 1 ]; then
-  echo "ComParta started $starts times after links were opened."
-  status=1
-fi
 
 # Taps a button on the screen by its words, found in the screen's description the phone gives.
 tap_on() {
@@ -111,8 +93,9 @@ sent() {
   cat "$computer/sent.txt" 2> /dev/null || echo 0
 }
 
-# Story 7: a file from the computer keeps arriving with the screen off, the service that keeps it
-# going runs with its notification, and it stops a minute after the bytes stop.
+# Story 7, first, while no other confirmation is open: a file from the computer keeps arriving with
+# the screen off, the service that keeps it going runs with its notification, and it stops a minute
+# after the bytes stop.
 adb shell pm grant "$package" android.permission.POST_NOTIFICATIONS || true
 for _ in $(seq 300); do
   [ -s "$computer/invite.txt" ] && break
@@ -124,7 +107,14 @@ if [ -s "$computer/invite.txt" ]; then
   adb shell "am start -W -a android.intent.action.VIEW -d '$invite' $package"
   wait_for "Asked: Get this file?" 60 $((asked + 1)) || status=1
   tap_on "Get the file" || status=1
-  wait_for "Keeping going with the screen off" 120 || status=1
+  wait_for "Receiving started" 30 || status=1
+  if ! wait_for "Keeping going with the screen off" 120; then
+    status=1
+    echo "What the app said:"
+    adb logcat -d -s ComParta:I | tail -n 30 || true
+    echo "What the computer said:"
+    tail -n 20 "$folder/computer-log.txt" || true
+  fi
   adb shell cmd statusbar expand-notifications || true
   sleep 2
   adb exec-out screencap -p > "$folder/android-moving.png" || true
@@ -157,6 +147,27 @@ if [ -s "$computer/invite.txt" ]; then
 else
   echo "The computer never shared its file:"
   cat "$folder/computer-log.txt" || true
+  status=1
+fi
+
+
+# Story 6: an invite tapped in an email, and a chat message shared to ComParta from WhatsApp, open
+# "Get this file?" in the running app; a message without an invite is answered plainly. Nothing
+# starts a second copy of the engine.
+asked=$(seen "Asked: Get this file?")
+link='magnet:?xt=urn:btih:c12fe1c06bba254a9dc9f519b335aa7c1367a88a&dn=Natal.mp4&xl=1048576'
+adb shell "am start -W -a android.intent.action.VIEW -d '$link' $package"
+wait_for "Asked: Get this file?" 60 $((asked + 1)) || status=1
+adb exec-out screencap -p > "$folder/android-link-tapped.png" || true
+# The confirmation stays open: a back press that lands before it shows would leave the app, which
+# ends it when nothing is shared (AD-14). A new link replaces what the confirmation asks.
+adb shell "am start -W -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT 'Oi! Here is the video: $link see you' $package"
+wait_for "Asked: Get this file?" 60 $((asked + 2)) || status=1
+adb shell "am start -W -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT 'See you on Sunday' $package"
+wait_for "Said: invite.notInMessage" 60 || status=1
+starts=$(seen "ComParta started")
+if [ "$starts" -ne 1 ]; then
+  echo "ComParta started $starts times after links were opened."
   status=1
 fi
 
