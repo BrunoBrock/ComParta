@@ -18,7 +18,8 @@ namespace ComParta.Wiring.Tests;
 /// The phone app working with the rest of the phone (epic 7), through the app wired as on Android:
 /// what the phone hands the app (a tapped link, a shared message) goes where the Android activity
 /// hands it, and from there the screen's commands as JSON go through the real router, use cases,
-/// database and torrent engine to a file a computer offers.
+/// database and torrent engine to a file a computer offers. While bytes move, the phone's notification
+/// (the presence port the Android service shows) says how far they are and stops them.
 /// </summary>
 public sealed class PhoneAppTests : IAsyncLifetime
 {
@@ -35,6 +36,10 @@ public sealed class PhoneAppTests : IAsyncLifetime
     private FakePaths _paths = null!;
     private BridgeRouter _router = null!;
     private MonoTorrentTransferEngine _engine = null!;
+    private readonly FakePresence _presence = new();
+    // Real time for everything but how long the notification stays, so a test need not wait a minute.
+    private readonly ManualClock _clock = new(DateTimeOffset.UtcNow);
+    private BackgroundUseCases _background = null!;
 
     private sealed class NoClipboard : IClipboard
     {
@@ -67,7 +72,8 @@ public sealed class PhoneAppTests : IAsyncLifetime
         var thumbnails = new ThumbnailUseCases(shares, received, new FakeThumbnails());
         var sending = new SendingUseCases(engine, shares);
         var notifications = new NotificationUseCases(engine, transfers, shares, sending, settings, new FakeNotifier(), new FakeWindow());
-        var background = new BackgroundUseCases(engine, shares, transfers, sending, settings, store, notifications, new FakePresence());
+        var background = _background = new BackgroundUseCases(
+            engine, shares, transfers, sending, settings, store, notifications, _presence, _clock, activity);
         _router = new BridgeRouter(
             shares, transfers, settings, connection, _opened, activity, received, new NoClipboard(), opener, thumbnails,
             new DroppedFiles(), sending, notifications, background, new MediaUseCases(shares, received, _phone),
@@ -123,7 +129,8 @@ public sealed class PhoneAppTests : IAsyncLifetime
     }
 
     /// <summary>A computer shares a file and copies its invite; it stays running for the phone to get the file.</summary>
-    private async Task<(MonoTorrentTransferEngine Computer, string Invite, byte[] Bytes)> ComputerSharesAsync(string name, int size)
+    private async Task<(MonoTorrentTransferEngine Computer, string Invite, byte[] Bytes)> ComputerSharesAsync(
+        string name, int size, long? bytesPerSecond = null)
     {
         var originals = Path.Combine(_folder, "computer-files");
         Directory.CreateDirectory(originals);
@@ -133,6 +140,8 @@ public sealed class PhoneAppTests : IAsyncLifetime
         var computer = new MonoTorrentTransferEngine(new FakePaths(Path.Combine(_folder, "computer")));
         _engines.Add(computer);
         await computer.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        if (bytesPerSecond is { } slow)
+            await computer.SetSpeedLimitsAsync(null, slow);
         var offered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var shareId = ShareId.New();
         computer.OfferChanged += (changed, state) =>
@@ -160,14 +169,34 @@ public sealed class PhoneAppTests : IAsyncLifetime
     /// <summary>The person taps "Get it" on the confirmation; returns where the file arrived.</summary>
     private async Task<string> AcceptAsync(string invite, MonoTorrentTransferEngine computer, string name)
     {
+        var id = await StartReceivingAsync(invite, computer);
+        await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+        return Path.Combine(_paths.ReceivedRoot, name);
+    }
+
+    /// <summary>The tap on "Get it", and the phone reaching the computer; returns the transfer's id.</summary>
+    private async Task<string> StartReceivingAsync(string invite, MonoTorrentTransferEngine computer)
+    {
         // Nothing was received before the tap.
         Assert.Equal(0, (await ClickAsync(Commands.TransfersList)).GetArrayLength());
         var id = (await ClickAsync(Commands.TransfersReceive, new ReceiveArgs(invite))).GetProperty("id").GetString()!;
         Assert.True(TransferId.TryParse(id, out var transferId));
         await _engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, computer.ListenEndPoint!.Port));
-        await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
-            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
-        return Path.Combine(_paths.ReceivedRoot, name);
+        return id;
+    }
+
+    private async Task<MovingNotice?> NotificationShowsAsync(Func<MovingNotice?, bool> shows)
+    {
+        var until = DateTime.UtcNow + Timeout;
+        while (DateTime.UtcNow < until)
+        {
+            var shown = _presence.Moving.ToArray();
+            if (shown.Length > 0 && shows(shown[^1]))
+                return shown[^1];
+            await Task.Delay(50);
+        }
+        throw new TimeoutException("The phone's notification never showed what was expected.");
     }
 
     private static string Checksum(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
@@ -212,5 +241,76 @@ public sealed class PhoneAppTests : IAsyncLifetime
 
         Assert.Equal(ErrorCodes.InviteNotInMessage, answer.GetProperty("error").GetProperty("code").GetString());
         Assert.Equal(0, (await ClickAsync(Commands.TransfersList)).GetArrayLength());
+    }
+
+    [Fact]
+    public async Task While_a_file_arrives_the_notification_names_it_with_its_progress_and_goes_a_minute_after_it_arrived()
+    {
+        var (computer, invite, bytes) = await ComputerSharesAsync("Natal.mp4", 1_500_000, bytesPerSecond: 300_000);
+        Assert.Empty(_presence.Moving);
+
+        _opened.Open([invite]);
+        var (asked, _) = await ScreenAsksAsync();
+        var id = await StartReceivingAsync(asked, computer);
+
+        var moving = await NotificationShowsAsync(notice => notice is { Percent: > 0 and < 100 });
+        Assert.Matches(@"^Recebendo “Natal\.mp4”: \d+ %$", moving!.Title);
+        Assert.Equal("Parar", moving.Stop);
+        await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+        Assert.Equal(Checksum(bytes), Checksum(File.ReadAllBytes(Path.Combine(_paths.ReceivedRoot, "Natal.mp4"))));
+        // Still shown just after: the service stops a minute after the last bytes moved.
+        Assert.NotNull(_presence.Moving[^1]);
+
+        _clock.Now += BackgroundUseCases.ShownAfterMoving;
+        await NotificationShowsAsync(notice => notice is null);
+    }
+
+    [Fact]
+    public async Task Stop_on_the_notification_stops_the_arriving_file_and_the_speed_bar_shows_it_stopped()
+    {
+        var (computer, invite, _) = await ComputerSharesAsync("Natal.mp4", 3_000_000, bytesPerSecond: 200_000);
+        _opened.Open([invite]);
+        var (asked, _) = await ScreenAsksAsync();
+        var id = await StartReceivingAsync(asked, computer);
+        await NotificationShowsAsync(notice => notice is { Percent: > 0 });
+
+        // What the service runs when Stop is pressed on the notification.
+        await _background.StopFromNoticeAsync();
+
+        await ScreenShowsAsync(Events.ActivityChanged, activity =>
+            activity.GetProperty("sendingStopped").GetBoolean() && activity.GetProperty("receivingStopped").GetBoolean());
+        await NotificationShowsAsync(notice => notice is null);
+        var before = (await ClickAsync(Commands.TransfersList)).EnumerateArray().Single(t => t.GetProperty("id").GetString() == id)
+            .GetProperty("receivedBytes").GetInt64();
+        await Task.Delay(TimeSpan.FromSeconds(3));
+        var after = (await ClickAsync(Commands.TransfersList)).EnumerateArray().Single(t => t.GetProperty("id").GetString() == id)
+            .GetProperty("receivedBytes").GetInt64();
+        Assert.True(after - before < 200_000, $"Still receiving after Stop: {before} then {after}.");
+        Assert.True(after < 3_000_000);
+    }
+
+    [Fact]
+    public async Task When_the_phone_allows_no_more_time_the_file_pauses_and_continues_when_the_app_opens()
+    {
+        var (computer, invite, bytes) = await ComputerSharesAsync("Natal.mp4", 1_500_000, bytesPerSecond: 300_000);
+        _opened.Open([invite]);
+        var (asked, _) = await ScreenAsksAsync();
+        var id = await StartReceivingAsync(asked, computer);
+        await NotificationShowsAsync(notice => notice is { Percent: > 0 });
+
+        // What the service runs when Android says the time is up.
+        await _background.TimedOutAsync();
+
+        var paused = await NotificationShowsAsync(notice => notice is { Paused: true });
+        Assert.Equal("Abra o ComParta para continuar.", paused!.Body);
+        await ScreenShowsAsync(Events.ActivityChanged, activity => activity.GetProperty("receivingStopped").GetBoolean());
+
+        await _background.AppOpenedAsync();
+
+        await ScreenShowsAsync(Events.ActivityChanged, activity => !activity.GetProperty("receivingStopped").GetBoolean());
+        await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done"));
+        Assert.Equal(Checksum(bytes), Checksum(File.ReadAllBytes(Path.Combine(_paths.ReceivedRoot, "Natal.mp4"))));
     }
 }

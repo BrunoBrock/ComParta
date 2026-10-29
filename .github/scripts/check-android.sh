@@ -2,13 +2,23 @@
 # Installs the APK on the emulator, starts ComParta and checks what epic 7 story 1 asks of a first
 # Android build: the app starts its engine, the screen loads and the bridge answers it, and the
 # app is still running afterwards; that received files have their place in Downloads (story 3); and
-# that an invite tapped or shared in another app opens "Get this file?" (story 6).
+# that an invite tapped or shared in another app opens "Get this file?" (story 6); and that a file
+# keeps arriving with the screen off, shown in a notification, and the service stops a minute after
+# (story 7), from a computer-side sender (tests/ComParta.PhoneCheck, built to publish/phone-check).
 # Leaves screenshots and the app's log next to the APK.
 set -euo pipefail
 
 folder="$1"
 apk=$(ls "$folder"/*-Signed.apk | head -n 1)
 package=org.comparta.app
+
+# The computer the emulator runs on shares a 300 MB file at 1 MB/s, so it is still arriving while
+# the screen is off.
+computer="$folder/computer"
+rm -rf "$computer"
+dotnet publish/phone-check/ComParta.PhoneCheck.dll "$computer" 300 1000000 26881 > "$folder/computer-log.txt" 2>&1 &
+sender=$!
+trap 'kill $sender 2> /dev/null || true' EXIT
 
 adb install -r "$apk"
 adb logcat -c
@@ -72,6 +82,80 @@ wait_for "Said: invite.notInMessage" 60 || status=1
 starts=$(seen "ComParta started")
 if [ "$starts" -ne 1 ]; then
   echo "ComParta started $starts times after links were opened."
+  status=1
+fi
+
+# Taps a button on the screen by its words, found in the screen's description the phone gives.
+tap_on() {
+  local words="$1"
+  for _ in $(seq 20); do
+    adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1 || true
+    local bounds
+    bounds=$(adb exec-out cat /sdcard/ui.xml | tr '>' '\n' | grep -E "(text|content-desc)=\"$words\"" \
+      | grep -o 'bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' | head -n 1 || true)
+    if [ -n "$bounds" ]; then
+      read -r x1 y1 x2 y2 <<< "$(echo "$bounds" | grep -o '[0-9]*' | tr '\n' ' ')"
+      adb shell input tap $(( (x1 + x2) / 2 )) $(( (y1 + y2) / 2 ))
+      echo "Tapped: $words"
+      return 0
+    fi
+    sleep 2
+  done
+  adb exec-out cat /sdcard/ui.xml > "$folder/android-screen.xml" || true
+  echo "Never found: $words"
+  return 1
+}
+
+# Bytes the computer has sent the phone so far.
+sent() {
+  cat "$computer/sent.txt" 2> /dev/null || echo 0
+}
+
+# Story 7: a file from the computer keeps arriving with the screen off, the service that keeps it
+# going runs with its notification, and it stops a minute after the bytes stop.
+adb shell pm grant "$package" android.permission.POST_NOTIFICATIONS || true
+for _ in $(seq 300); do
+  [ -s "$computer/invite.txt" ] && break
+  sleep 1
+done
+if [ -s "$computer/invite.txt" ]; then
+  invite=$(cat "$computer/invite.txt")
+  asked=$(seen "Asked: Get this file?")
+  adb shell "am start -W -a android.intent.action.VIEW -d '$invite' $package"
+  wait_for "Asked: Get this file?" 60 $((asked + 1)) || status=1
+  tap_on "Get the file" || status=1
+  wait_for "Keeping going with the screen off" 120 || status=1
+  adb shell cmd statusbar expand-notifications || true
+  sleep 2
+  adb exec-out screencap -p > "$folder/android-moving.png" || true
+  adb shell cmd statusbar collapse || true
+
+  adb shell input keyevent 223
+  sleep 10
+  before=$(sent)
+  sleep 40
+  after=$(sent)
+  echo "With the screen off the phone got $((after - before)) bytes in 40 seconds ($before to $after)."
+  if [ "$after" -le $((before + 5000000)) ]; then
+    echo "The file did not keep arriving with the screen off."
+    status=1
+  fi
+  if ! adb shell dumpsys activity services "$package" | grep -q "MovingService"; then
+    echo "The service that keeps it going is not running with the screen off."
+    status=1
+  fi
+  if ! adb shell dumpsys notification --noredact | grep -q "pkg=$package"; then
+    echo "No notification is shown while the file arrives."
+    status=1
+  fi
+  adb shell input keyevent 224
+
+  # Nothing moves once the computer stops sharing; a minute later the service is gone.
+  kill "$sender" 2> /dev/null || true
+  wait_for "Stopped keeping going with the screen off" 150 || status=1
+else
+  echo "The computer never shared its file:"
+  cat "$folder/computer-log.txt" || true
   status=1
 fi
 

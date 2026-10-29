@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The computer side of the Android check in CI (.github/scripts/check-android.sh). Never shipped. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ComParta.Core\ComParta.Core.csproj" />
+    <ProjectReference Include="..\..\src\ComParta.Engine.MonoTorrent\ComParta.Engine.MonoTorrent.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -77,10 +77,10 @@ public sealed class NotificationUseCases
     }
 
     /// <summary>A short text outside the window, such as the icon's menu, in the person's language.</summary>
-    public string Text(string key)
+    public string Text(string key, string name = "", int count = 0, int percent = 0)
     {
         lock (_lock)
-            return NotificationTexts.Format(_language, key, "");
+            return NotificationTexts.Format(_language, key, name, count, percent);
     }
 
     private async Task LoadLanguageAsync(CancellationToken ct = default)

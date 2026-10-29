@@ -74,6 +74,12 @@ public sealed class ActivityUseCases
     public Task SetStoppedAsync(bool sending, bool receiving, CancellationToken ct = default) =>
         ApplyAsync(sending, receiving, store: true, ct);
 
+    /// <summary>
+    /// Stops sending and receiving without remembering it, as when the phone allowed no more time
+    /// in the background; <see cref="StartAsync"/> brings back what the person chose.
+    /// </summary>
+    public Task StopForNowAsync(CancellationToken ct = default) => ApplyAsync(true, true, store: false, ct);
+
     /// <summary>What one share is doing now.</summary>
     public ItemActivity For(ShareId id) => _engine.GetActivity().Shares.GetValueOrDefault(id) ?? ItemActivity.None;
 

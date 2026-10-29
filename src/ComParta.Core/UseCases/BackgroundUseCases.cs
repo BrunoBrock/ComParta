@@ -17,6 +17,9 @@ public sealed class BackgroundUseCases
     /// <summary>How long the computer stays awake after the last bytes moved.</summary>
     public static readonly TimeSpan AwakeAfterMoving = TimeSpan.FromSeconds(45);
 
+    /// <summary>How long the phone's notification stays after the last bytes moved (epic 7 story 7).</summary>
+    public static readonly TimeSpan ShownAfterMoving = TimeSpan.FromMinutes(1);
+
     private const string ExplainedKey = "background.explained";
 
     private readonly ITransferEngine _engine;
@@ -27,12 +30,16 @@ public sealed class BackgroundUseCases
     private readonly ISettingsRepository _store;
     private readonly NotificationUseCases _notifications;
     private readonly IBackgroundPresence _presence;
+    private readonly ActivityUseCases? _activity;
     private readonly TimeProvider _clock;
     private readonly object _lock = new();
     private DateTimeOffset? _lastMoved;
     private bool _awake;
     private bool _explained;
     private bool? _startWithSystem;
+    private MovingNotice? _shown;
+    private bool _bothStopped;
+    private bool _pausedForTime;
 
     public BackgroundUseCases(
         ITransferEngine engine,
@@ -43,7 +50,8 @@ public sealed class BackgroundUseCases
         ISettingsRepository store,
         NotificationUseCases notifications,
         IBackgroundPresence presence,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null,
+        ActivityUseCases? activity = null)
     {
         _engine = engine;
         _shares = shares;
@@ -53,8 +61,12 @@ public sealed class BackgroundUseCases
         _store = store;
         _notifications = notifications;
         _presence = presence;
+        _activity = activity;
         _clock = clock ?? TimeProvider.System;
         _engine.ActivityChanged += OnActivityChanged;
+        _transfers.Changed += ShowMoving;
+        if (_activity is not null)
+            _activity.Changed += OnStoppedChanged;
         _settings.Changed += () => _ = ApplyStartWithSystemAsync();
     }
 
@@ -154,6 +166,109 @@ public sealed class BackgroundUseCases
         return answer.Quitting;
     }
 
+    /// <summary>
+    /// The Stop button on the phone's notification: the same stop as the speed bar's Stop, kept
+    /// after a restart (AD-22). The screen shows it stopped.
+    /// </summary>
+    public Task StopFromNoticeAsync() =>
+        _activity?.SetStoppedAsync(sending: true, receiving: true) ?? Task.CompletedTask;
+
+    /// <summary>
+    /// The phone allowed no more time for working with the screen off (Android 15 gives six hours):
+    /// everything is paused, not remembered as the person's stop, and the notification says to open
+    /// ComParta, which continues it (<see cref="AppOpened"/>).
+    /// </summary>
+    public async Task TimedOutAsync()
+    {
+        lock (_lock)
+            _pausedForTime = true;
+        if (_activity is not null)
+            await _activity.StopForNowAsync();
+        ShowMoving();
+    }
+
+    /// <summary>The person opened the app: what was paused for lack of time continues.</summary>
+    public async Task AppOpenedAsync()
+    {
+        lock (_lock)
+        {
+            if (!_pausedForTime)
+                return;
+            _pausedForTime = false;
+            _lastMoved = null;
+        }
+        if (_activity is not null)
+            await _activity.StartAsync();
+        ShowMoving();
+    }
+
+    private void OnStoppedChanged(Activity activity)
+    {
+        lock (_lock)
+            _bothStopped = activity.SendingStopped && activity.ReceivingStopped;
+        ShowMoving();
+    }
+
+    /// <summary>
+    /// What the phone's notification says now: the files moving and how far they are, until a minute
+    /// after the last bytes moved; nothing once the person stopped everything.
+    /// </summary>
+    private MovingNotice? Notice()
+    {
+        bool paused, moving;
+        lock (_lock)
+        {
+            paused = _pausedForTime;
+            moving = !_bothStopped && _lastMoved is { } last && _clock.GetUtcNow() - last < ShownAfterMoving;
+        }
+        string Text(string key, string name = "", int count = 0, int percent = 0) => _notifications.Text(key, name, count, percent);
+        var why = Text("notify.moving.why");
+        var whyOk = Text("notify.moving.whyOk");
+        if (paused)
+            return new MovingNotice(Text("notify.paused.title"), Text("notify.paused.body"), null, null, why, whyOk, Paused: true);
+        if (!moving)
+            return null;
+
+        var receiving = _transfers.List()
+            .Where(view => view.State == TransferState.Receiving)
+            .Select(view => (Name: view.Transfer.Name ?? "", Percent: view.Transfer.SizeBytes is > 0 and var size
+                ? (int)Math.Clamp(view.ReceivedBytes * 100 / size, 0, 100) : 0))
+            .ToList();
+        var sending = _shares.Current()
+            .Select(view => (Name: view.Share.Name, Sending: _sending.For(view.Share.Id)))
+            .Where(item => item.Sending.ReceiverCount > 0)
+            .Select(item => (item.Name, item.Sending.Percent))
+            .ToList();
+        var all = sending.Concat(receiving).ToList();
+        if (all.Count == 0)
+            return new MovingNotice(Text("notify.moving.other"), Text("notify.moving.body"), null, Text("notify.moving.stop"), why, whyOk);
+        var percent = (int)Math.Round(all.Average(item => item.Percent));
+        var title = (sending.Count, receiving.Count) switch
+        {
+            (1, 0) => Text("notify.moving.sendingOne", sending[0].Name, 1, percent),
+            (_, 0) => Text("notify.moving.sendingMany", "", sending.Count, percent),
+            (0, 1) => Text("notify.moving.receivingOne", receiving[0].Name, 1, percent),
+            (0, _) => Text("notify.moving.receivingMany", "", receiving.Count, percent),
+            _ => Text("notify.moving.both", "", all.Count, percent),
+        };
+        return new MovingNotice(title, Text("notify.moving.body"), percent, Text("notify.moving.stop"), why, whyOk);
+    }
+
+    private void ShowMoving()
+    {
+        MovingNotice? notice;
+        try { notice = Notice(); }
+        catch (Exception) { return; }
+        lock (_lock)
+        {
+            if (notice == _shown)
+                return;
+            _shown = notice;
+        }
+        try { _presence.ShowMoving(notice); }
+        catch (Exception) { /* the transfer continues while the screen is on */ }
+    }
+
     private void OnActivityChanged()
     {
         var now = _clock.GetUtcNow();
@@ -174,6 +289,7 @@ public sealed class BackgroundUseCases
             try { _presence.KeepAwake(keep); }
             catch (Exception) { /* the computer may sleep; the transfer continues after */ }
         }
+        ShowMoving();
     }
 
     private async Task ApplyStartWithSystemAsync(CancellationToken ct = default)

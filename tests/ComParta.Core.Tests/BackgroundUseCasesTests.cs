@@ -17,6 +17,7 @@ public sealed class BackgroundUseCasesTests
     private readonly TransferUseCases _transfers;
     private readonly SettingsUseCases _settings;
     private readonly NotificationUseCases _notifications;
+    private readonly ActivityUseCases _activity;
     private readonly BackgroundUseCases _background;
 
     public BackgroundUseCasesTests()
@@ -27,7 +28,8 @@ public sealed class BackgroundUseCasesTests
         _settings = new SettingsUseCases(_store, new FakeSystem("pt-BR"));
         var sending = new SendingUseCases(_engine, _shares, _clock);
         _notifications = new NotificationUseCases(_engine, _transfers, _shares, sending, _settings, _notifier, new FakeWindow(), _clock);
-        _background = new BackgroundUseCases(_engine, _shares, _transfers, sending, _settings, _store, _notifications, _presence, _clock);
+        _activity = new ActivityUseCases(_engine, _store);
+        _background = new BackgroundUseCases(_engine, _shares, _transfers, sending, _settings, _store, _notifications, _presence, _clock, _activity);
     }
 
     private async Task<ShareId> ShareAsync() => (await _shares.AddAsync()).Value!.Share!.Share.Id;
@@ -186,5 +188,117 @@ public sealed class BackgroundUseCasesTests
 
         Assert.Equal([false, true], _presence.StartWithSystem);
         Assert.True((await _settings.GetAsync()).StartWithWindows);
+    }
+
+    /// <summary>A transfer half received, with bytes moving now.</summary>
+    private async Task<TransferId> HalfReceivedAsync(string name)
+    {
+        var id = (await _transfers.ReceiveAsync("invite:" + name)).Value!.Transfer.Id;
+        HalfReceived(id, name);
+        return id;
+    }
+
+    private void HalfReceived(TransferId id, string name)
+    {
+        _engine.Report(new ReceiveProgress(id, name, 1_000, 450, false, BytesPerSecond: 100));
+        Move(100, 0);
+    }
+
+    [Fact]
+    public async Task The_phone_notification_appears_when_bytes_start_moving_names_the_file_and_goes_a_minute_after_they_stop()
+    {
+        await _notifications.StartAsync();
+        await _background.StartAsync();
+        var id = (await _transfers.ReceiveAsync("invite:Natal.mp4")).Value!.Transfer.Id;
+        Assert.Empty(_presence.Moving);
+
+        HalfReceived(id, "Natal.mp4");
+
+        var shown = _presence.Moving[^1]!;
+        Assert.Equal("Recebendo “Natal.mp4”: 45 %", shown.Title);
+        Assert.Equal(45, shown.Percent);
+        Assert.Equal("Parar", shown.Stop);
+        Assert.False(shown.Paused);
+        Assert.False(string.IsNullOrWhiteSpace(shown.Why));
+
+        _clock.Now += TimeSpan.FromSeconds(30);
+        Move(0, 0);
+        Assert.NotNull(_presence.Moving[^1]);
+
+        _clock.Now += BackgroundUseCases.ShownAfterMoving;
+        Move(0, 0);
+        Assert.Null(_presence.Moving[^1]);
+        Assert.Equal(1, _presence.Moving.Count(notice => notice is null));
+    }
+
+    [Fact]
+    public async Task Sending_and_receiving_several_files_are_counted_in_one_line_in_English()
+    {
+        await _settings.SetAsync("en", null, null);
+        await _notifications.StartAsync();
+        var share = await ShareAsync();
+        var receiving = (await _transfers.ReceiveAsync("invite:film.mp4")).Value!.Transfer.Id;
+        _engine.Report(new ReceiveProgress(receiving, "film.mp4", 1_000, 100, false, BytesPerSecond: 100));
+
+        Move(100, 100, share, receivers: 1);
+
+        Assert.Equal("Sending and receiving 2 files: 10 %", _presence.Moving[^1]!.Title);
+        Assert.Equal("Stop", _presence.Moving[^1]!.Stop);
+    }
+
+    [Fact]
+    public async Task Stop_on_the_notification_stops_sending_and_receiving_as_the_speed_bar_does_and_the_notification_goes()
+    {
+        await _activity.StartAsync();
+        await HalfReceivedAsync("Natal.mp4");
+        Assert.NotNull(_presence.Moving[^1]);
+
+        await _background.StopFromNoticeAsync();
+
+        Assert.Equal((true, true), _engine.StoppedFlags);
+        Assert.True(_activity.Current() is { SendingStopped: true, ReceivingStopped: true });
+        Assert.Equal("true", _store.Values["activity.sendingStopped"]);
+        Assert.Null(_presence.Moving[^1]);
+    }
+
+    [Fact]
+    public async Task When_the_phone_allows_no_more_time_everything_pauses_says_so_and_continues_when_the_app_opens()
+    {
+        await _notifications.StartAsync();
+        await _activity.StartAsync();
+        var id = await HalfReceivedAsync("Natal.mp4");
+
+        await _background.TimedOutAsync();
+
+        Assert.Equal((true, true), _engine.StoppedFlags);
+        var paused = _presence.Moving[^1]!;
+        Assert.True(paused.Paused);
+        Assert.Equal(("Pausado para economizar bateria", "Abra o ComParta para continuar."), (paused.Title, paused.Body));
+        Assert.Null(paused.Stop);
+        // A pause for time is not the person's stop: nothing is remembered for the next start.
+        Assert.False(_store.Values.ContainsKey("activity.sendingStopped"));
+        // The paused notice stays however long nothing moves.
+        _clock.Now += TimeSpan.FromMinutes(10);
+        Move(0, 0);
+        Assert.True(_presence.Moving[^1]!.Paused);
+
+        await _background.AppOpenedAsync();
+
+        Assert.Equal((false, false), _engine.StoppedFlags);
+        Assert.Null(_presence.Moving[^1]);
+        _engine.Report(new ReceiveProgress(id, "Natal.mp4", 1_000, 460, false, BytesPerSecond: 100));
+        Move(100, 0);
+        Assert.Equal("Recebendo “Natal.mp4”: 46 %", _presence.Moving[^1]!.Title);
+    }
+
+    [Fact]
+    public async Task Opening_the_app_keeps_a_stop_the_person_chose()
+    {
+        await _activity.StartAsync();
+        await _activity.SetStoppedAsync(sending: true, receiving: false);
+
+        await _background.AppOpenedAsync();
+
+        Assert.Equal((true, false), _engine.StoppedFlags);
     }
 }

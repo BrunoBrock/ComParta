@@ -425,6 +425,9 @@ internal sealed class FakePresence : IBackgroundPresence
     public void Hide() => Hides++;
     void IBackgroundPresence.StartWithSystem(bool on) => StartWithSystem.Add(on);
     public void Quit() => Quits++;
+    /// <summary>Each time the phone's notification changed: what it said, or null when it went away.</summary>
+    public List<MovingNotice?> Moving { get; } = [];
+    public void ShowMoving(MovingNotice? notice) => Moving.Add(notice);
 }
 
 /// <summary>

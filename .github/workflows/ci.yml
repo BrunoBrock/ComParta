@@ -154,6 +154,10 @@ jobs:
           name: ComParta-apk
           path: publish/android/*-Signed.apk
 
+      # The computer side of the emulator check: shares a file the phone receives with the screen off.
+      - name: Build the computer-side sender
+        run: dotnet build tests/ComParta.PhoneCheck/ComParta.PhoneCheck.csproj -c Release -o publish/phone-check
+
       - name: Let the emulator use the processor directly
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -176,4 +180,6 @@ jobs:
           path: |
             publish/android/android-*.png
             publish/android/android-log.txt
+            publish/android/android-screen.xml
+            publish/android/computer-log.txt
           if-no-files-found: ignore
