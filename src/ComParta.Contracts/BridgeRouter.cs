@@ -27,6 +27,7 @@ public sealed class BridgeRouter
     private readonly BackgroundUseCases _background;
     private readonly MediaUseCases _media;
     private readonly SupportUseCases _support;
+    private readonly AboutUseCases _about;
 
     public BridgeRouter(
         ShareUseCases shares,
@@ -44,10 +45,12 @@ public sealed class BridgeRouter
         NotificationUseCases notifications,
         BackgroundUseCases background,
         MediaUseCases media,
-        SupportUseCases support)
+        SupportUseCases support,
+        AboutUseCases about)
     {
         _media = media;
         _support = support;
+        _about = about;
         _background = background;
         _background.QuitAsked += answer => Raise(Events.QuitChanged, ToDto(answer));
         _background.BackAsked += () => Raise(Events.BackChanged, true);
@@ -303,6 +306,11 @@ public sealed class BridgeRouter
                 return CommandResult.Success(report);
             }
 
+            case Commands.AboutNotices:
+                return await _about.NoticesAsync() is { } notices
+                    ? CommandResult.Success(notices)
+                    : CommandResult.Failure(ErrorCodes.Unexpected);
+
             case Commands.AppLeave:
                 _background.Leave();
                 return CommandResult.Success(null);
@@ -524,7 +532,8 @@ public sealed class BridgeRouter
         var dto = ToDto(view, Sending.Idle);
         return new ShareDetailsDto(
             dto.Id, dto.Name, dto.SizeBytes, dto.Status,
-            Path.GetDirectoryName(view.Share.FilePath) ?? "",
+            // A phone's picked item has no folder a person would recognise (AD-20); nothing is shown.
+            Path.IsPathFullyQualified(view.Share.FilePath) ? Path.GetDirectoryName(view.Share.FilePath) ?? "" : "",
             view.Share.AddedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
             activity.SendingBytesPerSecond, activity.Connections, activity.BytesSent, dto.ItemCount, dto.Kind);
     }

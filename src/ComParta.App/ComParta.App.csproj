@@ -21,6 +21,12 @@
 		<ApplicationId>org.comparta.app</ApplicationId>
 		<ApplicationDisplayVersion>0.1</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
+		<!-- A release's version (build.ps1 -Version, from the git tag). Read from the environment, so the
+		     MSIX packaging step, which builds the project again without the command line's properties,
+		     gets it too. -->
+		<ApplicationDisplayVersion Condition="'$(COMPARTA_VERSION)' != ''">$(COMPARTA_VERSION)</ApplicationDisplayVersion>
+		<ApplicationVersion Condition="'$(COMPARTA_VERSION)' != ''">0</ApplicationVersion>
+		<Version Condition="'$(COMPARTA_VERSION)' != ''">$(COMPARTA_VERSION)</Version>
 
 	</PropertyGroup>
 
@@ -49,6 +55,8 @@
 		<MauiFont Include="Resources\Fonts\*" />
 		<!-- Resources\Raw\wwwroot is the build output of src/ui (see build.ps1). -->
 		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+		<!-- The licenses of the parts ComParta uses, shown in Settings, About (made by tools/ComParta.Notices). -->
+		<MauiAsset Include="..\..\THIRD-PARTY-NOTICES.txt" LogicalName="THIRD-PARTY-NOTICES.txt" />
 	</ItemGroup>
 
 	<ItemGroup>

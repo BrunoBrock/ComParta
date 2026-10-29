@@ -4,13 +4,12 @@
 id = 1
 type = "story"
 title = "License and third-party notices"
-description = "Adds the chosen LICENSE file, a header policy in CONTRIBUTING, a generated THIRD-PARTY-NOTICES file listing every NuGet and npm package shipped with its license (a build step fails on an unknown or incompatible license), and shows them in Settings, About."
+description = "Keeps the 0BSD LICENSE, a header policy in CONTRIBUTING, a generated THIRD-PARTY-NOTICES file listing every NuGet and npm package shipped with its license (a build step fails on an unknown or incompatible license), and shows them in Settings, About."
 verify = "The build step lists MonoTorrent, React, Lucide and the rest with their licenses; adding a package with no license fails it; About shows the notices."
 covers = ["CAP-11"]
-after = ["1.14"]
-hitl = true                 # The maintainer chooses the license
+after = []
+hitl = false                # D-1 answered: Zero-Clause BSD (PR #29)
 risk = "low"
-unknown = "Decision D-1: which license (recommendation Apache-2.0)."
 
 [[entry]]
 id = 2
@@ -41,12 +40,11 @@ id = 4
 type = "story"
 title = "Release workflow from a tag"
 description = "Adds a GitHub Actions workflow that, on a version tag, builds and tests, produces the MSIX and the zip, writes release notes from the commits, attaches both to a GitHub Release, and submits the MSIX to the Store with the Store's submission tool using secrets the maintainer adds."
-verify = "Pushing a test tag creates a draft GitHub Release with both files; a Store submission appears in Partner Center."
+verify = "Pushing a test tag creates a draft GitHub Release with both files; a Store submission appears in Partner Center once the Store secrets exist."
 covers = ["CAP-11"]
-after = [2, 3]
-hitl = true                 # The maintainer adds the Store secrets
+after = [2]                 # Built before the Store listing (3): the Store step is present but off until its secrets exist
+hitl = false
 risk = "medium"
-unknown = "Decision D-2."
 
 [[entry]]
 id = 5

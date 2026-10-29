@@ -39,7 +39,8 @@ function shareRows(share: ShareDetailsDto, stopped: boolean): [MessageKey, strin
     ['details.size', formatSize(share.sizeBytes)],
     ...(share.kind === 'file' ? [] : [['details.files', String(share.itemCount)] as [MessageKey, string]]),
     ['details.state', stopped && share.status === 'ready' ? t('stopped.chip') : t(`shares.chip.${share.status}`)],
-    ['details.where', share.folder],
+    // A phone's picked item has no folder a person would know (AD-20), so the line is left out.
+    ...(share.folder ? [['details.where', share.folder] as [MessageKey, string]] : []),
     ['details.added', formatDateTime(share.addedAt)],
     ['details.sendingNow', formatRate(share.sendingBytesPerSecond)],
     ['details.connections', String(share.connections)],
@@ -67,7 +68,8 @@ function transferRows(transfer: TransferDetailsDto, stopped: boolean): [MessageK
   return [
     ['details.size', size],
     ['details.state', state],
-    ['details.where', t('details.whereReceived')],
+    // A file the antivirus stopped is not offered among the received files (AD-13).
+    ...(transfer.state === 'blocked' ? [] : [['details.where', t('details.whereReceived')] as [MessageKey, string]]),
     ['details.added', formatDateTime(transfer.addedAt)],
     ['details.source', t(`details.source.${transfer.source}`)],
     ['details.sendingNow', formatRate(transfer.sendingBytesPerSecond)],
@@ -169,6 +171,9 @@ export default function DetailsWindow(props: DetailsWindowProps) {
       )}
       {!gone && details?.kind === 'share' && details.value.kind === 'folder' && (
         <p className="hint">{t('details.folderSnapshot')}</p>
+      )}
+      {!gone && details?.kind === 'transfer' && details.value.state === 'blocked' && (
+        <p className="hint">{t('transfers.state.blocked')}</p>
       )}
       <div className="dialog-actions">
         <button type="button" onClick={onClose} autoFocus>

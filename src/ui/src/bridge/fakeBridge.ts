@@ -84,6 +84,8 @@ export interface FakeBridgeOptions {
   theme?: 'light' | 'dark'
   /** The name of a folder the person chose for received files; the usual one when left out. */
   receivedFolder?: string
+  /** Shared files were picked on a phone: like the app there, details have no folder to show (AD-20). */
+  onPhone?: boolean
 }
 
 export interface FakeBridge extends Bridge {
@@ -369,7 +371,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
   const setPaused = (id: string, paused: boolean) => {
     const transfer = transfers.find((t) => t.id === id)
     if (!transfer) return fail('transfer.notFound')
-    if (transfer.state === 'done' || transfer.state === 'failed') return fail('transfer.finished')
+    if (['done', 'failed', 'blocked'].includes(transfer.state)) return fail('transfer.finished')
     if (paused) updateTransfer(id, { state: 'paused', bytesPerSecond: 0, secondsLeft: null, neededBytes: null })
     else if (transfer.state === 'paused') updateTransfer(id, { state: transfer.sizeBytes ? 'receiving' : 'connecting' })
     return ok(null)
@@ -836,6 +838,42 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       return ok(report)
     },
 
+    // As the app: the shipped notices file, each part as its name and version, then its license.
+    'about.notices': () =>
+      ok(
+        [
+          'ComParta third-party notices',
+          '============================',
+          '',
+          'Parts in the app and the helper (NuGet)',
+          '---------------------------------------',
+          '',
+          'MonoTorrent 3.0.2',
+          'License: MIT',
+          'Copyright: not stated by the package',
+          'Project: https://github.com/alanmcgovern/monotorrent',
+          '',
+          'Parts in the screen (npm)',
+          '-------------------------',
+          '',
+          'lucide-react 0.500.0',
+          'License: ISC',
+          'Copyright: not stated by the package',
+          'Project: https://lucide.dev',
+          '',
+          'react 19.0.0',
+          'License: MIT',
+          'Copyright: Meta Platforms, Inc. and affiliates.',
+          'Project: https://react.dev',
+          '',
+          'react-dom 19.0.0',
+          'License: MIT',
+          'Copyright: Meta Platforms, Inc. and affiliates.',
+          'Project: https://react.dev',
+          '',
+        ].join('\n'),
+      ),
+
     'app.leave': () => {
       fake.leaves++
       return ok(null)
@@ -885,7 +923,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       const sending = share.status === 'ready' && !share.paused && !stopped.sendingStopped && stepMs > 0
       const details: ShareDetailsDto = {
         ...share,
-        folder: 'C:\\Users\\Ana\\Videos',
+        folder: options.onPhone ? '' : 'C:\\Users\\Ana\\Videos',
         addedAt: addedAt.get(share.id) ?? addedLongAgo,
         sendingBytesPerSecond: sending ? fakeSendingPerShare : 0,
         connections: sending ? 1 : 0,

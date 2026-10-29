@@ -216,6 +216,7 @@ An arrow means "may depend on". `ComParta.Core` depends on no other project and 
 - **Binds:** core, engine, shell
 - **Prevents:** Android support needing a second engine adapter; content URIs leaking into core logic.
 - **Rule:** A share item's source is an opaque `ContentRef` that only the shell understands (a Windows path, or an Android content URI with a persisted read grant). The engine adapter reads shared bytes and checks existence through `IContentSource` (open for read at an offset, length, last-changed time), which the shell implements; MonoTorrent is given a piece writer backed by that port for offered content. Received content is still written by the engine under the Received root; on Android the shell then publishes finished items to the shared Downloads collection.
+- **Amended 2026-10-28 (epic 7 story 3):** on Android 11 and later the Received root itself is Downloads/ComParta in shared storage, written with ordinary file access (an app may create files there without a permission). Unfinished data waits in the hidden `.in-progress` folder, which the phone does not list, and the finished item is moved out of it, so the Gallery and Files apps see it with no copy and the engine keeps sharing it in place. Before Android 11 writing there needs a storage permission, so the Received root stays inside the app.
 
 ## Consistency Conventions
 

@@ -118,10 +118,29 @@ public sealed class ShareUseCases
             return Result<ShareView?>.Fail(ErrorKind.ShareNameInvalid);
         _picked = null;
 
-        // The file dialog chooses from one folder; files from elsewhere are refused as unreadable.
-        var full = picked.Select(Path.GetFullPath).ToList();
-        var root = Path.GetDirectoryName(full[0])!;
-        return await AddItemsAsync(root, name, ShareKind.Collection, [.. full.Select(path => Path.GetRelativePath(root, path))], ct);
+        // Files under the first one's folder keep their place in it; any other (a phone's picker has no
+        // folders) goes under its own name, made unique.
+        var full = picked.Select(_files.FullName).ToList();
+        var root = Path.IsPathFullyQualified(full[0]) ? Path.GetDirectoryName(full[0]) ?? full[0] : full[0];
+        var entries = new List<(string Relative, string Item)>();
+        var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in full)
+        {
+            var relative = Path.IsPathFullyQualified(item) ? Path.GetRelativePath(root, item) : null;
+            if (relative is null || _files.Inside(root, relative) != item || !taken.Add(relative))
+                relative = UniqueName(_files.NameOf(item), taken);
+            entries.Add((relative, item));
+        }
+        return await AddEntriesAsync(root, name, ShareKind.Collection, entries, ct);
+    }
+
+    /// <summary>The name, or "name (2).ext" and so on when it is taken already.</summary>
+    private static string UniqueName(string name, HashSet<string> taken)
+    {
+        var unique = name;
+        for (var n = 2; !taken.Add(unique); n++)
+            unique = $"{Path.GetFileNameWithoutExtension(name)} ({n}){Path.GetExtension(name)}";
+        return unique;
     }
 
     private static readonly char[] NotInNames = ['<', '>', ':', '"', '/', '\\', '|', '?', '*', .. Enumerable.Range(0, 32).Select(c => (char)c)];
@@ -135,7 +154,7 @@ public sealed class ShareUseCases
 
     private async Task<Result<ShareView?>> ShareFolderAsync(string folder, CancellationToken ct)
     {
-        folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+        folder = _files.FullName(folder);
         IReadOnlyList<string> files;
         try { files = _files.ListFiles(folder); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -146,7 +165,7 @@ public sealed class ShareUseCases
             return Result<ShareView?>.Fail(ErrorKind.FolderEmpty);
         if (files.Count > MaxItems)
             return Result<ShareView?>.Fail(ErrorKind.FolderTooLarge);
-        var name = Path.GetFileName(folder);
+        var name = _files.NameOf(folder);
         return await AddItemsAsync(folder, string.IsNullOrEmpty(name) ? folder : name, ShareKind.Folder, files, ct);
     }
 
@@ -172,8 +191,9 @@ public sealed class ShareUseCases
 
     private Task<Result<ShareView?>> ShareFileAsync(string path, CancellationToken ct)
     {
-        path = Path.GetFullPath(path);
-        return AddItemsAsync(path, Path.GetFileName(path), ShareKind.File, [Path.GetFileName(path)], ct);
+        path = _files.FullName(path);
+        var name = _files.NameOf(path);
+        return AddEntriesAsync(path, name, ShareKind.File, [(name, path)], ct);
     }
 
     /// <summary>
@@ -181,15 +201,33 @@ public sealed class ShareUseCases
     /// <paramref name="root"/>, the file itself for a single file. Every file must be readable and
     /// not empty, and no path may leave the root.
     /// </summary>
-    public async Task<Result<ShareView?>> AddItemsAsync(
+    public Task<Result<ShareView?>> AddItemsAsync(
         string root, string name, ShareKind kind, IReadOnlyList<string> relativePaths, CancellationToken ct = default)
+    {
+        root = _files.FullName(root);
+        var entries = new List<(string Relative, string Item)>();
+        foreach (var relative in relativePaths)
+        {
+            var item = kind == ShareKind.File ? root : _files.Inside(root, relative);
+            if (item is null)
+                return Task.FromResult(Result<ShareView?>.Fail(ErrorKind.FileUnreadable));
+            entries.Add((relative, item));
+        }
+        return AddEntriesAsync(root, name, kind, entries, ct);
+    }
+
+    /// <summary>
+    /// Shares the items as one, each placed at its relative path. Every item must be readable and not
+    /// empty.
+    /// </summary>
+    private async Task<Result<ShareView?>> AddEntriesAsync(
+        string root, string name, ShareKind kind, IReadOnlyList<(string Relative, string Item)> entries, CancellationToken ct)
     {
         ShareView view;
         await _gate.WaitAsync(ct);
         try
         {
-            root = Path.GetFullPath(root);
-            if (relativePaths.Count == 0 || string.IsNullOrWhiteSpace(name))
+            if (entries.Count == 0 || string.IsNullOrWhiteSpace(name))
                 return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
             // The same file or folder shared twice; several files from one folder may be shared in many ways.
             if (kind != ShareKind.Collection && Snapshot().Any(v =>
@@ -197,11 +235,8 @@ public sealed class ShareUseCases
                 return Result<ShareView?>.Fail(ErrorKind.ShareDuplicate);
 
             var items = new List<ShareItem>();
-            foreach (var relative in relativePaths)
+            foreach (var (relative, path) in entries)
             {
-                var path = kind == ShareKind.File ? root : Path.GetFullPath(Path.Combine(root, relative));
-                if (kind != ShareKind.File && !path.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                    return Result<ShareView?>.Fail(ErrorKind.FileUnreadable);
                 long size;
                 try
                 {

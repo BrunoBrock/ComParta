@@ -63,3 +63,22 @@ describe("the phone's back button", () => {
     expect(listed.ok && listed.value).toEqual([])
   })
 })
+
+describe('a file shared from a phone', () => {
+  it('shows its details without a folder, which a phone item does not have', async () => {
+    const { user } = setup({ shares: [video], onPhone: true })
+    await user.click(await screen.findByRole('button', { name: `Details of ${video.name}` }))
+    const sheet = screen.getByRole('dialog', { name: `Details of “${video.name}”` })
+
+    expect(await within(sheet).findByText(en['details.added'])).toBeInTheDocument()
+    expect(within(sheet).queryByText(en['details.where'])).not.toBeInTheDocument()
+  })
+
+  it('still shows the folder of a file shared from a computer', async () => {
+    const { user } = setup({ shares: [video] })
+    await user.click(await screen.findByRole('button', { name: `Details of ${video.name}` }))
+    const sheet = screen.getByRole('dialog', { name: `Details of “${video.name}”` })
+
+    expect(await within(sheet).findByText(en['details.where'])).toBeInTheDocument()
+  })
+})

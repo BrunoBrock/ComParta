@@ -60,13 +60,16 @@ public sealed partial class AppServices
 			BeforeStart();
 			var platform = CreatePlatform();
 			var store = await SqliteStore.OpenAsync(_paths.DatabasePath);
-			_engine = new MonoTorrentTransferEngine(_paths);
-			var shares = new ShareUseCases(store, _engine, new NativeFilePicker(), new LocalFileSystem(), paths: _paths);
+			// What is shared is read through the system's own content source (AD-20).
+			_engine = platform.SharedContent is { } content
+				? new MonoTorrentTransferEngine(_paths) { Content = content }
+				: new MonoTorrentTransferEngine(_paths);
+			var shares = new ShareUseCases(store, _engine, platform.SharePicker, platform.SharedFiles, paths: _paths);
 			// Where received files go: the usual folder, or the one chosen in Settings (epic 12 story 2).
 			var receivedFolder = new ReceivedFolder(store, _paths, new NativeFilePicker(), new LocalFileSystem());
 			var transfers = new TransferUseCases(
 				store, _engine, picker: new NativeFilePicker(), files: new LocalFileSystem(), storage: new LocalStorageInfo(_paths),
-				received: receivedFolder);
+				received: receivedFolder, guard: platform.ReceivedGuard);
 			var settings = new SettingsUseCases(store, new SystemInfo(), _engine, receivedFolder);
 			var connection = new ConnectionUseCases(_engine, platform.Firewall);
 			var activity = new ActivityUseCases(_engine, store);
@@ -78,8 +81,9 @@ public sealed partial class AppServices
 			var background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, platform.Presence);
 			var router = new BridgeRouter(
 				shares, transfers, settings, connection, Opened, activity, received, new NativeClipboard(), opener, thumbnails, Dropped,
-				sending, notifications, background, new MediaUseCases(shares, received, new LocalFileSystem()),
-				new SupportUseCases(store, new SystemInfo(), settings, shares, transfers, connection));
+				sending, notifications, background, new MediaUseCases(shares, received, platform.SharedFiles),
+				new SupportUseCases(store, new SystemInfo(), settings, shares, transfers, connection),
+				new AboutUseCases(new AppPackageNotices()));
 			router.CommandFailed += (_, e) => Log(e);
 
 			await _engine.StartAsync(SharingPolicy.Default);
@@ -165,4 +169,8 @@ internal sealed record PlatformParts(
 	Ports.IContentOpener Opener,
 	Ports.IThumbnailProvider Thumbnails,
 	Ports.INotifier Notifier,
-	Ports.IBackgroundPresence Presence);
+	Ports.IBackgroundPresence Presence,
+	Ports.IFilePicker SharePicker,
+	Ports.IFileSystem SharedFiles,
+	Ports.IContentSource? SharedContent,
+	Ports.IReceivedFileGuard ReceivedGuard);

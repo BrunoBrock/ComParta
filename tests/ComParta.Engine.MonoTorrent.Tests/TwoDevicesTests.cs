@@ -238,7 +238,7 @@ public sealed class TwoDevicesTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Several_files_whose_place_the_engine_would_use_is_taken_are_not_offered()
+    public async Task A_file_where_the_engine_thinks_shared_files_are_is_neither_read_nor_changed()
     {
         var one = CreateFile(Path.Combine("A", "one.bin"), 100_000);
         var two = CreateFile(Path.Combine("B", "two.bin"), 50_000);
@@ -249,7 +249,8 @@ public sealed class TwoDevicesTests : IAsyncLifetime
         Directory.CreateDirectory(Path.GetDirectoryName(taken)!);
         File.WriteAllText(taken, "something else");
 
-        Assert.Equal(OfferState.Failed, await OfferItemsAndWaitAsync(sender, shareId, "Both", items));
+        // Shared files are read through the content source (AD-20), so what sits there is left alone.
+        Assert.Equal(OfferState.Ready, await OfferItemsAndWaitAsync(sender, shareId, "Both", items));
         Assert.Equal("something else", File.ReadAllText(taken));
         Assert.Equal(100_000, new FileInfo(one).Length);
     }

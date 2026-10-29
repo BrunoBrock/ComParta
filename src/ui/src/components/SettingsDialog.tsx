@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import type { Bridge, ErrorCode } from '../bridge/index.ts'
 import { formatRate, type Language, languageNames, languages, t } from '../i18n/index.ts'
 import { readHelper } from '../helper.ts'
 import { maxPublicServers, readPublicServers } from '../publicServers.ts'
 import Button from './ui/Button.tsx'
 import Dialog from './ui/Dialog.tsx'
+import NoticesDialog from './NoticesDialog.tsx'
 
 export type Theme = 'system' | 'light' | 'dark'
 const themes: readonly Theme[] = ['system', 'light', 'dark']
@@ -49,6 +51,9 @@ interface SettingsDialogProps {
   /** New files go to the usual folder again; the problem to show, or null. */
   onUsualReceivedFolder: () => Promise<string | null>
   version: string
+  /** Asks for the licenses of the parts ComParta uses (epic 5 story 1). */
+  bridge: Bridge
+  onError: (code: ErrorCode) => void
   onClose: () => void
 }
 
@@ -80,8 +85,11 @@ export default function SettingsDialog({
   onChooseReceivedFolder,
   onUsualReceivedFolder,
   version,
+  bridge,
+  onError,
   onClose,
 }: SettingsDialogProps) {
+  const [showNotices, setShowNotices] = useState(false)
   const [folderProblem, setFolderProblem] = useState<string | null>(null)
   const [name, setName] = useState(yourName)
   const [nameProblem, setNameProblem] = useState(false)
@@ -118,185 +126,190 @@ export default function SettingsDialog({
   }
 
   return (
-    <Dialog labelledBy="settings-title" onClose={onClose}>
-      <h2 id="settings-title">{t('settings.title')}</h2>
-      <label htmlFor="settings-name">{t('settings.name')}</label>
-      <div className="settings-row">
-        <input
-          id="settings-name"
-          type="text"
-          autoComplete="name"
-          maxLength={maxNameLength}
-          value={name}
-          placeholder={t('invite.someone')}
-          aria-describedby="settings-name-hint"
-          aria-invalid={nameProblem}
-          onChange={(event) => setName(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') void saveName()
-          }}
-        />
-        <Button onClick={() => void saveName()}>{t('settings.nameSave')}</Button>
-      </div>
-      <p id="settings-name-hint" className="hint">
-        {t('settings.nameHint')}
-      </p>
-      {nameProblem && (
-        <p role="alert" className="settings-problem">
-          {t('settings.nameInvalid')}
-        </p>
-      )}
-      <label htmlFor="settings-language">{t('language.label')}</label>
-      <select
-        id="settings-language"
-        className="settings-select"
-        value={language}
-        aria-describedby="settings-language-hint"
-        onChange={(event) => onLanguage(event.target.value as Language)}
-      >
-        {languages.map((option) => (
-          <option key={option} value={option} lang={option}>
-            {languageNames[option]}
-          </option>
-        ))}
-      </select>
-      <p id="settings-language-hint" className="hint">
-        {t('settings.languageHint')}
-      </p>
-      <fieldset className="settings-theme">
-        <legend>{t('settings.theme')}</legend>
-        {themes.map((option) => (
-          <label key={option} className="settings-check">
-            <input
-              type="radio"
-              name="settings-theme"
-              value={option}
-              checked={theme === option}
-              onChange={() => onTheme(option)}
-            />
-            {t(`settings.theme.${option}`)}
-          </label>
-        ))}
-      </fieldset>
-      <label className="settings-check">
-        <input
-          type="checkbox"
-          checked={startWithWindows}
-          aria-describedby="settings-start-hint"
-          onChange={(event) => onStartWithWindows(event.target.checked)}
-        />
-        {t('settings.startWithWindows')}
-      </label>
-      <p id="settings-start-hint" className="hint">
-        {t('settings.startWithWindowsHint')}
-      </p>
-      <label className="settings-check">
-        <input
-          type="checkbox"
-          checked={guidedSend}
-          aria-describedby="settings-guided-hint"
-          onChange={(event) => onGuidedSend(event.target.checked)}
-        />
-        {t('settings.guidedSend')}
-      </label>
-      <p id="settings-guided-hint" className="hint">
-        {t('settings.guidedSendHint')}
-      </p>
-      <fieldset className="settings-received" aria-describedby="settings-received-hint">
-        <legend>{t('settings.receivedFolder')}</legend>
-        <p className="settings-received-name">{receivedFolder}</p>
-        <p id="settings-received-hint" className="hint">
-          {t('settings.receivedFolderHint')}
-        </p>
-        {folderProblem && (
-          <p role="alert" className="settings-problem">
-            {folderProblem}
-          </p>
-        )}
+    <>
+      <Dialog labelledBy="settings-title" onClose={onClose}>
+        <h2 id="settings-title">{t('settings.title')}</h2>
+        <label htmlFor="settings-name">{t('settings.name')}</label>
         <div className="settings-row">
-          <Button onClick={() => void onChooseReceivedFolder().then(setFolderProblem)}>{t('settings.receivedFolderChange')}</Button>
-          {receivedFolderChosen && (
-            <Button onClick={() => void onUsualReceivedFolder().then(setFolderProblem)}>{t('settings.receivedFolderReset')}</Button>
-          )}
-        </div>
-      </fieldset>
-      <fieldset className="settings-speed" aria-describedby="settings-speed-hint">
-        <legend>{t('settings.speed')}</legend>
-        <p id="settings-speed-hint" className="hint">
-          {t('settings.speedHint')}
-        </p>
-        {(['receive', 'send'] as const).map((way) => (
-          <SpeedChoice
-            key={way}
-            id={`settings-${way}-limit`}
-            label={t(way === 'receive' ? 'settings.receiveLimit' : 'settings.sendLimit')}
-            limit={speedLimits[way]}
-            onChange={(limit) => onSpeedLimits({ ...speedLimits, [way]: limit })}
+          <input
+            id="settings-name"
+            type="text"
+            autoComplete="name"
+            maxLength={maxNameLength}
+            value={name}
+            placeholder={t('invite.someone')}
+            aria-describedby="settings-name-hint"
+            aria-invalid={nameProblem}
+            onChange={(event) => setName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void saveName()
+            }}
           />
-        ))}
-      </fieldset>
-      <label htmlFor="settings-servers">{t('settings.servers')}</label>
-      <textarea
-        id="settings-servers"
-        rows={3}
-        spellCheck={false}
-        value={servers}
-        aria-describedby="settings-servers-hint"
-        aria-invalid={problem !== null}
-        onChange={(event) => setServers(event.target.value)}
-      />
-      <p id="settings-servers-hint" className="hint">
-        {t('settings.serversHint')}
-      </p>
-      {problem && (
-        <p role="alert" className="settings-problem">
-          {problem}
+          <Button onClick={() => void saveName()}>{t('settings.nameSave')}</Button>
+        </div>
+        <p id="settings-name-hint" className="hint">
+          {t('settings.nameHint')}
         </p>
-      )}
-      <Button onClick={() => void saveServers()}>{t('settings.serversSave')}</Button>
-      <fieldset className="settings-helper" aria-describedby="settings-helper-hint">
-        <legend>{t('settings.helper')}</legend>
-        <p id="settings-helper-hint" className="hint">
-          {t('settings.helperHint')}
-        </p>
-        <label htmlFor="settings-helper-address">{t('settings.helperAddress')}</label>
-        <input
-          id="settings-helper-address"
-          type="url"
-          spellCheck={false}
-          autoComplete="off"
-          value={address}
-          aria-invalid={helperProblem}
-          onChange={(event) => setAddress(event.target.value)}
-        />
-        <label htmlFor="settings-helper-key">{t('settings.helperKey')}</label>
-        <input
-          id="settings-helper-key"
-          type="password"
-          spellCheck={false}
-          autoComplete="off"
-          value={key}
-          aria-invalid={helperProblem}
-          onChange={(event) => setKey(event.target.value)}
-        />
-        {helperProblem && (
+        {nameProblem && (
           <p role="alert" className="settings-problem">
-            {t('settings.helperInvalid')}
+            {t('settings.nameInvalid')}
           </p>
         )}
-        <Button onClick={() => void saveHelper()}>{t('settings.helperSave')}</Button>
-      </fieldset>
-      <section className="settings-about" aria-labelledby="settings-about-title">
-        <h3 id="settings-about-title">{t('settings.about')}</h3>
-        {version && <p>{t('settings.version', { version })}</p>}
-        <p>{t('settings.openSource')}</p>
-      </section>
-      <div className="dialog-actions">
-        <Button onClick={onClose} autoFocus>
-          {t('settings.close')}
-        </Button>
-      </div>
-    </Dialog>
+        <label htmlFor="settings-language">{t('language.label')}</label>
+        <select
+          id="settings-language"
+          className="settings-select"
+          value={language}
+          aria-describedby="settings-language-hint"
+          onChange={(event) => onLanguage(event.target.value as Language)}
+        >
+          {languages.map((option) => (
+            <option key={option} value={option} lang={option}>
+              {languageNames[option]}
+            </option>
+          ))}
+        </select>
+        <p id="settings-language-hint" className="hint">
+          {t('settings.languageHint')}
+        </p>
+        <fieldset className="settings-theme">
+          <legend>{t('settings.theme')}</legend>
+          {themes.map((option) => (
+            <label key={option} className="settings-check">
+              <input
+                type="radio"
+                name="settings-theme"
+                value={option}
+                checked={theme === option}
+                onChange={() => onTheme(option)}
+              />
+              {t(`settings.theme.${option}`)}
+            </label>
+          ))}
+        </fieldset>
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={startWithWindows}
+            aria-describedby="settings-start-hint"
+            onChange={(event) => onStartWithWindows(event.target.checked)}
+          />
+          {t('settings.startWithWindows')}
+        </label>
+        <p id="settings-start-hint" className="hint">
+          {t('settings.startWithWindowsHint')}
+        </p>
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={guidedSend}
+            aria-describedby="settings-guided-hint"
+            onChange={(event) => onGuidedSend(event.target.checked)}
+          />
+          {t('settings.guidedSend')}
+        </label>
+        <p id="settings-guided-hint" className="hint">
+          {t('settings.guidedSendHint')}
+        </p>
+        <fieldset className="settings-received" aria-describedby="settings-received-hint">
+          <legend>{t('settings.receivedFolder')}</legend>
+          <p className="settings-received-name">{receivedFolder}</p>
+          <p id="settings-received-hint" className="hint">
+            {t('settings.receivedFolderHint')}
+          </p>
+          {folderProblem && (
+            <p role="alert" className="settings-problem">
+              {folderProblem}
+            </p>
+          )}
+          <div className="settings-row">
+            <Button onClick={() => void onChooseReceivedFolder().then(setFolderProblem)}>{t('settings.receivedFolderChange')}</Button>
+            {receivedFolderChosen && (
+              <Button onClick={() => void onUsualReceivedFolder().then(setFolderProblem)}>{t('settings.receivedFolderReset')}</Button>
+            )}
+          </div>
+        </fieldset>
+        <fieldset className="settings-speed" aria-describedby="settings-speed-hint">
+          <legend>{t('settings.speed')}</legend>
+          <p id="settings-speed-hint" className="hint">
+            {t('settings.speedHint')}
+          </p>
+          {(['receive', 'send'] as const).map((way) => (
+            <SpeedChoice
+              key={way}
+              id={`settings-${way}-limit`}
+              label={t(way === 'receive' ? 'settings.receiveLimit' : 'settings.sendLimit')}
+              limit={speedLimits[way]}
+              onChange={(limit) => onSpeedLimits({ ...speedLimits, [way]: limit })}
+            />
+          ))}
+        </fieldset>
+        <label htmlFor="settings-servers">{t('settings.servers')}</label>
+        <textarea
+          id="settings-servers"
+          rows={3}
+          spellCheck={false}
+          value={servers}
+          aria-describedby="settings-servers-hint"
+          aria-invalid={problem !== null}
+          onChange={(event) => setServers(event.target.value)}
+        />
+        <p id="settings-servers-hint" className="hint">
+          {t('settings.serversHint')}
+        </p>
+        {problem && (
+          <p role="alert" className="settings-problem">
+            {problem}
+          </p>
+        )}
+        <Button onClick={() => void saveServers()}>{t('settings.serversSave')}</Button>
+        <fieldset className="settings-helper" aria-describedby="settings-helper-hint">
+          <legend>{t('settings.helper')}</legend>
+          <p id="settings-helper-hint" className="hint">
+            {t('settings.helperHint')}
+          </p>
+          <label htmlFor="settings-helper-address">{t('settings.helperAddress')}</label>
+          <input
+            id="settings-helper-address"
+            type="url"
+            spellCheck={false}
+            autoComplete="off"
+            value={address}
+            aria-invalid={helperProblem}
+            onChange={(event) => setAddress(event.target.value)}
+          />
+          <label htmlFor="settings-helper-key">{t('settings.helperKey')}</label>
+          <input
+            id="settings-helper-key"
+            type="password"
+            spellCheck={false}
+            autoComplete="off"
+            value={key}
+            aria-invalid={helperProblem}
+            onChange={(event) => setKey(event.target.value)}
+          />
+          {helperProblem && (
+            <p role="alert" className="settings-problem">
+              {t('settings.helperInvalid')}
+            </p>
+          )}
+          <Button onClick={() => void saveHelper()}>{t('settings.helperSave')}</Button>
+        </fieldset>
+        <section className="settings-about" aria-labelledby="settings-about-title">
+          <h3 id="settings-about-title">{t('settings.about')}</h3>
+          {version && <p>{t('settings.version', { version })}</p>}
+          <p>{t('settings.openSource')}</p>
+          <Button onClick={() => setShowNotices(true)}>{t('settings.notices')}</Button>
+        </section>
+        <div className="dialog-actions">
+          <Button onClick={onClose} autoFocus>
+            {t('settings.close')}
+          </Button>
+        </div>
+      </Dialog>
+      {/* Beside Settings, not inside it, so Escape closes only the licenses. */}
+      {showNotices && <NoticesDialog bridge={bridge} onError={onError} onClose={() => setShowNotices(false)} />}
+    </>
   )
 }
 

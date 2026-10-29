@@ -308,6 +308,21 @@ public interface IThumbnailProvider
     Task<Thumbnail?> GetAsync(string path, int size, CancellationToken ct = default);
 }
 
+/// <summary>
+/// Shared files, read where they are (AD-20). What a content reference is belongs to the shell: a
+/// path on a computer, or an item picked on a phone, which has no path.
+/// </summary>
+public interface IContentSource
+{
+    bool Exists(string contentRef);
+    /// <summary>Size in bytes; throws when it cannot be read.</summary>
+    long Length(string contentRef);
+    /// <summary>The name the person knows it by, without any folder.</summary>
+    string NameOf(string contentRef);
+    /// <summary>Opens it for reading only, at any position; throws when that fails.</summary>
+    Stream OpenRead(string contentRef);
+}
+
 public interface IFileSystem
 {
     bool FileExists(string path);
@@ -323,6 +338,27 @@ public interface IFileSystem
     Stream OpenRead(string path);
 
     bool FolderExists(string path) => false;
+
+    /// <summary>
+    /// The form a picked, dropped or found item is kept in: its full path on a computer; a phone keeps
+    /// the reference its picker gave, which only the shell understands (AD-20).
+    /// </summary>
+    string FullName(string item) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(item));
+
+    /// <summary>The name the person knows an item by, without its folder.</summary>
+    string NameOf(string item) => Path.GetFileName(Path.TrimEndingDirectorySeparator(item));
+
+    /// <summary>
+    /// The item at <paramref name="relative"/> (as <see cref="ListFiles"/> gives it) inside
+    /// <paramref name="folder"/>; null when it would lead out of the folder.
+    /// </summary>
+    string? Inside(string folder, string relative)
+    {
+        var path = Path.GetFullPath(Path.Combine(folder, relative));
+        return path.StartsWith(Path.TrimEndingDirectorySeparator(folder) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            ? path
+            : null;
+    }
 
     /// <summary>
     /// The files in a folder and the folders inside it, as paths relative to it, in a stable order;
