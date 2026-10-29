@@ -391,6 +391,8 @@ export const en = {
     'ComParta could not read this file. Check that it is not empty or open in another program, then try again.',
   'error.invite.invalid':
     'That is not an invite or download link ComParta can use. Copy the whole text from the message or website and paste it again.',
+  'error.invite.notInMessage':
+    'There is no invite in this message. Ask the other person to send the invite again, then share that message to ComParta.',
   'error.transfer.duplicate': 'You are already receiving this file.',
   'error.transfer.finished': 'This file has already arrived, so there is nothing to pause.',
   'error.disk.full': 'There is not enough room on this computer for this file. Free up some space, then try again.',

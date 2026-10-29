@@ -42,6 +42,9 @@ public sealed partial class MonoTorrentTransferEngine
     public InviteSummary? DescribeDownloadFile(byte[] content) =>
         TryLoadDownloadFile(content, out var torrent) ? new InviteSummary(torrent.Name, torrent.Size) : null;
 
+    /// <summary>What the engine's links start with, so a phone opens ComParta when one is tapped (epic 7 story 6).</summary>
+    public const string LinkScheme = "magnet";
+
     /// <summary>A download link anywhere in the text, such as one Windows opened the app with; null when there is none.</summary>
     public static string? FindLinkIn(string text) => MagnetInText().Match(text) is { Success: true } found ? found.Value : null;
 

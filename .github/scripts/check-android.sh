@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Installs the APK on the emulator, starts ComParta and checks what epic 7 story 1 asks of a first
 # Android build: the app starts its engine, the screen loads and the bridge answers it, and the
-# app is still running afterwards; and that received files have their place in Downloads (story 3).
-# Then (story 12) the phone receives a photo, a video and an MKV video from another device running
-# on this computer, through its own screen: the photo shows and the video plays and seeks in the
-# phone's web view, and the MKV, which it cannot play, opens the Files app at its folder.
+# app is still running afterwards; that received files have their place in Downloads (story 3); and
+# that an invite tapped or shared in another app opens "Get this file?" (story 6).
+# Before that (story 12) the phone receives a photo, a video and an MKV video from another device
+# running on this computer, through its own screen: the photo shows and the video plays and seeks in
+# the phone's web view, and the MKV, which it cannot play, opens the Files app at its folder.
 # Leaves screenshots and the app's log next to the APK.
 #   check-android.sh <APK folder> <folder with photo.jpg, clip.mp4, film.mkv> <ComParta.CheckSender.dll>
 set -euo pipefail
@@ -22,17 +23,23 @@ adb shell touch "/sdcard/Android/data/$package/files/screen-check"
 adb logcat -c
 adb shell am start -W -n "$package/$package.MainActivity"
 
-# Waits for a line in the app's log, or fails after the given number of seconds.
+# How many times a line is in the app's log.
+seen() {
+  adb logcat -d -s ComParta:I | grep -c "$1" || true
+}
+
+# Waits until a line is in the app's log (at least the given number of times), or fails after the
+# given number of seconds.
 wait_for() {
-  local text="$1" seconds="$2"
+  local text="$1" seconds="$2" times="${3:-1}"
   for _ in $(seq "$seconds"); do
-    if adb logcat -d -s ComParta:I | grep -q "$text"; then
+    if [ "$(seen "$text")" -ge "$times" ]; then
       echo "Seen: $text"
       return 0
     fi
     sleep 1
   done
-  echo "Never saw: $text"
+  echo "Never saw: $text (${times} times)"
   return 1
 }
 
@@ -105,6 +112,34 @@ else
   fi
 fi
 kill "$sender_pid" 2> /dev/null || true
+
+# Story 6: an invite tapped in an email, and a chat message shared to ComParta from WhatsApp, open
+# "Get this file?" in the running app; a message without an invite is answered plainly. Nothing
+# starts a second copy of the engine.
+link='magnet:?xt=urn:btih:c12fe1c06bba254a9dc9f519b335aa7c1367a88a&dn=Natal.mp4&xl=1048576'
+adb shell "am start -W -a android.intent.action.VIEW -d '$link' $package"
+wait_for "Asked: Get this file?" 60 1 || status=1
+adb exec-out screencap -p > "$folder/android-link-tapped.png" || true
+# The confirmation stays open: a back press that lands before it shows would leave the app, which
+# ends it when nothing is shared (AD-14). A new link replaces what the confirmation asks.
+adb shell "am start -W -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT 'Oi! Here is the video: $link see you' $package"
+wait_for "Asked: Get this file?" 60 2 || status=1
+adb shell "am start -W -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT 'See you on Sunday' $package"
+wait_for "Said: invite.notInMessage" 60 || status=1
+starts=$(seen "ComParta started")
+if [ "$starts" -ne 1 ]; then
+  echo "ComParta started $starts times after links were opened."
+  status=1
+fi
+
+# The same tapped link when ComParta is not running starts it and asks too.
 adb logcat -d > "$folder/android-log.txt" || true
+adb shell am force-stop "$package"
+adb logcat -c
+adb shell "am start -W -a android.intent.action.VIEW -d '$link' $package"
+wait_for "ComParta started" 180 || status=1
+wait_for "Asked: Get this file?" 120 || status=1
+adb exec-out screencap -p > "$folder/android-link-cold.png" || true
+adb logcat -d >> "$folder/android-log.txt" || true
 grep -E "ComParta|comparta|FATAL|AndroidRuntime" "$folder/android-log.txt" | tail -n 60 || true
 exit $status

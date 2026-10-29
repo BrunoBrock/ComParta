@@ -243,6 +243,7 @@ export const errorCodes = [
   "share.notReady",
   "file.unreadable",
   "invite.invalid",
+  "invite.notInMessage",
   "transfer.duplicate",
   "transfer.notFound",
   "transfer.finished",

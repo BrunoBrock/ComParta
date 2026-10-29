@@ -787,6 +787,18 @@ public sealed class BridgeRouterTests
     }
 
     [Fact]
+    public async Task A_message_shared_to_the_app_without_an_invite_answers_that_plainly()
+    {
+        Assert.False(_opened.OpenMessage("See you on Sunday!"));
+
+        Assert.Single(_events, e => e.GetProperty("event").GetString() == Events.InvitesChanged);
+        var answer = await InvokeAsync(Commands.InvitesTakeOpened);
+        Assert.False(answer.GetProperty("ok").GetBoolean());
+        Assert.Equal(ErrorCodes.InviteNotInMessage, answer.GetProperty("error").GetProperty("code").GetString());
+        Assert.True((await InvokeAsync(Commands.InvitesTakeOpened)).GetProperty("ok").GetBoolean());
+    }
+
+    [Fact]
     public async Task A_share_says_how_many_devices_are_getting_it_and_how_many_finished()
     {
         var id = (await InvokeAsync(Commands.SharesAdd)).GetProperty("value").GetProperty("share").GetProperty("id").GetString()!;

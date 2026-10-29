@@ -215,6 +215,25 @@ describe('an invite link clicked outside the app', () => {
     expect(await screen.findByRole('dialog', { name: en['confirm.title'] })).toBeInTheDocument()
   })
 
+  it('opens the confirmation for a chat message shared to the app with an invite in it', async () => {
+    const { bridge } = setup()
+    await screen.findByText(en['shares.empty'])
+
+    act(() => bridge.openMessage(`Oi! Here is the video: ${sampleFakeInvite} see you`))
+
+    expect(await screen.findByRole('dialog', { name: en['confirm.title'] })).toBeInTheDocument()
+  })
+
+  it('says so when a message shared to the app has no invite in it', async () => {
+    const { bridge } = setup()
+    await screen.findByText(en['shares.empty'])
+
+    act(() => bridge.openMessage('See you on Sunday!'))
+
+    expect(await screen.findByText(en['error.invite.notInMessage'])).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: en['confirm.title'] })).not.toBeInTheDocument()
+  })
+
   it('explains a link ComParta cannot use', async () => {
     const { bridge } = setup()
     await screen.findByText(en['shares.empty'])

@@ -48,6 +48,16 @@ public partial class App : Application
 		});
 		// What this launch was started with (AD-14).
 		services.Opened.Open(LaunchArguments.Current());
+#if ANDROID
+		// An invite tapped or shared in another app (epic 7 story 6), now and while the app runs.
+		PhoneLinks.OnHanded((text, message) =>
+		{
+			if (message)
+				services.Opened.OpenMessage(text);
+			else
+				services.Opened.Open([text]);
+		});
+#endif
 #if WINDOWS
 		var startHidden = StartupEntry.IsBackgroundLaunch(Environment.GetCommandLineArgs()) || Packaged.StartedAtSignIn();
 		window.HandlerChanged += (_, _) => KeepWhenClosed(window, services, startHidden);
