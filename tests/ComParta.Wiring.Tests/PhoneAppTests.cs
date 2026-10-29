@@ -141,11 +141,7 @@ public sealed class PhoneAppTests : IAsyncLifetime
         _engines.Add(computer);
         await computer.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
         if (bytesPerSecond is { } slow)
-        {
-            // Both ends, since a busy computer can let a burst through one of them.
             await computer.SetSpeedLimitsAsync(null, slow);
-            await _engine.SetSpeedLimitsAsync(slow, null);
-        }
         var offered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var shareId = ShareId.New();
         computer.OfferChanged += (changed, state) =>
@@ -330,9 +326,6 @@ public sealed class PhoneAppTests : IAsyncLifetime
         Assert.Equal("Abra o ComParta para continuar.", paused!.Body);
         await ScreenShowsAsync(Events.ActivityChanged, activity => activity.GetProperty("receivingStopped").GetBoolean());
 
-        // Lifted first: a file stopped and started again under a receive limit can stay still, which
-        // is the engine's own matter and not what this test is about.
-        await _engine.SetSpeedLimitsAsync(null, null);
         await _background.AppOpenedAsync();
         // What the address in the invite does on a real phone: tries the computer again until it answers.
         Assert.True(TransferId.TryParse(id, out var transferId));
