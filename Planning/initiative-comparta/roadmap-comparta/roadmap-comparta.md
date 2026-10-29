@@ -26,7 +26,7 @@ architecture owns *how*, the UX design owns *how it looks and reads*, and each e
 
 ## Where we are (2026-10-20)
 
-On `main`, 69 of 129 stories done.
+On `main`, 71 of 129 stories done.
 
 On 2026-10-28 epic 3 (safe received content) was finished: Windows marks every received file as
 coming from another computer and lets the antivirus check it before it shows as received; a file
@@ -168,7 +168,7 @@ can be built and checked on their own, and every story's blocker is named.
 
 | Check | Result |
 | --- | --- |
-| Ticket tree is consistent | `python3 _bmad/method/scripts/tickets.py status Planning/initiative-comparta` reports 18 epics and 129 tickets (69 done, 5 built and waiting on a person, 1 in progress, 1 dropped), and no undeclared dependency. Known: epic 15 is listed before epic 6, which it waits on; both are built. |
+| Ticket tree is consistent | `python3 _bmad/method/scripts/tickets.py status Planning/initiative-comparta` reports 18 epics and 129 tickets (71 done, 6 built and waiting on a person, 1 in progress, 1 dropped), and no undeclared dependency. Known: epic 15 is listed before epic 6, which it waits on; both are built. |
 | Every CAP is covered by an epic | Yes; see the `covers` field in [tickets.toml](../tickets.toml). CAP-24 and CAP-31 (friends) are covered by epic 13 and CAP-32 (folders) by epic 17; their stories after the spikes carry `refine = true`. CAP-33 is epic 18. |
 | Every AD is cited by at least one epic | Yes. |
 | Every epic in R1 and R2 has stories with a `verify` | Yes. |
