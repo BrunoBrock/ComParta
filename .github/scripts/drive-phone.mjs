@@ -33,17 +33,23 @@ async function open(address) {
     socket.onopen = resolve
     socket.onerror = () => reject(new Error('The screen could not be reached.'))
   })
+  // One step at a time: the answer with the id of the step being run is the one it waits for.
   let next = 0
-  const waiting = new Map()
+  let waiting = null
   socket.onmessage = (message) => {
     const reply = JSON.parse(message.data)
-    waiting.get(reply.id)?.(reply)
-    waiting.delete(reply.id)
+    if (waiting !== null && reply.id === waiting.id) {
+      const { resolve } = waiting
+      waiting = null
+      resolve(reply)
+    }
   }
   return {
     async run(fn, ...args) {
       const id = ++next
-      const answered = new Promise((resolve) => waiting.set(id, resolve))
+      const answered = new Promise((resolve) => {
+        waiting = { id, resolve }
+      })
       socket.send(JSON.stringify({
         id,
         method: 'Runtime.evaluate',
