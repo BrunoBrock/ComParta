@@ -192,11 +192,11 @@ public sealed class PhoneAppTests : IAsyncLifetime
         var until = DateTime.UtcNow + Timeout;
         while (DateTime.UtcNow < until)
         {
-            if (_presence.Moving.ToArray().OfType<MovingNotice>().FirstOrDefault(showed) is { } shown)
+            if (_presence.MovingSoFar().OfType<MovingNotice>().FirstOrDefault(showed) is { } shown)
                 return shown;
             await Task.Delay(50);
         }
-        throw new TimeoutException("The phone's notification never showed what was expected.");
+        throw new TimeoutException(await NotExpectedAsync());
     }
 
     private async Task<MovingNotice?> NotificationShowsAsync(Func<MovingNotice?, bool> shows)
@@ -204,12 +204,19 @@ public sealed class PhoneAppTests : IAsyncLifetime
         var until = DateTime.UtcNow + Timeout;
         while (DateTime.UtcNow < until)
         {
-            var shown = _presence.Moving.ToArray();
+            var shown = _presence.MovingSoFar();
             if (shown.Length > 0 && shows(shown[^1]))
                 return shown[^1];
             await Task.Delay(50);
         }
-        throw new TimeoutException("The phone's notification never showed what was expected.");
+        throw new TimeoutException(await NotExpectedAsync());
+    }
+
+    private async Task<string> NotExpectedAsync()
+    {
+        var said = _presence.MovingSoFar().TakeLast(5).Select(notice => notice is null ? "nothing" : $"{notice.Title} ({notice.Percent})");
+        var transfers = await ClickAsync(Commands.TransfersList);
+        return $"The phone's notification never showed what was expected. It said: {string.Join("; ", said)}. Transfers: {transfers}";
     }
 
     private static string Checksum(byte[] bytes) => Convert.ToHexString(SHA256.HashData(bytes));
