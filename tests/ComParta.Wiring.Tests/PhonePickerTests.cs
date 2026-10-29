@@ -29,6 +29,7 @@ public sealed class PhonePickerTests : IAsyncLifetime
     private readonly FakePhoneStorage _phone = new();
     private readonly FakeFilePicker _picker = new();
     private readonly FakeClipboard _clipboard = new();
+    private readonly FakeOpener _opener = new();
     private readonly List<MonoTorrentTransferEngine> _engines = [];
     private FakePaths _paths = null!;
     private Phone _app = null!;
@@ -77,7 +78,7 @@ public sealed class PhonePickerTests : IAsyncLifetime
         var settings = new SettingsUseCases(store, new FakeSystem("pt-BR"), engine, receivedFolder);
         var connection = new ConnectionUseCases(engine, new FakeFirewall());
         var activity = new ActivityUseCases(engine, store);
-        var opener = new FakeOpener();
+        var opener = _opener;
         var received = new ReceivedUseCases(transfers, _paths, opener, disk);
         var thumbnails = new ThumbnailUseCases(shares, received, new FakeThumbnails());
         var sending = new SendingUseCases(engine, shares);
@@ -228,5 +229,110 @@ public sealed class PhonePickerTests : IAsyncLifetime
         Assert.Equal("unavailable", listed[songId]);
         var arrived = await ComputerReceivesAsync(videoId, "video.mp4");
         Assert.Equal(Checksum(_phone.Items[video].Bytes), Checksum(File.ReadAllBytes(arrived)));
+    }
+
+    /// <summary>The first bytes of a JPEG photo and an MP4 video, as a phone's camera writes them.</summary>
+    private static readonly byte[] JpegHead = [0xFF, 0xD8, 0xFF, 0xE1];
+    private static readonly byte[] Mp4Head = [0, 0, 0, 0x20, .. "ftypisom"u8];
+
+    private static byte[] Starting(byte[] head, int size)
+    {
+        var content = RandomNumberGenerator.GetBytes(size);
+        head.CopyTo(content, 0);
+        return content;
+    }
+
+    private static byte[] ReadAll(MediaReply reply)
+    {
+        using var body = reply.Body!;
+        using var copy = new MemoryStream();
+        body.CopyTo(copy);
+        return copy.ToArray();
+    }
+
+    /// <summary>The person taps the file in the grid; the viewer asks to open it, then the web view reads it whole and seeks.</summary>
+    private async Task ViewerPlaysAsync(ItemKindDto kind, string id, string expectedKind, string name, byte[] content)
+    {
+        var opened = await ClickAsync(Commands.MediaOpen, new MediaArgs(kind, id));
+        Assert.Equal((expectedKind, name), (opened.GetProperty("kind").GetString(), opened.GetProperty("name").GetString()));
+        // The screen gets an address that reads this one file: no phone reference and no folder.
+        Assert.DoesNotContain("content://", opened.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain(_folder, opened.GetRawText(), StringComparison.OrdinalIgnoreCase);
+        var url = opened.GetProperty("url").GetString()!;
+
+        var whole = _app.Router.ServeMedia(url, null);
+        Assert.Equal((200, (long)content.Length), (whole.Status, whole.Length));
+        Assert.Equal(content, ReadAll(whole));
+        var seek = _app.Router.ServeMedia(url, $"bytes={content.Length - 1000}-");
+        Assert.Equal((206, $"bytes {content.Length - 1000}-{content.Length - 1}/{content.Length}"), (seek.Status, seek.ContentRange));
+        Assert.Equal(content[^1000..], ReadAll(seek));
+        Assert.Equal(416, _app.Router.ServeMedia(url, $"bytes={content.Length}-").Status);
+    }
+
+    [Fact]
+    public async Task A_photo_and_a_video_picked_on_the_phone_open_in_the_viewer_and_the_video_seeks()
+    {
+        var photo = Starting(JpegHead, 80_000);
+        var video = Starting(Mp4Head, 300_000);
+        _picker.NextPick = _phone.AddItem("IMG_20261029.jpg", photo);
+        var photoId = (await ClickAsync(Commands.SharesAdd)).GetProperty("share").GetProperty("id").GetString()!;
+        _picker.NextPick = _phone.AddItem("VID_20261029.mp4", video);
+        var videoId = (await ClickAsync(Commands.SharesAdd)).GetProperty("share").GetProperty("id").GetString()!;
+        await WhenReadyAsync(photoId);
+        await WhenReadyAsync(videoId);
+
+        await ViewerPlaysAsync(ItemKindDto.Share, photoId, "picture", "IMG_20261029.jpg", photo);
+        await ViewerPlaysAsync(ItemKindDto.Share, videoId, "video", "VID_20261029.mp4", video);
+    }
+
+    [Fact]
+    public async Task A_video_the_phone_received_plays_and_seeks_from_where_it_arrived()
+    {
+        // A computer shares a video; the phone receives it through the screen's Receive button.
+        var originals = Path.Combine(_folder, "originals");
+        Directory.CreateDirectory(originals);
+        var content = Starting(Mp4Head, 400_000);
+        var original = Path.Combine(originals, "Formatura.mp4");
+        File.WriteAllBytes(original, content);
+        var computer = new MonoTorrentTransferEngine(new FakePaths(Path.Combine(_folder, "computer")));
+        _engines.Add(computer);
+        await computer.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var offered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shareId = ShareId.New();
+        computer.OfferChanged += (changed, state) =>
+        {
+            if (changed == shareId && state == OfferState.Ready)
+                offered.TrySetResult();
+        };
+        await computer.OfferAsync(shareId, original);
+        await offered.Task.WaitAsync(Timeout);
+
+        var id = (await ClickAsync(Commands.TransfersReceive, new ReceiveArgs((await computer.GetInviteAsync(shareId))!))).GetProperty("id").GetString()!;
+        Assert.True(TransferId.TryParse(id, out var transferId));
+        await _app.Engine.ConnectAsync(transferId, new IPEndPoint(IPAddress.Loopback, computer.ListenEndPoint!.Port));
+        var until = DateTime.UtcNow + Timeout;
+        while (!_app.Events.Any(e => e.GetProperty("event").GetString() == Events.TransfersChanged
+            && e.GetProperty("payload").EnumerateArray().Any(t => t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() == "done")))
+        {
+            Assert.True(DateTime.UtcNow < until, "The screen never showed the video as arrived.");
+            await Task.Delay(50);
+        }
+
+        await ViewerPlaysAsync(ItemKindDto.Transfer, id, "video", "Formatura.mp4", content);
+    }
+
+    [Fact]
+    public async Task A_video_the_phone_cannot_play_offers_its_folder_and_the_folder_opens()
+    {
+        _picker.NextPick = _phone.AddItem("Casamento.mkv", Starting([0x1A, 0x45, 0xDF, 0xA3], 50_000));
+        var id = (await ClickAsync(Commands.SharesAdd)).GetProperty("share").GetProperty("id").GetString()!;
+        await WhenReadyAsync(id);
+
+        var json = await _app.Router.InvokeAsync(Commands.MediaOpen, JsonSerializer.Serialize(new MediaArgs(ItemKindDto.Share, id), Contract.Json));
+        Assert.Equal(ErrorCodes.MediaNotPlayable, JsonDocument.Parse(json).RootElement.GetProperty("error").GetProperty("code").GetString());
+
+        // "Open the folder": the phone's reveal shows the Files app there.
+        await ClickAsync(Commands.SharesReveal, new IdArgs(id));
+        Assert.Equal([_picker.NextPick], _opener.Revealed);
     }
 }

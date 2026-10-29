@@ -1782,6 +1782,18 @@ dialog.viewer {
   margin: 0;
 }
 
+/* On a phone (epic 7 story 12): a larger Close for a thumb, and the message fits the narrow screen. */
+@media (max-width: 600px) {
+  .viewer-bar button {
+    min-width: 48px;
+    min-height: 48px;
+  }
+
+  .viewer-cannot {
+    margin: 0 calc(var(--space) * 2);
+  }
+}
+
 /* Your name in Settings: the field and its save button on one line. */
 .settings-row {
   display: flex;

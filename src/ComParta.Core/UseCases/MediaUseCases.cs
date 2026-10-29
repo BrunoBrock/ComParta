@@ -80,7 +80,7 @@ public sealed class MediaUseCases(ShareUseCases shares, ReceivedUseCases receive
             (path, name) = (found!, Path.GetFileName(found!));
         }
 
-        if (!Formats.TryGetValue(Path.GetExtension(path), out var format) || !files.FileExists(path) || !format.Looks(ReadHead(path)))
+        if (!Formats.TryGetValue(Path.GetExtension(KindName(path)), out var format) || !files.FileExists(path) || !format.Looks(ReadHead(path)))
             return Result<MediaItem>.Fail(ErrorKind.NotPlayable);
 
         var token = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
@@ -156,6 +156,22 @@ public sealed class MediaUseCases(ShareUseCases shares, ReceivedUseCases receive
             end = Math.Min(asked, size - 1);
         }
         return start >= size ? (1, 0) : (start, end);
+    }
+
+    /// <summary>
+    /// The name that tells the file's kind: a path ends in it, but an item picked on a phone has no
+    /// path (AD-20), so the shell is asked the name it knows the item by. Empty when it cannot tell.
+    /// </summary>
+    private string KindName(string path)
+    {
+        try
+        {
+            return files.NameOf(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return "";
+        }
     }
 
     private byte[] ReadHead(string path)
