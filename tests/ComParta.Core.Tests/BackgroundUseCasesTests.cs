@@ -232,6 +232,18 @@ public sealed class BackgroundUseCasesTests
     }
 
     [Fact]
+    public async Task Bytes_that_arrive_show_the_notification_even_before_the_engine_measures_a_speed()
+    {
+        await _notifications.StartAsync();
+        await _background.StartAsync();
+        var id = (await _transfers.ReceiveAsync("invite:Natal.mp4")).Value!.Transfer.Id;
+
+        _engine.Report(new ReceiveProgress(id, "Natal.mp4", 1_000, 300, false));
+
+        Assert.Equal(30, _presence.Moving[^1]!.Percent);
+    }
+
+    [Fact]
     public async Task Sending_and_receiving_several_files_are_counted_in_one_line_in_English()
     {
         await _settings.SetAsync("en", null, null);

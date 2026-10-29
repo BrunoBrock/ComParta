@@ -39,6 +39,7 @@ public sealed class BackgroundUseCases
     private bool _explained;
     private bool? _startWithSystem;
     private MovingNotice? _shown;
+    private long _receivedSoFar;
     private bool _bothStopped;
     private bool _pausedForTime;
 
@@ -65,7 +66,7 @@ public sealed class BackgroundUseCases
         _activity = activity;
         _clock = clock ?? TimeProvider.System;
         _engine.ActivityChanged += OnActivityChanged;
-        _transfers.Changed += ShowMoving;
+        _transfers.Changed += OnTransfersChanged;
         if (_activity is not null)
             _activity.Changed += OnStoppedChanged;
         _settings.Changed += () => _ = ApplyStartWithSystemAsync();
@@ -274,6 +275,21 @@ public sealed class BackgroundUseCases
             try { _presence.ShowMoving(notice); }
             catch (Exception) { /* the transfer continues while the screen is on */ }
         }
+    }
+
+    /// <summary>Bytes that arrived count as moving too, even between two of the engine's looks at its speed.</summary>
+    private void OnTransfersChanged()
+    {
+        long received;
+        try { received = _transfers.List().Where(view => view.State == TransferState.Receiving).Sum(view => view.ReceivedBytes); }
+        catch (Exception) { return; }
+        lock (_lock)
+        {
+            if (received > _receivedSoFar)
+                _lastMoved = _clock.GetUtcNow();
+            _receivedSoFar = received;
+        }
+        ShowMoving();
     }
 
     private void OnActivityChanged()
