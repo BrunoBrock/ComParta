@@ -214,9 +214,10 @@ public sealed class PhoneAppTests : IAsyncLifetime
         var until = DateTime.UtcNow + Timeout;
         while (DateTime.UtcNow < until)
         {
-            var shown = _presence.MovingSoFar();
-            if (shown.Length > 0 && shows(shown[^1]))
-                return shown[^1];
+            // Nothing shown yet counts as no notification.
+            var shown = _presence.MovingSoFar().LastOrDefault();
+            if (shows(shown))
+                return shown;
             await Task.Delay(50);
         }
         throw new TimeoutException(await NotExpectedAsync());
@@ -308,8 +309,10 @@ public sealed class PhoneAppTests : IAsyncLifetime
         _opened.Open([invite]);
         var (asked, _) = await ScreenAsksAsync();
         var id = await StartReceivingAsync(asked, computer);
-        // Any notice: on a busy computer the file can arrive before its progress is ever seen.
-        await NotificationShowedAsync(notice => notice is not null);
+        // Pressed once bytes arrive; on a busy computer the whole file can arrive before the
+        // notification ever shows it, and then nothing more may arrive either.
+        await ScreenShowsAsync(Events.TransfersChanged, list => list.EnumerateArray().Any(t =>
+            t.GetProperty("id").GetString() == id && t.GetProperty("state").GetString() is "receiving" or "done"));
 
         // What the service runs when Stop is pressed on the notification.
         await _background.StopFromNoticeAsync();
