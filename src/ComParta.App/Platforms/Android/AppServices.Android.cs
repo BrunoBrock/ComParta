@@ -5,8 +5,9 @@ namespace ComParta.App;
 
 /// <summary>
 /// The Android adapters (epic 7): the same core, engine and screen, with the phone's own picker and
-/// its picked items read where they are (story 2). Received files in Downloads, notifications and the
-/// background service come in later stories, so their adapters here do as little as is safe.
+/// its picked items read where they are (story 2), and the service that keeps transfers going with
+/// the screen off (story 7). Notifications for what arrived come in a later story, so that adapter
+/// does as little as is safe.
 /// </summary>
 public sealed partial class AppServices
 {
@@ -17,7 +18,7 @@ public sealed partial class AppServices
 		// Picked items are read where they are, through the phone's content resolver (story 2).
 		var storage = new AndroidStorage();
 		return new(
-			new AndroidFirewall(), new AndroidOpener(), new NoThumbnails(), new NoNotifications(), new AndroidPresence(Stop),
+			new AndroidFirewall(), new AndroidOpener(), new NoThumbnails(), new NoNotifications(), new AndroidPresence(Stop, () => Background),
 			// The phone keeps received files in its own sandbox; there is no protection to hand them to.
 			new AndroidPicker(), storage, storage, Ports.NoReceivedFileCheck.Instance);
 	}

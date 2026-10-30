@@ -159,6 +159,10 @@ public sealed class ButtonsTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        // Limits lifted first: the engine queues slowed reads and writes in one place for the whole
+        // process, and one left waiting by a stopped engine would hold back the next test's files.
+        await _engine.SetSpeedLimitsAsync(null, null);
+        await Task.Delay(300);
         await _engine.StopAsync().WaitAsync(Quick);
         Assert.Null(_failure);
         try { Directory.Delete(_folder, recursive: true); }

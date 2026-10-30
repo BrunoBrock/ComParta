@@ -154,6 +154,10 @@ jobs:
           name: ComParta-apk
           path: publish/android/*-Signed.apk
 
+      # The computer side of the emulator check: shares a file the phone receives with the screen off.
+      - name: Build the computer-side sender
+        run: dotnet build tests/ComParta.PhoneCheck/ComParta.PhoneCheck.csproj -c Release -o publish/phone-check
+
       # Another device for the emulator to receive from (epic 7 story 12), and what it shares: a photo,
       # a video the phone plays, and an MKV video it cannot play.
       - name: Build the other device and its files
@@ -189,4 +193,6 @@ jobs:
             publish/android/android-*.png
             publish/android/check-sender.txt
             publish/android/android-log.txt
+            publish/android/android-screen.xml
+            publish/android/computer-log.txt
           if-no-files-found: ignore

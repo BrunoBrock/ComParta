@@ -135,12 +135,29 @@ public sealed class NoNotifications : Ports.INotifier
 }
 
 /// <summary>
-/// Staying present on a phone (AD-14). The foreground service that keeps transfers going with the
-/// screen off is epic 7 story 7; until then leaving puts the app behind the others, as the home
-/// button does, and quitting ends it.
+/// Staying present on a phone (AD-14). While bytes move, a foreground service keeps the app working
+/// with the screen off, shown as a notification with how far the files are and a Stop button (epic 7
+/// story 7). Core decides what it says and when it starts and stops; this only shows it. Leaving
+/// puts the app behind the others, as the home button does, and quitting ends it.
 /// </summary>
-public sealed class AndroidPresence(Action stop) : Ports.IBackgroundPresence
+public sealed class AndroidPresence : Ports.IBackgroundPresence
 {
+	private const string AskedKey = "notifications.asked";
+	private const int AskRequest = 7701;
+
+	private readonly Action _stop;
+	private readonly Func<ComParta.Core.UseCases.BackgroundUseCases?> _background;
+
+	public AndroidPresence(Action stop, Func<ComParta.Core.UseCases.BackgroundUseCases?> background)
+	{
+		_stop = stop;
+		_background = background;
+		Current = this;
+	}
+
+	/// <summary>The running app's presence, for the service and the activity to reach core.</summary>
+	public static AndroidPresence? Current { get; private set; }
+
 	public void KeepAwake(bool awake)
 	{
 	}
@@ -151,9 +168,80 @@ public sealed class AndroidPresence(Action stop) : Ports.IBackgroundPresence
 
 	public void Quit() => MainThread.BeginInvokeOnMainThread(() =>
 	{
-		stop();
+		MovingService.Hide(Android.App.Application.Context);
+		_stop();
 		Platform.CurrentActivity?.FinishAndRemoveTask();
 	});
 
 	public void Hide() => MainThread.BeginInvokeOnMainThread(() => Platform.CurrentActivity?.MoveTaskToBack(true));
+
+	public void ShowMoving(Ports.MovingNotice? notice) => MainThread.BeginInvokeOnMainThread(() =>
+	{
+		var context = Android.App.Application.Context;
+		try
+		{
+			if (notice is null)
+			{
+				MovingService.Hide(context);
+				MovingService.HidePaused(context);
+			}
+			else if (notice.Paused)
+			{
+				MovingService.Hide(context);
+				MovingService.ShowPaused(context, notice);
+			}
+			else
+			{
+				AskOnce(notice);
+				MovingService.Show(context, notice);
+			}
+		}
+		catch (Exception e)
+		{
+			// The phone refused the service, as it does for an app out of sight on Android 12 and later;
+			// the transfer goes on while the screen is on, and the next change tries again.
+			Android.Util.Log.Warn("ComParta", $"Could not keep going with the screen off: {e.GetType().Name}");
+		}
+	});
+
+	/// <summary>The Stop button on the notification.</summary>
+	internal void StopFromNotice() => Run(background => background.StopFromNoticeAsync());
+
+	/// <summary>The phone allowed no more time with the screen off.</summary>
+	internal void TimedOut() => Run(background => background.TimedOutAsync());
+
+	/// <summary>The person opened the app: what was paused for lack of time continues.</summary>
+	public void AppOpened() => Run(background => background.AppOpenedAsync());
+
+	private void Run(Func<ComParta.Core.UseCases.BackgroundUseCases, Task> step)
+	{
+		if (_background() is not { } background)
+			return;
+		_ = Task.Run(async () =>
+		{
+			try { await step(background); }
+			catch (Exception e) { Android.Util.Log.Warn("ComParta", e.GetType().Name); }
+		});
+	}
+
+	/// <summary>
+	/// The first time files move, says in one sentence why ComParta wants to show a notification, then
+	/// lets the phone ask (Android 13 and later). Asked once; the person can change it in the phone's settings.
+	/// </summary>
+	private static void AskOnce(Ports.MovingNotice notice)
+	{
+		if (!OperatingSystem.IsAndroidVersionAtLeast(33) || Platform.CurrentActivity is not { } activity)
+			return;
+		if (AndroidX.Core.Content.ContextCompat.CheckSelfPermission(activity, Android.Manifest.Permission.PostNotifications)
+				== Android.Content.PM.Permission.Granted
+			|| Preferences.Default.Get(AskedKey, false))
+			return;
+		Preferences.Default.Set(AskedKey, true);
+		new AndroidX.AppCompat.App.AlertDialog.Builder(activity)
+			.SetMessage(notice.Why)!
+			.SetCancelable(false)!
+			.SetPositiveButton(notice.WhyOk, (_, _) =>
+				AndroidX.Core.App.ActivityCompat.RequestPermissions(activity, [Android.Manifest.Permission.PostNotifications], AskRequest))!
+			.Show();
+	}
 }

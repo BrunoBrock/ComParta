@@ -464,7 +464,17 @@ public sealed class BridgeRouter
 
     private static CommandResult Failure(ErrorKind? error) => CommandResult.Failure(ToCode(error ?? ErrorKind.Unexpected));
 
-    private void RaiseShares() => Raise(Events.SharesChanged, _shares.Current().Select(ToDto).ToArray());
+    private readonly object _sharesRaising = new();
+
+    /// <summary>
+    /// The list as it is now. Changes arrive from several threads; one at a time, so an older list
+    /// never reaches the screen after a newer one and leaves a ready share showing as getting ready.
+    /// </summary>
+    private void RaiseShares()
+    {
+        lock (_sharesRaising)
+            Raise(Events.SharesChanged, _shares.Current().Select(ToDto).ToArray());
+    }
 
     private ShareDto ToDto(ShareView view) => ToDto(view, _sending.For(view.Share.Id));
 

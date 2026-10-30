@@ -136,7 +136,8 @@ public sealed partial class MonoTorrentTransferEngine
 
     public IReadOnlyList<ReceiveFile>? GetReceiveFiles(TransferId id)
     {
-        if (!_incoming.TryGetValue(id, out var incoming) || incoming.Finishing || !incoming.Manager.HasMetadata)
+        // The engine can say it has the list of files a moment before the list is filled in.
+        if (!_incoming.TryGetValue(id, out var incoming) || incoming.Finishing || !incoming.Manager.HasMetadata || incoming.Manager.Files.Count == 0)
             return null;
         var skipped = incoming.Skipped;
         return [.. incoming.Manager.Files.Select((file, index) =>

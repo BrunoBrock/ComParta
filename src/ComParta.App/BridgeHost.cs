@@ -31,7 +31,7 @@ public sealed class BridgeHost
 				Android.Util.Log.Info("ComParta", $"Screen answered: {command}");
 			// And for these: the screen showed "Get this file?" for a tapped or shared invite, or said a
 			// shared message had none (epic 7 story 6).
-			if (command is Commands.TransfersPreview or Commands.InvitesTakeOpened)
+			if (command is Commands.TransfersPreview or Commands.InvitesTakeOpened or Commands.TransfersReceive)
 				LogAnswer(command, result);
 #endif
 			return result;
@@ -50,6 +50,10 @@ public sealed class BridgeHost
 		var root = answer.RootElement;
 		if (command == Commands.TransfersPreview && root.GetProperty("ok").GetBoolean())
 			Android.Util.Log.Info("ComParta", "Asked: Get this file?");
+		else if (command == Commands.TransfersReceive)
+			Android.Util.Log.Info("ComParta", root.GetProperty("ok").GetBoolean()
+				? "Receiving started"
+				: $"Could not start receiving: {root.GetProperty("error").GetProperty("code").GetString()}");
 		else if (command == Commands.InvitesTakeOpened && !root.GetProperty("ok").GetBoolean())
 			Android.Util.Log.Info("ComParta", $"Said: {root.GetProperty("error").GetProperty("code").GetString()}");
 	}

@@ -58,6 +58,11 @@ public sealed class PhonePickerTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        // Limits lifted first: the engine queues slowed reads and writes in one place for the whole
+        // process, and one left waiting by a stopped engine would hold back the next test's files.
+        foreach (var engine in _engines)
+            await engine.SetSpeedLimitsAsync(null, null);
+        await Task.Delay(300);
         foreach (var engine in _engines)
             await engine.StopAsync().WaitAsync(Quick);
         try { Directory.Delete(_folder, recursive: true); }

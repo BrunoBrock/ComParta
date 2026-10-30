@@ -78,7 +78,7 @@ public sealed partial class AppServices
 			var thumbnails = new ThumbnailUseCases(shares, received, platform.Thumbnails);
 			var sending = new SendingUseCases(_engine, shares);
 			var notifications = _notifications = new NotificationUseCases(_engine, transfers, shares, sending, settings, platform.Notifier, Focus);
-			var background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, platform.Presence);
+			var background = new BackgroundUseCases(_engine, shares, transfers, sending, settings, store, notifications, platform.Presence, activity: activity);
 			var router = new BridgeRouter(
 				shares, transfers, settings, connection, Opened, activity, received, new NativeClipboard(), opener, thumbnails, Dropped,
 				sending, notifications, background, new MediaUseCases(shares, received, platform.SharedFiles),

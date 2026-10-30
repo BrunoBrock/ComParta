@@ -26,10 +26,23 @@ public class MainActivity : MauiAppCompatActivity
 		// Read by the Android check in CI, with the start line, to see the app starts only once.
 		Android.Util.Log.Info("ComParta", $"Screen opened{(savedInstanceState is null ? "" : " again")}");
 		base.OnCreate(savedInstanceState);
+#if DEBUG
+		// A debug build tries the phone's time limit for the screen off in a minute:
+		// adb shell am start -n org.comparta.app/org.comparta.app.MainActivity --ei limitSeconds 60
+		if (Intent?.GetIntExtra("limitSeconds", 0) is > 0 and var seconds)
+			MovingService.Limit = TimeSpan.FromSeconds(seconds);
+#endif
 		// A screen made again (turned, or after the system closed it) would bring back the link it was
 		// first opened with, and so would opening the app again from the recent apps.
 		if (savedInstanceState is null && Intent is { } intent && !intent.Flags.HasFlag(ActivityFlags.LaunchedFromHistory))
 			PhoneLinks.Hand(intent);
+	}
+
+	/// <summary>The person opened the app: what was paused to save battery continues (epic 7 story 7).</summary>
+	protected override void OnResume()
+	{
+		base.OnResume();
+		AndroidPresence.Current?.AppOpened();
 	}
 
 	/// <summary>The app was already open: the same screen and engine take the link (one running copy, as on Windows).</summary>

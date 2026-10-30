@@ -297,7 +297,25 @@ public interface IBackgroundPresence
     /// notification area; on a phone the app goes behind the others.
     /// </summary>
     void Hide();
+    /// <summary>
+    /// Shows what is moving while the app works out of sight, with a Stop button, or nothing once
+    /// bytes have not moved for a while (null). On a phone this is the notification of the service
+    /// that keeps transfers going with the screen off (AD-14, epic 7 story 7); Windows shows the
+    /// speed bar in its window and the icon by the clock instead, so it does nothing here.
+    /// </summary>
+    void ShowMoving(MovingNotice? notice)
+    {
+    }
 }
+
+/// <summary>What the phone's notification says while files move, in the person's language.</summary>
+/// <param name="Title">"Sending “Natal.mp4”: 45 %", or that transfers were paused to save battery.</param>
+/// <param name="Percent">For the progress bar, 0 to 100; null when there is no bar to show.</param>
+/// <param name="Stop">The Stop button's words, or null when there is nothing to stop.</param>
+/// <param name="Why">The one sentence said before the phone asks whether ComParta may show notifications.</param>
+/// <param name="WhyOk">The button under that sentence.</param>
+/// <param name="Paused">Transfers were paused because the phone allowed no more time; they continue when the app opens.</param>
+public sealed record MovingNotice(string Title, string Body, int? Percent, string? Stop, string Why, string WhyOk, bool Paused = false);
 
 /// <summary>A small picture of a file, as the operating system draws it.</summary>
 public sealed record Thumbnail(string ContentType, byte[] Bytes);
