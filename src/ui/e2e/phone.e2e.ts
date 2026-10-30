@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
 import { expect, type Locator, type Page, test } from '@playwright/test'
 import { en } from '../src/i18n/en.ts'
 import { ptBR } from '../src/i18n/pt-BR.ts'
@@ -204,3 +205,62 @@ async function shareThroughTheGuidePt(page: Page) {
   await page.getByRole('menuitem', { name: ptBR['shares.add'] }).tap()
   await page.getByRole('dialog').getByRole('button', { name: ptBR['steps.done'] }).tap()
 }
+
+/** What the app's web view would read: a small photo for a picture, a short clip for a video. */
+const media = {
+  photo: fileURLToPath(new URL('./media/photo.jpg', import.meta.url)),
+  clip: fileURLToPath(new URL('./media/clip.webm', import.meta.url)),
+}
+
+/** Answers the addresses the fake bridge gives, as the app's web view does with the file asked for. */
+async function serveMedia(page: Page) {
+  await page.route('https://media.comparta.invalid/**', (route) =>
+    route.request().resourceType() === 'image'
+      ? route.fulfill({ path: media.photo, contentType: 'image/jpeg' })
+      : route.fulfill({ path: media.clip, contentType: 'video/webm' }),
+  )
+}
+
+/** The viewer fills the phone, its Close is large, and Close goes back to where it was opened. */
+async function expectViewerFillsThePhoneAndCloses(page: Page, viewer: Locator) {
+  const box = (await viewer.boundingBox())!
+  expect([box.x, box.y, Math.round(box.width), Math.round(box.height)]).toEqual([0, 0, 360, 740])
+  const close = viewer.getByRole('button', { name: en['viewer.close'] })
+  const closeBox = (await close.boundingBox())!
+  expect(Math.min(closeBox.width, closeBox.height)).toBeGreaterThanOrEqual(48)
+  expect(await smallTargets(viewer)).toEqual([])
+  await expectNoSidewaysScroll(page)
+  await close.tap()
+  await expect(viewer).toBeHidden()
+}
+
+test('a shared video plays and a received photo shows full screen, and Close goes back (epic 7 story 12)', async ({ page }) => {
+  await serveMedia(page)
+  await open(page)
+
+  // The first sample the guided send shares is a video.
+  await shareThroughTheGuide(page)
+  await page.getByRole('button', { name: /^Details of / }).first().tap()
+  const sheet = page.getByRole('dialog', { name: /^Details of / })
+  await sheet.getByRole('button', { name: en['received.open'] }).tap()
+  const player = page.getByRole('dialog', { name: 'Birthday party.mp4', exact: true })
+  await expect.poll(() => player.locator('video').evaluate((video: HTMLVideoElement) => video.readyState)).toBeGreaterThan(0)
+  await expectViewerFillsThePhoneAndCloses(page, player)
+  await expect(sheet).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(sheet).toBeHidden()
+
+  // A photo arrives, and opens from its card in Received.
+  await page.getByRole('button', { name: en['fab.open'] }).tap()
+  await page.getByRole('menuitem', { name: en['transfers.open'] }).tap()
+  const receive = page.getByRole('dialog', { name: en['receive.title'] })
+  await receive.getByLabel(en['transfers.inviteLabel']).fill('https://example.org/download/Beach%20day.jpg')
+  await receive.getByRole('button', { name: en['receive.continue'] }).tap()
+  await page.getByRole('dialog', { name: en['confirm.title'] }).getByRole('button', { name: en['transfers.receive'] }).tap()
+  const openPhoto = page.getByRole('button', { name: en['received.openFor'].replace('{name}', 'Beach day.jpg'), exact: true })
+  await expect(openPhoto).toBeVisible({ timeout: 30_000 })
+  await openPhoto.tap()
+  const photo = page.getByRole('dialog', { name: 'Beach day.jpg', exact: true })
+  await expect.poll(() => photo.getByRole('img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
+  await expectViewerFillsThePhoneAndCloses(page, photo)
+})

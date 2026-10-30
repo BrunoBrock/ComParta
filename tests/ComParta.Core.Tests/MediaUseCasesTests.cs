@@ -232,4 +232,77 @@ public sealed class MediaUseCasesTests
             _media.Open(MediaSource.Share, id);
         Assert.Equal(404, _media.Serve(first, null).Status);
     }
+
+    /// <summary>As on a phone (epic 7 story 12): what the person shares is read through the phone's content port and has no path.</summary>
+    private sealed class OnAPhone
+    {
+        public FakePhoneStorage Phone { get; } = new();
+        public FakeFilePicker Picker { get; } = new();
+        public ShareUseCases Shares { get; }
+        public MediaUseCases Media { get; }
+
+        public OnAPhone()
+        {
+            var engine = new FakeEngine();
+            Shares = new ShareUseCases(new FakeShareRepository(), engine, Picker, Phone);
+            var transfers = new TransferUseCases(new FakeTransferRepository(), engine, files: new FakeFileSystem());
+            var received = new ReceivedUseCases(transfers, new FakePaths(Path.Combine(Path.GetTempPath(), "comparta-phone-media")), new FakeOpener(), Phone);
+            Media = new MediaUseCases(Shares, received, Phone);
+        }
+
+        public async Task<string> ShareAsync(string name, byte[] content)
+        {
+            Picker.NextPick = Phone.AddItem(name, content);
+            return (await Shares.AddAsync()).Value!.Share!.Share.Id.ToString();
+        }
+    }
+
+    [Theory]
+    [InlineData("IMG_2041.jpg", MediaKind.Picture, "image/jpeg")]
+    [InlineData("Áudio do WhatsApp.mp3", MediaKind.Song, "audio/mpeg")]
+    [InlineData("VID_2026.mp4", MediaKind.Video, "video/mp4")]
+    public async Task On_a_phone_a_shared_item_with_no_path_opens_by_the_name_the_phone_gives_and_seeks(string name, MediaKind kind, string type)
+    {
+        var phone = new OnAPhone();
+        var head = kind switch { MediaKind.Picture => Heads.Jpeg, MediaKind.Song => Heads.Mp3, _ => Heads.Mp4 };
+        var content = Content(head, 2_000);
+        var id = await phone.ShareAsync(name, content);
+
+        var opened = phone.Media.Open(MediaSource.Share, id);
+
+        Assert.True(opened.Ok, opened.Error.ToString());
+        Assert.Equal((kind, name), (opened.Value!.Kind, opened.Value.Name));
+        var whole = phone.Media.Serve(opened.Value.Token, null);
+        Assert.Equal((200, type, 2_000L), (whole.Status, whole.ContentType, whole.Length));
+        Assert.Equal(content, Read(whole));
+        var seek = phone.Media.Serve(opened.Value.Token, "bytes=1500-1599");
+        Assert.Equal((206, "bytes 1500-1599/2000"), (seek.Status, seek.ContentRange));
+        Assert.Equal(content[1500..1600], Read(seek));
+        Assert.Equal(416, phone.Media.Serve(opened.Value.Token, "bytes=2000-").Status);
+    }
+
+    [Theory]
+    [InlineData("filme.mkv")]
+    [InlineData("contrato.pdf")]
+    [InlineData("sem extensão")]
+    public async Task On_a_phone_an_item_the_screen_cannot_play_gives_the_fallback(string name)
+    {
+        var phone = new OnAPhone();
+        var id = await phone.ShareAsync(name, Content(Heads.Mp4, 100));
+
+        Assert.Equal(ErrorKind.NotPlayable, phone.Media.Open(MediaSource.Share, id).Error);
+    }
+
+    [Fact]
+    public async Task On_a_phone_an_item_whose_permission_was_taken_back_gives_the_fallback()
+    {
+        var phone = new OnAPhone();
+        var id = await phone.ShareAsync("praia.jpg", Content(Heads.Jpeg, 100));
+        var token = phone.Media.Open(MediaSource.Share, id).Value!.Token;
+
+        phone.Phone.Revoked.Add(phone.Picker.NextPick!);
+
+        Assert.Equal(ErrorKind.NotPlayable, phone.Media.Open(MediaSource.Share, id).Error);
+        Assert.Equal(404, phone.Media.Serve(token, null).Status);
+    }
 }
