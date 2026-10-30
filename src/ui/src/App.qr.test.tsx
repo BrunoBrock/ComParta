@@ -87,7 +87,7 @@ describe('show an invite as a QR code', () => {
 
   it('gives up on a link too long for any QR code instead of drawing a broken one', () => {
     expect(drawQr('x'.repeat(3000))).toBeNull()
-    expect(drawQr(`magnet:?xt=urn:btih:${'a'.repeat(40)}&dn=Natal.mp4`)?.size).toBeGreaterThan(21)
+    expect(drawQr(`link:?id=${'a'.repeat(40)}&dn=Natal.mp4`)?.size).toBeGreaterThan(21)
   })
 })
 
