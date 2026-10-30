@@ -444,10 +444,13 @@ internal sealed class FakePhoneStorage : IFileSystem, IContentSource
     /// <summary>Items whose permission the person took back.</summary>
     public HashSet<string> Revoked { get; } = new(StringComparer.Ordinal);
 
-    public string AddItem(string name, int sizeBytes)
+    public string AddItem(string name, int sizeBytes) => AddItem(name, System.Security.Cryptography.RandomNumberGenerator.GetBytes(sizeBytes));
+
+    /// <summary>An item with this content; its reference, like the phone's, says nothing of its name or kind.</summary>
+    public string AddItem(string name, byte[] bytes)
     {
         var reference = $"content://com.android.providers.media.documents/document/{++_next}";
-        Items[reference] = (name, System.Security.Cryptography.RandomNumberGenerator.GetBytes(sizeBytes));
+        Items[reference] = (name, bytes);
         return reference;
     }
 
@@ -463,15 +466,20 @@ internal sealed class FakePhoneStorage : IFileSystem, IContentSource
 
     private bool Readable(string reference) => Items.ContainsKey(reference) && !Revoked.Contains(reference);
 
-    public bool FileExists(string path) => Readable(path);
-    public bool Exists(string contentRef) => Readable(contentRef);
+    // As on the phone, the app's own files (what arrived, in Downloads/ComParta) are ordinary files.
+    private static bool IsPicked(string item) => item.StartsWith("content://", StringComparison.Ordinal);
+
+    public bool FileExists(string path) => IsPicked(path) ? Readable(path) : File.Exists(path);
+    public bool Exists(string contentRef) => FileExists(contentRef);
 
     public long GetReadableFileSize(string path) => Length(path);
     public long Length(string contentRef) =>
-        Readable(contentRef) ? Items[contentRef].Bytes.Length : throw new UnauthorizedAccessException();
+        !IsPicked(contentRef) ? new FileInfo(contentRef).Length
+        : Readable(contentRef) ? Items[contentRef].Bytes.Length : throw new UnauthorizedAccessException();
 
     public Stream OpenRead(string path) =>
-        Readable(path) ? new MemoryStream(Items[path].Bytes, writable: false) : throw new UnauthorizedAccessException();
+        !IsPicked(path) ? new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)
+        : Readable(path) ? new MemoryStream(Items[path].Bytes, writable: false) : throw new UnauthorizedAccessException();
 
     public bool FolderExists(string path) => Trees.ContainsKey(path);
 
@@ -480,7 +488,8 @@ internal sealed class FakePhoneStorage : IFileSystem, IContentSource
 
     // A reference is kept as the picker gave it, and has no folder to be found from.
     public string FullName(string item) => item;
-    public string NameOf(string item) => Trees.TryGetValue(item, out var tree) ? tree.Name : Items[item].Name;
+    public string NameOf(string item) =>
+        !IsPicked(item) ? Path.GetFileName(item) : Trees.TryGetValue(item, out var tree) ? tree.Name : Items[item].Name;
     string IContentSource.NameOf(string contentRef) => NameOf(contentRef);
     public string? Inside(string folder, string relative) =>
         Trees.TryGetValue(folder, out var tree) ? tree.Files.GetValueOrDefault(relative) : null;

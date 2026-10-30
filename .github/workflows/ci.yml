@@ -154,6 +154,18 @@ jobs:
           name: ComParta-apk
           path: publish/android/*-Signed.apk
 
+      # Another device for the emulator to receive from (epic 7 story 12), and what it shares: a photo,
+      # a video the phone plays, and an MKV video it cannot play.
+      - name: Build the other device and its files
+        run: |
+          dotnet build tools/ComParta.CheckSender -c Release -o publish/check-sender
+          command -v ffmpeg > /dev/null || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+          mkdir -p publish/check-media
+          ffmpeg -loglevel error -f lavfi -i testsrc=size=640x480 -frames:v 1 publish/check-media/photo.jpg
+          ffmpeg -loglevel error -f lavfi -i testsrc=duration=6:size=320x240:rate=25 -f lavfi -i sine=duration=6 \
+            -c:v libx264 -profile:v baseline -pix_fmt yuv420p -c:a aac -movflags +faststart publish/check-media/clip.mp4
+          ffmpeg -loglevel error -f lavfi -i testsrc=duration=2:size=320x240:rate=25 -c:v libx264 publish/check-media/film.mkv
+
       - name: Let the emulator use the processor directly
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -167,7 +179,7 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
-          script: bash .github/scripts/check-android.sh publish/android
+          script: bash .github/scripts/check-android.sh publish/android publish/check-media publish/check-sender/ComParta.CheckSender.dll
 
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
@@ -175,5 +187,6 @@ jobs:
           name: android-check
           path: |
             publish/android/android-*.png
+            publish/android/check-sender.txt
             publish/android/android-log.txt
           if-no-files-found: ignore
