@@ -159,6 +159,18 @@ else
   status=1
 fi
 
+# The unfinished 300 MB file would still be waiting for its computer; story 12 starts from a fresh
+# app, as on a phone that has received nothing yet.
+adb logcat -d > "$folder/android-log.txt" || true
+adb shell am force-stop "$package"
+adb shell pm clear "$package" > /dev/null
+adb shell mkdir -p "/sdcard/Android/data/$package/files"
+adb shell touch "/sdcard/Android/data/$package/files/screen-check"
+adb logcat -c
+adb shell am start -W -n "$package/$package.MainActivity"
+wait_for "ComParta started" 180 || status=1
+wait_for "Screen answered" 120 || status=1
+
 # Story 12: another device on this computer shares the three files; from the emulator this computer
 # is 10.0.2.2.
 wait_for "Screen check open" 5 || status=1
@@ -228,7 +240,7 @@ if [ "$starts" -ne 1 ]; then
 fi
 
 # The same tapped link when ComParta is not running starts it and asks too.
-adb logcat -d > "$folder/android-log.txt" || true
+adb logcat -d >> "$folder/android-log.txt" || true
 adb shell am force-stop "$package"
 adb logcat -c
 adb shell "am start -W -a android.intent.action.VIEW -d '$link' $package"
