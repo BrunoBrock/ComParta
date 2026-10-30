@@ -106,6 +106,9 @@ sent() {
 # arriving with the screen off, the service that keeps it going runs with its notification, and it
 # stops a minute after the bytes stop.
 adb shell pm grant "$package" android.permission.POST_NOTIFICATIONS || true
+# No lock screen, so the phone wakes straight back into the app: a locked phone does not play the
+# video in story 12.
+adb shell locksettings set-disabled true || true
 for _ in $(seq 300); do
   [ -s "$computer/invite.txt" ] && break
   sleep 1
@@ -149,6 +152,7 @@ if [ -s "$computer/invite.txt" ]; then
   fi
   adb shell input keyevent 224
   adb shell wm dismiss-keyguard || true
+  adb shell input keyevent 82 || true
 
   # Nothing moves once the computer stops sharing; a minute later the service is gone.
   kill "$computer_pid" 2> /dev/null || true
