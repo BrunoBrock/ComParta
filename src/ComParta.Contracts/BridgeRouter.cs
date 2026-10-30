@@ -183,6 +183,14 @@ public sealed class BridgeRouter
                 return CommandResult.Success(null);
             }
 
+            case Commands.SharesInviteLink:
+            {
+                var link = ShareId.TryParse(Args<IdArgs>(argsJson)?.Id, out var linkShareId)
+                    ? await _shares.GetInviteAsync(linkShareId)
+                    : Result<string>.Fail(ErrorKind.ShareNotFound);
+                return link.Ok ? CommandResult.Success(link.Value) : Failure(link.Error);
+            }
+
             case Commands.SharesSaveDownloadFile:
             {
                 var saved = ShareId.TryParse(Args<IdArgs>(argsJson)?.Id, out var saveShareId)

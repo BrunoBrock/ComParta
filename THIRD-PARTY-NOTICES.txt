@@ -236,10 +236,20 @@ Project: https://dot.net/
 Parts in the screen (npm)
 -------------------------
 
+jsqr 1.4.0
+License: Apache-2.0
+Copyright: not stated by the package
+Project: https://github.com/cozmo/jsQR
+
 lucide-react 1.57.0
 License: ISC
 Copyright: Copyright (c) 2026 Lucide Icons and Contributors
 Project: https://lucide.dev
+
+qrcode-generator 2.0.4
+License: MIT
+Copyright: Kazuhiko Arase
+Project: https://github.com/kazuhikoarase/qrcode-generator.git
 
 react 19.3.1
 License: MIT

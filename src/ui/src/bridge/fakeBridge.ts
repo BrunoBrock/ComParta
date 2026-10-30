@@ -173,6 +173,8 @@ const addedLongAgo = '2026-10-10T14:05:00.000Z'
 // and size) but carry the share id in the clear.
 // The ComParta links of earlier builds are still read.
 const invitePrefix = 'link:?id='
+/** The fake's invite link for a share, as Copy link copies it. */
+const inviteLinkOf = (share: ShareDto) => `${invitePrefix}${share.id}&dn=${encodeURIComponent(share.name)}&xl=${share.sizeBytes}`
 const invitePattern = /link:\?id=([A-Za-z0-9_-]+)[^\s"'<>]*/i
 const oldInvitePrefix = 'comparta://receive/v1/'
 const oldInvitePattern = /comparta:\/\/receive\/v1\/([A-Za-z0-9_-]+)/i
@@ -583,7 +585,7 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       const share = shares.find((s) => s.id === id)
       if (!share) return fail('share.notFound')
       if (share.status !== 'ready') return fail('share.notReady')
-      const link = `${invitePrefix}${share.id}&dn=${encodeURIComponent(share.name)}&xl=${share.sizeBytes}`
+      const link = inviteLinkOf(share)
       fake.copiedInvite = message
         ? message.includes('{link}')
           ? message.replace('{link}', link)
@@ -592,6 +594,13 @@ export function createFakeBridge(options: FakeBridgeOptions = {}): FakeBridge {
       return ok(null)
     },
 
+    // As the router: the same link Copy link copies, and nothing goes on the clipboard.
+    'shares.inviteLink': (args) => {
+      const share = shares.find((s) => s.id === (args as IdArgs).id)
+      if (!share) return fail('share.notFound')
+      if (share.status !== 'ready') return fail('share.notReady')
+      return ok(inviteLinkOf(share))
+    },
     'shares.saveDownloadFile': (args) => {
       const { id } = args as IdArgs
       const share = shares.find((s) => s.id === id)

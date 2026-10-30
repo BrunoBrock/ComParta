@@ -172,6 +172,17 @@ export const ptBR: Catalog = {
   'shares.linkCopied':
     'Link de “{name}” copiado. Além do ComParta, outros apps que baixam arquivos, no computador ou no celular, também abrem esse link.',
   'shares.saveDownloadFile': 'Salvar arquivo de download',
+  'shares.showQr': 'Mostrar como QR code',
+  'qr.title': 'QR code de “{name}”',
+  'qr.label': 'QR code com o convite de “{name}”',
+  'qr.hint': 'No outro celular, abra o ComParta, toque em {receive} e escolha {scan}. O app de câmera do celular também consegue ler.',
+  'qr.tooLong': 'Este convite é longo demais para um QR code. Copie o convite e envie numa mensagem.',
+  'receive.scan': 'Ler um QR code',
+  'scan.title': 'Ler um QR code',
+  'scan.hint': 'Aponte a câmera para o QR code na outra tela. Ele é lido assim que aparece.',
+  'scan.camera': 'O que a câmera vê',
+  'scan.noCamera': 'O ComParta não conseguiu usar a câmera. Permita a câmera para o ComParta nas configurações do celular, ou cole o convite.',
+  'scan.back': 'Voltar',
   'shares.downloadFileSaved':
     'O arquivo de download de “{name}” está na sua pasta Downloads. Abra-o num app que baixa arquivos, se esse app não aceitar links.',
   'invite.someone': 'Alguém',

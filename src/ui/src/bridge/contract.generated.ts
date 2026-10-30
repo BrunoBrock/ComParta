@@ -275,6 +275,7 @@ export interface Commands {
   "shares.remove": { args: IdArgs; result: null };
   "shares.copyInvite": { args: CopyInviteArgs; result: null };
   "shares.saveDownloadFile": { args: IdArgs; result: string };
+  "shares.inviteLink": { args: IdArgs; result: string };
   "shares.pause": { args: IdArgs; result: null };
   "shares.resume": { args: IdArgs; result: null };
   "shares.reveal": { args: IdArgs; result: null };
