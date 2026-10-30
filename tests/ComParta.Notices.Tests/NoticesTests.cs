@@ -129,6 +129,14 @@ public sealed class NoticesTests : IDisposable
         Assert.False(NuGetParts.HasTarget(assets, "net10.0-windows10.0.19041.0"));
     }
 
+    [Theory]
+    // Apache's own words and its template line name no one; the package's line further down does.
+    [InlineData("Apache License\n\n      copyright notice that is included in or attached to the work\n   Copyright [yyyy] [name of copyright owner]\n", null)]
+    [InlineData("Apache License\n      copyright license to reproduce\nCopyright 2024 Real people\n", "Copyright 2024 Real people")]
+    [InlineData("MIT License\n\nCopyright (c) <year> <owner>\n(c) 2020 Someone\n", "(c) 2020 Someone")]
+    public void The_copyright_line_is_a_line_that_names_someone_not_the_license_own_words(string license, string? expected) =>
+        Assert.Equal(expected, CopyrightLine.FromText(license));
+
     [Fact]
     public void Npm_parts_leave_out_development_packages()
     {

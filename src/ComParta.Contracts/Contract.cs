@@ -13,6 +13,7 @@ public static class Commands
     public const string SharesRemove = "shares.remove";
     public const string SharesCopyInvite = "shares.copyInvite";
     public const string SharesSaveDownloadFile = "shares.saveDownloadFile";
+    public const string SharesInviteLink = "shares.inviteLink";
     public const string SharesPause = "shares.pause";
     public const string SharesResume = "shares.resume";
     public const string SharesReveal = "shares.reveal";
@@ -335,6 +336,8 @@ public static class Contract
         new(Commands.SharesCopyInvite, typeof(CopyInviteArgs), null),
         // The saved file's name, shown to the person; the folder opens with it selected (AD-18: no path crosses the bridge).
         new(Commands.SharesSaveDownloadFile, typeof(IdArgs), typeof(string)),
+        // The invite link alone, for the QR code the details window shows (epic 7 story 9). Nothing is copied.
+        new(Commands.SharesInviteLink, typeof(IdArgs), typeof(string)),
         new(Commands.SharesPause, typeof(IdArgs), null),
         new(Commands.SharesResume, typeof(IdArgs), null),
         // Shows the shared file selected in its folder, as received.reveal does for one that arrived.

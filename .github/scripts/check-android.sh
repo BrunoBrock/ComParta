@@ -2,7 +2,8 @@
 # Installs the APK on the emulator, starts ComParta and checks what epic 7 story 1 asks of a first
 # Android build: the app starts its engine, the screen loads and the bridge answers it, and the
 # app is still running afterwards; that received files have their place in Downloads (story 3); and
-# that an invite tapped or shared in another app opens "Get this file?" (story 6).
+# that an invite tapped or shared in another app opens "Get this file?" (story 6); and that the
+# camera for scanning a QR code is not taken at start (story 9).
 # Leaves screenshots and the app's log next to the APK.
 set -euo pipefail
 
@@ -51,6 +52,16 @@ if ! adb shell ls -d /sdcard/Download/ComParta > /dev/null 2>&1; then
 fi
 if ! adb shell pidof "$package" > /dev/null; then
   echo "ComParta is no longer running."
+  status=1
+fi
+# Story 9: the app may ask for the camera, for "Scan a QR code", but starting it never does: the
+# phone asks only when the person taps Scan.
+camera=$(adb shell dumpsys package "$package" | grep "android.permission.CAMERA" || true)
+if [ -z "$camera" ]; then
+  echo "ComParta cannot ask for the camera."
+  status=1
+elif echo "$camera" | grep -q "granted=true"; then
+  echo "ComParta had the camera before anyone tapped Scan."
   status=1
 fi
 

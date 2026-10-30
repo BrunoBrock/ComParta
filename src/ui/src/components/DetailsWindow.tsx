@@ -1,10 +1,11 @@
-import { FileDown, Link, Pause, Play, SlidersHorizontal } from 'lucide-react'
+import { FileDown, Link, Pause, Play, QrCode, SlidersHorizontal } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { Bridge, ErrorCode, ShareDetailsDto, TransferDetailsDto } from '../bridge/index.ts'
 import { formatDateTime, formatRate, formatSize, formatTimeLeft, type MessageKey, percentOf, t } from '../i18n/index.ts'
 import { inviteMessage } from '../invite.ts'
 import type { ItemToggle } from './ItemView.tsx'
 import MoreOptionsDialog from './MoreOptionsDialog.tsx'
+import QrCodeDialog from './QrCodeDialog.tsx'
 import type { SpeedLimits } from './SettingsDialog.tsx'
 import { openReceived } from './openReceived.ts'
 import RiskyOpenDialog from './RiskyOpenDialog.tsx'
@@ -89,6 +90,7 @@ export default function DetailsWindow(props: DetailsWindowProps) {
   const [gone, setGone] = useState(false)
   const [opening, setOpening] = useState(false)
   const [options, setOptions] = useState(false)
+  const [qr, setQr] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -214,6 +216,10 @@ export default function DetailsWindow(props: DetailsWindowProps) {
               <FileDown size={18} aria-hidden="true" />
               {t('shares.saveDownloadFile')}
             </button>
+            <button type="button" onClick={() => setQr(true)}>
+              <QrCode size={18} aria-hidden="true" />
+              {t('shares.showQr')}
+            </button>
             {onView && (
               <button type="button" onClick={onView}>
                 {t('received.open')}
@@ -227,6 +233,9 @@ export default function DetailsWindow(props: DetailsWindowProps) {
       </div>
       {opening && (
         <RiskyOpenDialog name={item.name} onConfirm={confirmOpen} onCancel={() => setOpening(false)} />
+      )}
+      {qr && (
+        <QrCodeDialog bridge={bridge} id={item.id} name={item.name} onClose={() => setQr(false)} onError={onError} />
       )}
       {options && details?.kind === 'transfer' && (
         <MoreOptionsDialog

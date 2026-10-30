@@ -1212,6 +1212,34 @@ dialog.help {
   margin: 0;
 }
 
+.receive-scan {
+  margin-block-start: var(--space);
+}
+
+/* The camera while it looks for a QR code (epic 7 story 9). */
+.qr-camera {
+  display: block;
+  width: 100%;
+  max-height: 60vh;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius);
+  background: #000;
+}
+
+/* The invite as a QR code: always dark on white, in either theme, so any camera reads it. */
+.qr-code {
+  display: flex;
+  justify-content: center;
+  margin-block: var(--space);
+}
+
+.qr-code svg {
+  width: min(100%, 320px);
+  height: auto;
+  aspect-ratio: 1;
+}
+
 .confirm-item {
   display: flex;
   align-items: flex-start;

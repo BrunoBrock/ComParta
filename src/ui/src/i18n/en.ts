@@ -168,6 +168,17 @@ export const en = {
   'shares.linkCopied':
     'Link for “{name}” copied. Besides ComParta, other apps that download files, on a computer or a phone, open it too.',
   'shares.saveDownloadFile': 'Save download file',
+  'shares.showQr': 'Show as QR code',
+  'qr.title': 'QR code for “{name}”',
+  'qr.label': 'QR code with the invite for “{name}”',
+  'qr.hint': 'On the other phone, open ComParta, tap {receive} and choose {scan}. The phone’s own camera app can read it too.',
+  'qr.tooLong': 'This invite is too long for a QR code. Copy the invite and send it in a message instead.',
+  'receive.scan': 'Scan a QR code',
+  'scan.title': 'Scan a QR code',
+  'scan.hint': 'Point the camera at the QR code on the other screen. It is read as soon as it is in view.',
+  'scan.camera': 'What the camera sees',
+  'scan.noCamera': 'ComParta could not use the camera. Allow the camera for ComParta in the phone’s settings, or paste the invite instead.',
+  'scan.back': 'Back',
   'shares.downloadFileSaved':
     'The download file for “{name}” is in your Downloads folder. Open it in an app that downloads files, if that app does not take links.',
   'invite.someone': 'Someone',

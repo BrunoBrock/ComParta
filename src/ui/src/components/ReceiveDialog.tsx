@@ -1,7 +1,9 @@
-import { FileDown } from 'lucide-react'
+import { FileDown, ScanLine } from 'lucide-react'
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'react'
 import type { Bridge, InvitePreviewDto } from '../bridge/index.ts'
 import { errorMessage, formatSize, t } from '../i18n/index.ts'
+import { canScan } from '../qr.ts'
+import QrScanner from './QrScanner.tsx'
 import FileIcon from './ui/FileIcon.tsx'
 import Dialog from './ui/Dialog.tsx'
 
@@ -30,6 +32,9 @@ export default function ReceiveDialog({ bridge, pasted, onStarted, onCancel }: R
   const [problem, setProblem] = useState<string | null>(null)
   const [preview, setPreview] = useState<InvitePreviewDto | null>(pasted?.preview ?? null)
   const typed = useRef(false)
+  // On a phone, the camera reads an invite shown as a QR code on another screen (epic 7 story 9).
+  const [scanning, setScanning] = useState(false)
+  const [scannable] = useState(canScan)
 
   useEffect(() => {
     if (pasted) return
@@ -55,13 +60,26 @@ export default function ReceiveDialog({ bridge, pasted, onStarted, onCancel }: R
     }
   }
 
-  async function look(event: FormEvent) {
-    event.preventDefault()
+  async function lookUp(text: string) {
     await run(async () => {
-      const result = await bridge.invoke('transfers.preview', { invite })
+      const result = await bridge.invoke('transfers.preview', { invite: text })
       if (result.ok) setPreview(result.value)
       else setProblem(errorMessage(result.error.code))
     })
+  }
+
+  async function look(event: FormEvent) {
+    event.preventDefault()
+    await lookUp(invite)
+  }
+
+  // A code read: the same "Get this file?" as a pasted invite, or the same words when it holds none.
+  async function scanned(text: string) {
+    typed.current = true
+    setFound(false)
+    setScanning(false)
+    setInvite(text)
+    await lookUp(text)
   }
 
   async function receive() {
@@ -93,6 +111,16 @@ export default function ReceiveDialog({ bridge, pasted, onStarted, onCancel }: R
     <Dialog labelledBy="receive-title" onClose={onCancel}>
       {preview ? (
         <Confirmation preview={preview} busy={busy} alert={alert} onReceive={receive} onCancel={onCancel} />
+      ) : scanning ? (
+        <div className="scan">
+          <h2 id="receive-title">{t('scan.title')}</h2>
+          <QrScanner onFound={scanned} />
+          <div className="dialog-actions">
+            <button type="button" onClick={() => setScanning(false)} autoFocus>
+              {t('scan.back')}
+            </button>
+          </div>
+        </div>
       ) : (
         <form onSubmit={look}>
           <h2 id="receive-title">{t('receive.title')}</h2>
@@ -113,6 +141,12 @@ export default function ReceiveDialog({ bridge, pasted, onStarted, onCancel }: R
           <p className="hint" role={found ? 'status' : undefined}>
             {found ? t('receive.found') : t('receive.hint')}
           </p>
+          {scannable && (
+            <button type="button" className="receive-scan" onClick={() => setScanning(true)} disabled={busy}>
+              <ScanLine size={18} aria-hidden="true" />
+              {t('receive.scan')}
+            </button>
+          )}
           <div className="receive-file">
             <span className="hint">{t('receive.or')}</span>
             <button type="button" onClick={openFile} disabled={busy}>

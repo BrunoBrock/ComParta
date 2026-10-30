@@ -779,6 +779,53 @@ public sealed class ButtonsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Show_as_QR_code_draws_the_invite_link_and_a_phone_that_reads_it_gets_the_file()
+    {
+        var id = await ShareAFileAsync("Natal.mp4");
+
+        // "Show as QR code": the link alone comes back for the screen to draw; nothing is copied.
+        var link = (await ClickAsync(Commands.SharesInviteLink, new IdArgs(id))).GetString()!;
+        Assert.Null(_clipboard.Text);
+        await ClickAsync(Commands.SharesCopyInvite, new CopyInviteArgs(id, null));
+        Assert.Equal(_clipboard.Text, link);
+        Assert.True(global::MonoTorrent.MagnetLink.TryParse(link, out var magnet), link);
+        Assert.Equal("Natal.mp4", magnet!.Name);
+
+        // The phone that scans it: "Get this file?" names the file, and the tap on it receives it.
+        var phonePaths = new FakePaths(Path.Combine(_folder, "phone"));
+        await using var phone = new MonoTorrentTransferEngine(phonePaths);
+        await phone.StartAsync(SharingPolicy.Closed with { ListenPort = FreePort() });
+        var preview = await ClickAsync(Commands.TransfersPreview, new ReceiveArgs(link));
+        Assert.Equal("Natal.mp4", preview.GetProperty("name").GetString());
+        var done = new TaskCompletionSource<ReceiveProgress>(TaskCreationOptions.RunContinuationsAsynchronously);
+        phone.ReceiveProgressed += progress =>
+        {
+            if (progress.Done || progress.Failed)
+                done.TrySetResult(progress);
+        };
+        var transfer = TransferId.New();
+        Assert.True(await phone.ReceiveAsync(transfer, link));
+        await phone.ConnectAsync(transfer, new IPEndPoint(IPAddress.Loopback, _engine.ListenEndPoint!.Port));
+        Assert.True((await done.Task.WaitAsync(Timeout)).Done);
+        Assert.Equal(
+            Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(_folder, "originals", "Natal.mp4")))),
+            Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(phonePaths.ReceivedRoot, "Natal.mp4")))));
+    }
+
+    [Fact]
+    public async Task Show_as_QR_code_answers_plainly_for_a_file_no_longer_shared()
+    {
+        var id = await ShareAFileAsync("gone.bin");
+        await ClickAsync(Commands.SharesRemove, new IdArgs(id));
+
+        foreach (var asked in new[] { id, "nonsense" })
+        {
+            var json = await _router.InvokeAsync(Commands.SharesInviteLink, JsonSerializer.Serialize(new IdArgs(asked), Contract.Json)).WaitAsync(Quick);
+            Assert.Equal(ErrorCodes.ShareNotFound, JsonDocument.Parse(json).RootElement.GetProperty("error").GetProperty("code").GetString());
+        }
+    }
+
+    [Fact]
     public async Task Your_name_and_colors_chosen_in_settings_are_shown_and_kept_after_a_restart()
     {
         await ClickAsync(Commands.SettingsSet, new SetSettingsArgs(null, null, null, 0, false, null, YourName: "Ana", Theme: "dark", WelcomeDone: true));

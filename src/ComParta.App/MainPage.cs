@@ -14,6 +14,8 @@ public sealed class MainPage : ContentPage
 			DropTarget.Attach(webView, services.Dropped, services.Log);
 			MediaStream.Attach(webView, services.Router, services.Log);
 		};
+#elif ANDROID
+		CameraForScreen.Attach(webView, services.Log);
 #endif
 		_services = services;
 		Content = webView;
