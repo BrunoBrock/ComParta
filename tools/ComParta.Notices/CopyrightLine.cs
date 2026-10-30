@@ -6,8 +6,9 @@ namespace ComParta.Notices;
 public static partial class CopyrightLine
 {
     // Case matters: a license's own words, such as Apache's "copyright notice that is included",
-    // start with a small letter, and a package's own line does not.
-    [GeneratedRegex(@"^(Copyright\b|COPYRIGHT\b|\([cC]\)|©)")]
+    // start with a small letter, and a package's own line does not. A line opening with (c) or © must
+    // give a year, since Apache's list item "(c) You must retain…" opens the same way.
+    [GeneratedRegex(@"^(Copyright\b|COPYRIGHT\b|(\([cC]\)|©)\s*\d{4})")]
     private static partial Regex Start();
 
     public static string? FromText(string text) =>
