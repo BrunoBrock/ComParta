@@ -16,8 +16,8 @@ public static partial class CopyrightLine
             // License files written as code comments start their lines with // or *.
             .Select(line => line.Trim().TrimStart('/', '*', '#').Trim())
             // Leaves out the template line of a license text, such as "Copyright (c) <year> <owner>" or
-            // Apache's "Copyright [yyyy] [name of copyright owner]".
-            .FirstOrDefault(line => Start().IsMatch(line) && !line.Contains('<') && !line.Contains('[') && line.Length > "Copyright".Length + 2);
+            // Apache's "Copyright [yyyy] [name of copyright owner]", also written with braces.
+            .FirstOrDefault(line => Start().IsMatch(line) && line.IndexOfAny(['<', '[', '{']) < 0 && line.Length > "Copyright".Length + 2);
 
     /// <summary>The first copyright line of the license files among <paramref name="paths"/>, in name order.</summary>
     public static string? FromFiles(IEnumerable<string> paths)
