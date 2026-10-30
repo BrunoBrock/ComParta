@@ -76,54 +76,6 @@ fi
 
 adb exec-out screencap -p > "$folder/android-first-screen.png" || true
 
-# Story 12: another device on this computer shares the three files; from the emulator this computer
-# is 10.0.2.2.
-wait_for "Screen check open" 5 || status=1
-port=47123
-invites="$media/invites.txt"
-rm -f "$invites"
-dotnet "$sender" "$port" 10.0.2.2 "$invites" "$media/photo.jpg" "$media/clip.mp4" "$media/film.mkv" > "$folder/check-sender.txt" 2>&1 &
-sender_pid=$!
-for _ in $(seq 120); do
-  [ -f "$invites" ] && break
-  sleep 1
-done
-if [ ! -f "$invites" ]; then
-  echo "The other device never shared the files."
-  cat "$folder/check-sender.txt" || true
-  status=1
-else
-  app_pid=$(adb shell pidof "$package" | tr -d '\r')
-  adb forward tcp:9333 "localabstract:webview_devtools_remote_$app_pid"
-  node .github/scripts/drive-phone.mjs 9333 "$invites" || status=1
-  # The web view read the photo whole and the video in parts, as a player does.
-  wait_for "Media answered: 200" 10 || status=1
-  wait_for "Media answered: 206 for a part" 10 || status=1
-  # Open the folder shows the Files app in front.
-  shown=0
-  for _ in $(seq 15); do
-    if adb shell dumpsys activity activities | grep -E "topResumedActivity|mResumedActivity" | grep -qi documentsui; then
-      shown=1
-      break
-    fi
-    sleep 1
-  done
-  if [ "$shown" -eq 1 ]; then
-    echo "Seen: the Files app opened"
-  else
-    echo "The Files app did not open."
-    adb shell dumpsys activity activities | grep -E "topResumedActivity|mResumedActivity" || true
-    status=1
-  fi
-  sleep 2
-  adb exec-out screencap -p > "$folder/android-files-app.png" || true
-  if ! adb shell pidof "$package" > /dev/null; then
-    echo "ComParta stopped while playing."
-    status=1
-  fi
-fi
-kill "$sender_pid" 2> /dev/null || true
-
 # Taps a button on the screen by its words, found in the screen's description the phone gives.
 tap_on() {
   local words="$1"
@@ -150,8 +102,9 @@ sent() {
   cat "$computer/sent.txt" 2> /dev/null || echo 0
 }
 
-# Story 7: a file from the computer keeps arriving with the screen off, the service that keeps it
-# going runs with its notification, and it stops a minute after the bytes stop.
+# Story 7, first, before story 12 leaves the Files app in front: a file from the computer keeps
+# arriving with the screen off, the service that keeps it going runs with its notification, and it
+# stops a minute after the bytes stop.
 adb shell pm grant "$package" android.permission.POST_NOTIFICATIONS || true
 for _ in $(seq 300); do
   [ -s "$computer/invite.txt" ] && break
@@ -205,6 +158,54 @@ else
   cat "$folder/computer-log.txt" || true
   status=1
 fi
+
+# Story 12: another device on this computer shares the three files; from the emulator this computer
+# is 10.0.2.2.
+wait_for "Screen check open" 5 || status=1
+port=47123
+invites="$media/invites.txt"
+rm -f "$invites"
+dotnet "$sender" "$port" 10.0.2.2 "$invites" "$media/photo.jpg" "$media/clip.mp4" "$media/film.mkv" > "$folder/check-sender.txt" 2>&1 &
+sender_pid=$!
+for _ in $(seq 120); do
+  [ -f "$invites" ] && break
+  sleep 1
+done
+if [ ! -f "$invites" ]; then
+  echo "The other device never shared the files."
+  cat "$folder/check-sender.txt" || true
+  status=1
+else
+  app_pid=$(adb shell pidof "$package" | tr -d '\r')
+  adb forward tcp:9333 "localabstract:webview_devtools_remote_$app_pid"
+  node .github/scripts/drive-phone.mjs 9333 "$invites" || status=1
+  # The web view read the photo whole and the video in parts, as a player does.
+  wait_for "Media answered: 200" 10 || status=1
+  wait_for "Media answered: 206 for a part" 10 || status=1
+  # Open the folder shows the Files app in front.
+  shown=0
+  for _ in $(seq 15); do
+    if adb shell dumpsys activity activities | grep -E "topResumedActivity|mResumedActivity" | grep -qi documentsui; then
+      shown=1
+      break
+    fi
+    sleep 1
+  done
+  if [ "$shown" -eq 1 ]; then
+    echo "Seen: the Files app opened"
+  else
+    echo "The Files app did not open."
+    adb shell dumpsys activity activities | grep -E "topResumedActivity|mResumedActivity" || true
+    status=1
+  fi
+  sleep 2
+  adb exec-out screencap -p > "$folder/android-files-app.png" || true
+  if ! adb shell pidof "$package" > /dev/null; then
+    echo "ComParta stopped while playing."
+    status=1
+  fi
+fi
+kill "$sender_pid" 2> /dev/null || true
 
 # Story 6: an invite tapped in an email, and a chat message shared to ComParta from WhatsApp, open
 # "Get this file?" in the running app; a message without an invite is answered plainly. Nothing
