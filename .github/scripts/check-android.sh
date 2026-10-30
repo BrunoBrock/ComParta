@@ -6,7 +6,7 @@
 # Before that (story 12) the phone receives a photo, a video and an MKV video from another device
 # running on this computer, through its own screen: the photo shows and the video plays and seeks in
 # the phone's web view, and the MKV, which it cannot play, opens the Files app at its folder.
-# After it (story 7) a file keeps arriving with the screen off, shown in a notification, and the
+# First of all (story 7) a file keeps arriving with the screen off, shown in a notification, and the
 # service stops a minute after, from a computer-side sender (tests/ComParta.PhoneCheck, built to
 # publish/phone-check).
 # Leaves screenshots and the app's log next to the APK.
